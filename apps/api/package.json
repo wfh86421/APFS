@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fastify/cors": "^10.0.0",
     "@shieldscan/core-schema": "workspace:*",
     "@shieldscan/network-intel": "workspace:*",
     "@shieldscan/node-sdk": "workspace:*",

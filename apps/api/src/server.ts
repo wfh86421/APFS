@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import {
   SCHEMA_VERSION,
   type EnvironmentReport,
@@ -28,6 +29,14 @@ import {
 } from '@shieldscan/scoring-engine';
 
 const app = Fastify({ logger: true });
+
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+void app.register(cors, {
+  origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+});
 
 const port = Number(process.env.PORT ?? 3001);
 const databaseUrl = process.env.DATABASE_URL;
@@ -174,7 +183,12 @@ app.post('/v1/reports', async (request, reply) => {
   const network = await analyzeRequestNetwork(ip, report);
   const score = await buildScoringEngine().calculate(report, report.issues, DEFAULT_PROFILE);
 
-  await repository.saveReport(report, {
+  // 把伺服器端的網路分析一併持久化，歷史報告可回溯當時判決。
+  const reportToStore: EnvironmentReport = {
+    ...report,
+    raw: { ...(report.raw as object | undefined), network },
+  };
+  await repository.saveReport(reportToStore, {
     clientIp: ip,
     privacyScore: score.finalScore,
     grade: score.grade,

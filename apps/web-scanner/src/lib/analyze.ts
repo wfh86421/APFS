@@ -101,7 +101,7 @@ export async function analyzeSignals(
     });
   }
 
-  const report = buildReport(signals, { consent });
+  const report = await buildReport(signals, { consent });
   report.issues = issues;
 
   const engine = new ScoringEngine();
