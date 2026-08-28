@@ -40,6 +40,19 @@ docs/          技術文件
 - **驗證**：`pnpm -r typecheck`、`pnpm -r build`（含 Next.js production build）全數通過；`/` 與 `/privacy` HTTP 200。
 - **待辦**：部署上線、自然流量驗證（月掃描 ≥5,000）、`POST /v1/reports` 由網站串接（Phase 2）。
 
+## 測試
+
+```bash
+# 全 workspace 型別檢查與建置
+pnpm -r typecheck
+pnpm -r build
+
+# 端到端測試（首頁/同意機制/掃描流程/JSON 匯出/隱私頁/掃描耗時 P95<3s）
+pnpm --filter @shieldscan/web-scanner e2e
+```
+
+Phase 0/1 驗證指標檢核：見 [docs/verification-phase0-1.md](./docs/verification-phase0-1.md)。
+
 ## 規劃文件
 
 本儲存庫根目錄同時存放各來源 AI 的規劃文件與最優合併方案：

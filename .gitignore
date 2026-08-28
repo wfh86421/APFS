@@ -38,3 +38,8 @@ coverage/
 pnpm-debug.log*
 *.tsbuildinfo
 .env.local
+
+# ===== Playwright =====
+apps/web-scanner/test-results/
+apps/web-scanner/playwright-report/
+apps/web-scanner/playwright/.cache/
