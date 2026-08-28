@@ -5,7 +5,12 @@ packages:
 onlyBuiltDependencies:
   - esbuild
   - sharp
+  - embedded-postgres
+  - "@embedded-postgres/windows-x64"
+  - redis-memory-server
   - "@next/swc-win32-x64-msvc"
   - "@img/sharp-win32-x64"
 allowBuilds:
+  '@embedded-postgres/windows-x64': set this to true or false
   esbuild: set this to true or false
+  redis-memory-server: set this to true or false

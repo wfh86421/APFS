@@ -18,6 +18,9 @@
     "dev:api": "pnpm --filter @shieldscan/api dev"
   },
   "devDependencies": {
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.13.0",
+    "redis-memory-server": "^0.17.1",
     "typescript": "^5.5.0"
   }
 }

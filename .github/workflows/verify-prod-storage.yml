@@ -1,0 +1,79 @@
+name: Verify Prod Storage (PostgreSQL + Redis)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/repository/**"
+      - "packages/network-intel/**"
+      - "packages/port-scanner/**"
+      - "infra/docker/**"
+      - "scripts/**"
+      - "pnpm-lock.yaml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          REDISMS_DISABLE_POSTINSTALL: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages & API
+        run: |
+          pnpm -r --filter "./packages/**" build
+          pnpm --filter @shieldscan/api build
+
+      - name: Start PostgreSQL + Redis (docker compose)
+        run: docker compose -f infra/docker/docker-compose.yml up -d postgres redis
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f infra/docker/docker-compose.yml exec -T postgres pg_isready -U shieldscan; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL 未在時限內就緒" && exit 1
+
+      - name: Wait for Redis
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f infra/docker/docker-compose.yml exec -T redis redis-cli ping | grep -q PONG; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Redis 未在時限內就緒" && exit 1
+
+      - name: Apply schema (idempotent)
+        env:
+          DATABASE_URL: postgres://shieldscan:shieldscan@localhost:5432/shieldscan
+        run: node scripts/init-db.mjs
+
+      - name: Run production storage verification
+        env:
+          EXTERNAL_DB: "1"
+          DATABASE_URL: postgres://shieldscan:shieldscan@localhost:5432/shieldscan
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: "6379"
+        run: node scripts/verify-prod-storage.mjs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f infra/docker/docker-compose.yml down -v
