@@ -1,0 +1,25 @@
+{
+  "name": "@shieldscan/web-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "免費檢測網站：一鍵掃描 + 互動式報告",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shieldscan/browser-sdk": "workspace:*",
+    "@shieldscan/core-schema": "workspace:*",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.5.0"
+  }
+}

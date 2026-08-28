@@ -1,0 +1,23 @@
+{
+  "name": "@shieldscan/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "核心 API：報告收錄、分析、評分、插件 Profile",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shieldscan/core-schema": "workspace:*",
+    "@shieldscan/scoring-engine": "workspace:*",
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

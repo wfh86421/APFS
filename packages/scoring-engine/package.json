@@ -1,0 +1,22 @@
+{
+  "name": "@shieldscan/scoring-engine",
+  "version": "0.1.0",
+  "description": "評分引擎：規則 + 跨層一致性 + ML 異常檢測三軌合併",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shieldscan/core-schema": "workspace:*"
+  }
+}

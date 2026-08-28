@@ -32,3 +32,9 @@ build/
 out/
 coverage/
 *.log
+
+# ===== pnpm / TypeScript =====
+.pnpm-store/
+pnpm-debug.log*
+*.tsbuildinfo
+.env.local

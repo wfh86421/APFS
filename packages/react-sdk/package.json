@@ -1,0 +1,24 @@
+{
+  "name": "@shieldscan/react-sdk",
+  "version": "0.1.0",
+  "description": "React Hook 與元件包",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shieldscan/browser-sdk": "workspace:*",
+    "@shieldscan/core-schema": "workspace:*",
+    "react": "^19.0.0"
+  }
+}
