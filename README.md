@@ -49,7 +49,9 @@ docs/          技術文件
 - **網站串接完成**：同意模式分流——local-only 全部留在本機；standard / stored 上傳 `POST /v1/reports`，採用伺服器評分、policy 與網路分析（Proxy/VPN/Tor/DC、WebRTC 一致性、DNS leak），伺服器失敗時自動降級為本機預覽並提示。API 位址由 `NEXT_PUBLIC_API_URL` 設定（見 [apps/web-scanner/.env.example](./apps/web-scanner/.env.example)）；API 已啟用 CORS（`CORS_ORIGIN` 環境變數可覆寫）。
 - **完整性**：SDK `buildReport()` 會對信封（nonce/timestamp/sdkVersion）產生 SHA-256 自雜湊指紋作為 `integrity.signature`（防篡改；正式伺服器簽章屬 Phase 3）；伺服器儲存報告時會把當下網路分析併入 `raw.network`，歷史可回溯。
 - **驗證**：repository 3/3、network-intel 4/4、port-scanner 2/2 測試通過；`pnpm -r typecheck` 與 API build 通過；API 冒煙測試（報告儲存/查詢/歷史/網路/限流/審計）全數通過。
-- **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存、ip-api 金鑰/額度設定、JA4/TCP 真實指紋、部署上線累積自然流量。
+- **資料刪除（個資請求）**：`DELETE /v1/reports/{id}`（單筆）與 `DELETE /v1/visitors/{visitorId}`（被遺忘權，含全部報告），操作皆寫審計。
+- **Phase 2 驗證報告**：[docs/verification-phase2.md](./docs/verification-phase2.md) — API 冒煙 15/15、P99=17.9ms、網路樣本準確率 100%、同 visitor 跨 IP 追蹤、限流/審計/刪除全數通過。
+- **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存（執行期驗證）、ip-api 金鑰/額度設定、JA4/TCP 真實指紋（需邊緣層）、部署上線累積自然流量。
 
 ## 測試
 

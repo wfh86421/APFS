@@ -175,6 +175,23 @@ export class PostgresReportRepository implements ReportRepository {
     };
   }
 
+  async deleteReport(reportId: string): Promise<boolean> {
+    const result = await this.pool.query('DELETE FROM fingerprint_scans WHERE report_id = $1', [
+      reportId,
+    ]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteVisitor(visitorId: string): Promise<boolean> {
+    await this.pool.query('DELETE FROM fingerprint_scans WHERE visitor_id = $1 OR session_id = $1', [
+      visitorId,
+    ]);
+    const result = await this.pool.query('DELETE FROM visitor_profiles WHERE visitor_id = $1', [
+      visitorId,
+    ]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
   private toStoredReport(row: ScanRow): StoredReport {
     return {
       reportId: row.report_id,

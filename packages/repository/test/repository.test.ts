@@ -62,6 +62,25 @@ test('visitor upsert 累積 IP 歷史', async () => {
 
   const history = await repo.listReportsByVisitor('visitor-a');
   assert.equal(history.length, 2);
+
+  await repo.upsertVisitor('visitor-a', {
+    visitorId: 'visitor-a',
+    scanCount: 1,
+    ipHistory: ['49.214.1.196'],
+    firstSeen: report1.createdAt,
+    lastSeen: report1.createdAt,
+  });
+  await repo.upsertVisitor('visitor-a', {
+    visitorId: 'visitor-a',
+    scanCount: 1,
+    ipHistory: ['203.0.113.5'],
+    firstSeen: report1.createdAt,
+    lastSeen: report2.createdAt,
+  });
+  const visitor = await repo.getVisitor('visitor-a');
+  assert.ok(visitor);
+  assert.deepEqual(visitor.ipHistory.sort(), ['203.0.113.5', '49.214.1.196']);
+  assert.equal(visitor.scanCount, 2);
 });
 
 test('list 依時間倒序', async () => {
@@ -75,4 +94,27 @@ test('list 依時間倒序', async () => {
   const first = history[0];
   assert.ok(first);
   assert.equal(first.reportId, newer.reportId);
+});
+
+test('deleteReport / deleteVisitor（可刪除驗收）', async () => {
+  const repo = new InMemoryReportRepository();
+  const report = makeReport();
+  await repo.saveReport(report, { clientIp: '49.214.1.196' });
+  await repo.upsertVisitor('visitor-a', {
+    visitorId: 'visitor-a',
+    scanCount: 1,
+    ipHistory: ['49.214.1.196'],
+    firstSeen: report.createdAt,
+    lastSeen: report.createdAt,
+  });
+
+  assert.equal(await repo.deleteReport(report.reportId), true);
+  assert.equal(await repo.getReport(report.reportId), null);
+  assert.equal(await repo.deleteReport(report.reportId), false);
+
+  const report2 = makeReport();
+  await repo.saveReport(report2);
+  assert.equal(await repo.deleteVisitor('visitor-a'), true);
+  assert.equal(await repo.getVisitor('visitor-a'), null);
+  assert.equal((await repo.listReportsByVisitor('visitor-a')).length, 0);
 });

@@ -217,12 +217,44 @@ app.get('/v1/reports/:id', async (request, reply) => {
   return stored;
 });
 
+/** DELETE /v1/reports/:id：單筆報告刪除（個資刪除請求）。 */
+app.delete('/v1/reports/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const deleted = await repository.deleteReport(id);
+  if (!deleted) return reply.code(404).send({ error: 'report_not_found' });
+  auditLog.unshift({
+    id: auditLog.length + 1,
+    action: 'report-delete',
+    targetIp: requestIp(request),
+    actorIp: requestIp(request),
+    metadata: { reportId: id },
+    createdAt: new Date().toISOString(),
+  });
+  return reply.code(204).send();
+});
+
 /** GET /v1/visitors/:visitorId/reports：同 visitor 跨 IP 歷史報告（驗收指標）。 */
 app.get('/v1/visitors/:visitorId/reports', async (request, reply) => {
   const { visitorId } = request.params as { visitorId: string };
   const reports = await repository.listReportsByVisitor(visitorId);
   const visitor = await repository.getVisitor(visitorId);
   return { visitorId, visitor, reports };
+});
+
+/** DELETE /v1/visitors/:visitorId：訪客及其全部報告刪除（被遺忘權）。 */
+app.delete('/v1/visitors/:visitorId', async (request, reply) => {
+  const { visitorId } = request.params as { visitorId: string };
+  const deleted = await repository.deleteVisitor(visitorId);
+  if (!deleted) return reply.code(404).send({ error: 'visitor_not_found' });
+  auditLog.unshift({
+    id: auditLog.length + 1,
+    action: 'visitor-delete',
+    targetIp: requestIp(request),
+    actorIp: requestIp(request),
+    metadata: { visitorId },
+    createdAt: new Date().toISOString(),
+  });
+  return reply.code(204).send();
 });
 
 app.post('/v1/analyze', async (request, reply) => {

@@ -95,6 +95,22 @@ paths:
           description: 找不到報告
         "501":
           description: 尚未實作（需要報告儲存層）
+    delete:
+      tags: [reports]
+      summary: 刪除單筆報告（個資刪除請求）
+      operationId: deleteReport
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: 已刪除
+        "404":
+          description: 找不到報告
   /v1/analyze:
     post:
       tags: [analyze]
@@ -255,6 +271,22 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/EnvironmentReport"
+  /v1/visitors/{visitorId}:
+    delete:
+      tags: [reports]
+      summary: 刪除訪客及其全部報告（被遺忘權）
+      operationId: deleteVisitor
+      parameters:
+        - name: visitorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: 已刪除
+        "404":
+          description: 找不到訪客
   /v1/audit-logs:
     get:
       tags: [system]
