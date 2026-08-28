@@ -4,9 +4,11 @@ import type {
   AnalysisIssue,
   EnvironmentReport,
   NormalizedSignal,
+  PolicyDecision,
   Severity,
 } from '@shieldscan/core-schema';
 import type { ScoreResult } from '@shieldscan/scoring-engine';
+import type { ServerNetworkAnalysis } from '../lib/api';
 
 function signalValue(signals: NormalizedSignal[], key: string): unknown {
   return signals.find((s) => s.key === key)?.value;
@@ -46,11 +48,19 @@ export default function ReportView({
   report,
   score,
   elapsedMs,
+  policy,
+  network,
+  analysisSource,
+  warning,
   onExport,
 }: {
   report: EnvironmentReport;
   score: ScoreResult;
   elapsedMs: number;
+  policy?: PolicyDecision;
+  network?: ServerNetworkAnalysis;
+  analysisSource: 'local' | 'server';
+  warning?: string;
   onExport: () => void;
 }) {
   const riskClass =
@@ -72,10 +82,26 @@ export default function ReportView({
 
   return (
     <>
+      {warning && (
+        <section className="card" style={{ borderLeftColor: 'var(--warn)' }}>
+          <p style={{ margin: 0, color: 'var(--warn)' }}>⚠️ {warning}</p>
+        </section>
+      )}
+
       <section className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2>隱私評分</h2>
+            <h2>
+              隱私評分{' '}
+              <span className="badge" style={{ color: 'var(--accent)' }}>
+                {analysisSource === 'server' ? '伺服器分析' : '本機預覽'}
+              </span>
+              {policy && (
+                <span className="badge" style={{ color: 'var(--accent)' }}>
+                  policy: {policy}
+                </span>
+              )}
+            </h2>
             <div className="score-gauge">
               <span className={`score-number ${scoreClass}`} style={{ color: `var(--${scoreClass})` }}>
                 {score.finalScore}
@@ -191,6 +217,34 @@ export default function ReportView({
 
       <section className="card">
         <h2>網路環境（Network）</h2>
+        {network && (
+          <dl className="kv" style={{ marginBottom: 12 }}>
+            <dt>來源 IP</dt>
+            <dd>{network.ip}</dd>
+            <dt>ISP / ASN</dt>
+            <dd>
+              {network.geo
+                ? `${network.geo.isp ?? '未知'} / ${network.geo.asn ?? '未知'}`
+                : '未知（本機/內網）'}
+            </dd>
+            <dt>風險等級</dt>
+            <dd>{network.riskLevel}</dd>
+            <dt>Proxy / VPN / Tor / DC</dt>
+            <dd>
+              {network.proxy ? 'Proxy ' : ''}
+              {network.vpn ? 'VPN ' : ''}
+              {network.tor ? 'Tor ' : ''}
+              {network.datacenter ? 'DataCenter' : ''}
+              {!network.proxy && !network.vpn && !network.tor && !network.datacenter
+                ? '無（一般家用/行動線路）'
+                : ''}
+            </dd>
+            <dt>WebRTC 一致性</dt>
+            <dd>{network.webrtc.consistency}</dd>
+            <dt>DNS leak</dt>
+            <dd>{network.dnsLeak ? (network.dnsLeak.detected ? '偵測到' : '未偵測') : '無樣本'}</dd>
+          </dl>
+        )}
         {networkSignals.length === 0 && (
           <p className="muted" style={{ marginTop: 0 }}>無資料</p>
         )}
@@ -207,9 +261,11 @@ export default function ReportView({
             </pre>
           </details>
         ))}
-        <p className="muted" style={{ marginBottom: 0, fontSize: 13 }}>
-          WebRTC 是否洩漏需由 Server 端與公網 IP 比對（Phase 2）。
-        </p>
+        {!network && (
+          <p className="muted" style={{ marginBottom: 0, fontSize: 13 }}>
+            WebRTC 是否洩漏需由 Server 端與公網 IP 比對（standard / stored 模式會上傳分析）。
+          </p>
+        )}
       </section>
     </>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EnvironmentReport, NormalizedSignal } from '@shieldscan/core-schema';
 import type { ScoreResult } from '@shieldscan/scoring-engine';
+import { submitReport, type ReportSubmissionResult } from '../lib/api';
 import ConsentBanner, {
   loadConsent,
   saveConsent,
@@ -16,12 +17,22 @@ interface ScanResult {
   report: EnvironmentReport;
   score: ScoreResult;
   elapsedMs: number;
+  policy?: ReportSubmissionResult['policy'];
+  network?: ReportSubmissionResult['network'];
+  analysisSource: 'local' | 'server';
+  warning?: string;
 }
 
 export default function Home() {
-  const [consent, setConsent] = useState<ConsentState>(() => loadConsent());
+  // 初始化固定為 local-only，避免 server/client hydration mismatch；
+  // 儲存的同意選擇在 mount 後再讀取。
+  const [consent, setConsent] = useState<ConsentState>({ mode: 'local-only' });
   const consentRef = useRef(consent);
   const [result, setResult] = useState<ScanResult | null>(null);
+
+  useEffect(() => {
+    setConsent(loadConsent());
+  }, []);
 
   useEffect(() => {
     consentRef.current = consent;
@@ -29,8 +40,41 @@ export default function Home() {
   }, [consent]);
 
   const handleComplete = async (signals: NormalizedSignal[], elapsedMs: number) => {
-    const { report, score } = await analyzeSignals(signals, consentRef.current);
-    setResult({ report, score, elapsedMs });
+    const consent = consentRef.current;
+    const { report, score } = await analyzeSignals(signals, consent);
+    const base: ScanResult = { report, score, elapsedMs, analysisSource: 'local' };
+
+    // local-only：一切留在本機；standard / stored：上傳伺服器並採用伺服器分析。
+    if (consent.mode !== 'local-only') {
+      try {
+        const server = await submitReport(report);
+        report.scores = {
+          privacyExposure: server.score.finalScore,
+          authenticity: server.score.finalScore,
+          automationRisk: 100 - server.score.finalScore,
+          networkTrust: server.score.finalScore,
+        };
+        report.raw = { ...(report.raw as object | undefined), network: server.network };
+        setResult({
+          ...base,
+          report,
+          score: server.score,
+          policy: server.policy,
+          network: server.network,
+          analysisSource: 'server',
+        });
+      } catch (err) {
+        setResult({
+          ...base,
+          warning: `伺服器分析失敗（${
+            err instanceof Error ? err.message : String(err)
+          }），顯示本機預覽分數`,
+        });
+      }
+      return;
+    }
+
+    setResult(base);
   };
 
   const handleExport = () => {
@@ -63,6 +107,10 @@ export default function Home() {
           report={result.report}
           score={result.score}
           elapsedMs={result.elapsedMs}
+          policy={result.policy}
+          network={result.network}
+          analysisSource={result.analysisSource}
+          warning={result.warning}
           onExport={handleExport}
         />
       )}

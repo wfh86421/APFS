@@ -46,8 +46,9 @@ docs/          技術文件
 - **L0/L1 網路層**：`packages/network-intel`（GeoIP mock/ip-api 雙提供者、Proxy/VPN/Tor/DataCenter 判斷、WebRTC 一致性、DNS leak 比對）；已知樣本分類準確率 100%（驗收 ≥95%）。
 - **合規端口檢測**：`packages/port-scanner` + `POST /v1/port-scan`——只掃請求者來源 IP、每 IP 每小時 5 次限流、審計日誌（`GET /v1/audit-logs`）。
 - **Server 端信任錨點**：`POST /v1/reports` 自動附加 HTTP headers 訊號（TLS JA4/TCP 介面預留），並回傳網路分析。
+- **網站串接完成**：同意模式分流——local-only 全部留在本機；standard / stored 上傳 `POST /v1/reports`，採用伺服器評分、policy 與網路分析（Proxy/VPN/Tor/DC、WebRTC 一致性、DNS leak），伺服器失敗時自動降級為本機預覽並提示。API 位址由 `NEXT_PUBLIC_API_URL` 設定（見 [apps/web-scanner/.env.example](./apps/web-scanner/.env.example)）。
 - **驗證**：repository 3/3、network-intel 4/4、port-scanner 2/2 測試通過；`pnpm -r typecheck` 與 API build 通過；API 冒煙測試（報告儲存/查詢/歷史/網路/限流/審計）全數通過。
-- **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存、ip-api 金鑰/額度設定、JA4/TCP 真實指紋、網站串接 `POST /v1/reports`。
+- **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存、ip-api 金鑰/額度設定、JA4/TCP 真實指紋、部署上線累積自然流量。
 
 ## 測試
 

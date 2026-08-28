@@ -102,4 +102,51 @@ test.describe('ShieldScan 檢測網站（Phase 1 E2E）', () => {
     expect(report.consent.mode).toBeTruthy();
     expect(report.sdk.name).toBe('@shieldscan/browser-sdk');
   });
+
+  test('standard 模式會上傳報告並顯示伺服器分析', async ({ page }) => {
+    let posted: unknown = null;
+    await page.route('**/v1/reports', async (route) => {
+      posted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reportId: 'e2e-0000-0000-0000-000000000001',
+          schemaVersion: '0.1.0',
+          score: {
+            finalScore: 90,
+            maxScore: 100,
+            grade: 'A+',
+            deductions: [],
+            riskLevel: 'low',
+          },
+          policy: 'allow',
+          network: {
+            ip: '127.0.0.1',
+            geo: null,
+            proxy: false,
+            vpn: false,
+            tor: false,
+            datacenter: false,
+            riskLevel: 'low',
+            webrtc: { consistency: 'unknown', localIps: [], publicIp: '127.0.0.1' },
+          },
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByLabel('標準（standard）').check();
+    await page.getByRole('button', { name: '開始掃描' }).click();
+
+    await expect(page.getByRole('heading', { name: '隱私評分' })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('伺服器分析')).toBeVisible();
+
+    expect(posted).toBeTruthy();
+    const body = posted as { consent?: { mode?: string }; signals?: unknown[] };
+    expect(body.consent?.mode).toBe('standard');
+    expect((body.signals as unknown[]).length).toBeGreaterThanOrEqual(10);
+  });
 });
