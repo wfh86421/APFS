@@ -12,6 +12,7 @@
   "dependencies": {
     "@shieldscan/browser-sdk": "workspace:*",
     "@shieldscan/core-schema": "workspace:*",
+    "@shieldscan/scoring-engine": "workspace:*",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

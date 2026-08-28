@@ -1,75 +1,75 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  ShieldScanSDK,
-  audioModule,
-  canvasModule,
-  localeModule,
-  screenModule,
-  timezoneModule,
-  webglModule,
-  webgpuModule,
-  webrtcModule,
-} from '@shieldscan/browser-sdk';
-import type { NormalizedSignal } from '@shieldscan/core-schema';
+import { useEffect, useRef, useState } from 'react';
+import type { EnvironmentReport, NormalizedSignal } from '@shieldscan/core-schema';
+import type { ScoreResult } from '@shieldscan/scoring-engine';
+import ConsentBanner, {
+  loadConsent,
+  saveConsent,
+  type ConsentState,
+} from '../components/consent-banner';
+import ReportView from '../components/report-view';
+import ScanPanel from '../components/scan-panel';
+import { analyzeSignals } from '../lib/analyze';
 
-const modules = [
-  canvasModule,
-  webglModule,
-  webgpuModule,
-  audioModule,
-  screenModule,
-  localeModule,
-  timezoneModule,
-  webrtcModule,
-];
+interface ScanResult {
+  report: EnvironmentReport;
+  score: ScoreResult;
+  elapsedMs: number;
+}
 
 export default function Home() {
-  const [signals, setSignals] = useState<NormalizedSignal[]>([]);
-  const [scanning, setScanning] = useState(false);
+  const [consent, setConsent] = useState<ConsentState>(() => loadConsent());
+  const consentRef = useRef(consent);
+  const [result, setResult] = useState<ScanResult | null>(null);
 
-  const scan = async () => {
-    setScanning(true);
-    try {
-      const sdk = new ShieldScanSDK({ sdkVersion: '0.1.0' });
-      for (const m of modules) sdk.register(m);
-      const session = await sdk.scan();
-      setSignals(await session.waitForCompletion());
-    } finally {
-      setScanning(false);
-    }
+  useEffect(() => {
+    consentRef.current = consent;
+    saveConsent(consent);
+  }, [consent]);
+
+  const handleComplete = async (signals: NormalizedSignal[], elapsedMs: number) => {
+    const { report, score } = await analyzeSignals(signals, consentRef.current);
+    setResult({ report, score, elapsedMs });
+  };
+
+  const handleExport = () => {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result.report, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `shieldscan-report-${result.report.reportId.slice(0, 8)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: 32, fontFamily: 'sans-serif' }}>
-      <h1>ShieldScan 隱盾檢測</h1>
-      <p>一鍵掃描瀏覽器指紋與環境訊號（MVP 雛形）。</p>
-      <button onClick={scan} disabled={scanning}>
-        {scanning ? '掃描中…' : '開始掃描'}
-      </button>
-      {signals.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24 }}>
-          <thead>
-            <tr>
-              <th align="left">模組</th>
-              <th align="left">類別</th>
-              <th align="left">數值摘要</th>
-            </tr>
-          </thead>
-          <tbody>
-            {signals.map((s) => (
-              <tr key={s.id}>
-                <td>{s.pluginId}</td>
-                <td>{s.category}</td>
-                <td style={{ wordBreak: 'break-all' }}>
-                  {JSON.stringify(s.value).slice(0, 120)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <main>
+      <header>
+        <h1>🛡️ ShieldScan 隱盾檢測</h1>
+        <p className="subtitle">
+          一站式瀏覽器指紋與網路環境安全檢測：即時隱私評分、風險預警與環境一致性驗證。
+        </p>
+      </header>
+
+      <ConsentBanner value={consent} onChange={setConsent} />
+      <ScanPanel consent={consent} onComplete={handleComplete} />
+
+      {result && (
+        <ReportView
+          report={result.report}
+          score={result.score}
+          elapsedMs={result.elapsedMs}
+          onExport={handleExport}
+        />
       )}
+
+      <footer className="muted" style={{ marginTop: 32, fontSize: 13 }}>
+        ShieldScan Phase 1 MVP — 本地分析預覽。正式風險判斷由 Server 端分析引擎提供。
+      </footer>
     </main>
   );
 }

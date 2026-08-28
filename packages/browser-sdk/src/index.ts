@@ -24,9 +24,19 @@ export interface ScanOptions {
   consentMode?: 'local-only' | 'standard' | 'stored';
 }
 
+export interface ScanProgressEvent {
+  moduleId: string;
+  moduleName: string;
+  index: number;
+  total: number;
+  percent: number;
+  status: 'running' | 'completed' | 'failed';
+  durationMs: number;
+}
+
 export interface ScanSession {
   sessionId: string;
-  onProgress(cb: (event: { module: string; progress: number }) => void): void;
+  onProgress(cb: (event: ScanProgressEvent) => void): void;
   waitForCompletion(): Promise<NormalizedSignal[]>;
 }
 
@@ -59,27 +69,68 @@ export class ShieldScanSDK {
       (m) => !options.modules || options.modules.includes(m.id),
     );
 
+    const listeners = new Set<(event: ScanProgressEvent) => void>();
+
     return {
       sessionId: crypto.randomUUID(),
-      onProgress() {
-        /* 預留：scanStream 實作後接上進度事件 */
+      onProgress(cb) {
+        listeners.add(cb);
       },
       async waitForCompletion() {
         const signals: NormalizedSignal[] = [];
-        for (const module of selected) {
-          const payload = await module.collect();
-          signals.push({
-            id: crypto.randomUUID(),
-            pluginId: module.id,
-            pluginVersion: module.version,
-            platform: 'browser',
-            category: module.category,
-            key: payload.key,
-            value: payload.value,
-            hash: payload.hash,
-            confidence: payload.confidence,
-            collectedAt: new Date().toISOString(),
-          });
+        const total = selected.length;
+        for (const [index, module] of selected.entries()) {
+          const startedAt = performance.now();
+          listeners.forEach((cb) =>
+            cb({
+              moduleId: module.id,
+              moduleName: module.name,
+              index,
+              total,
+              percent: Math.round((index / total) * 100),
+              status: 'running',
+              durationMs: 0,
+            }),
+          );
+
+          try {
+            const payload = await module.collect();
+            signals.push({
+              id: crypto.randomUUID(),
+              pluginId: module.id,
+              pluginVersion: module.version,
+              platform: 'browser',
+              category: module.category,
+              key: payload.key,
+              value: payload.value,
+              hash: payload.hash,
+              confidence: payload.confidence,
+              collectedAt: new Date().toISOString(),
+            });
+            listeners.forEach((cb) =>
+              cb({
+                moduleId: module.id,
+                moduleName: module.name,
+                index,
+                total,
+                percent: Math.round(((index + 1) / total) * 100),
+                status: 'completed',
+                durationMs: performance.now() - startedAt,
+              }),
+            );
+          } catch {
+            listeners.forEach((cb) =>
+              cb({
+                moduleId: module.id,
+                moduleName: module.name,
+                index,
+                total,
+                percent: Math.round(((index + 1) / total) * 100),
+                status: 'failed',
+                durationMs: performance.now() - startedAt,
+              }),
+            );
+          }
         }
         return signals;
       },
@@ -95,3 +146,6 @@ export { screenModule } from './modules/screen.js';
 export { localeModule } from './modules/locale.js';
 export { timezoneModule } from './modules/timezone.js';
 export { webrtcModule } from './modules/webrtc.js';
+export { uaModule } from './modules/ua.js';
+export { clientHintsModule } from './modules/clientHints.js';
+export { buildReport } from './report.js';

@@ -91,7 +91,9 @@ export function defaultRules(): ScoringRule[] {
       severity: 'info',
       deduction: 5,
       description: '瀏覽器對 Canvas API 進行了修改，可能是 Brave 等隱私瀏覽器的保護機制',
-      evaluate: (r) => r.signals.some((s) => s.key === 'canvas.isTampered' && s.value === true),
+      evaluate: (r, issues) =>
+        r.signals.some((s) => s.key === 'canvas.isTampered' && s.value === true) ||
+        issues.some((i) => i.type === 'canvas_tampered'),
     },
     {
       id: 'os_mismatch',

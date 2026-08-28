@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'ShieldScan 隱盾檢測 — 瀏覽器指紋與網路環境安全檢測',

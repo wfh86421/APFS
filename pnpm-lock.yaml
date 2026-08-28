@@ -42,6 +42,9 @@ importers:
       '@shieldscan/core-schema':
         specifier: workspace:*
         version: link:../../packages/core-schema
+      '@shieldscan/scoring-engine':
+        specifier: workspace:*
+        version: link:../../packages/scoring-engine
       next:
         specifier: ^15.0.0
         version: 15.5.24(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
