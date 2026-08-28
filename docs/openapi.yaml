@@ -183,6 +183,86 @@ paths:
                 $ref: "#/components/schemas/PluginProfile"
         "501":
           description: 尚未實作（需要 Plugin Registry 資料庫）
+  /v1/network/self:
+    get:
+      tags: [analyze]
+      summary: 來源 IP 的 L0/L1 網路分析（Geo/ASN/ISP/Proxy/VPN/Tor/DC + WebRTC 一致性）
+      operationId: networkSelf
+      responses:
+        "200":
+          description: 網路分析結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkAnalysisResponse"
+  /v1/port-scan:
+    post:
+      tags: [analyze]
+      summary: 合規端口掃描（只掃請求者來源 IP，每 IP 每小時 5 次，寫審計）
+      operationId: portScan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ports:
+                  type: array
+                  items:
+                    type: integer
+                  description: 僅接受 22/80/443/3389/445/8080/3306
+      responses:
+        "200":
+          description: 掃描結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PortScanResult"
+                  auditId:
+                    type: integer
+        "429":
+          description: 超過每小時 5 次限制
+  /v1/visitors/{visitorId}/reports:
+    get:
+      tags: [reports]
+      summary: 同 visitor 跨 IP 歷史報告（Phase 2 驗收指標）
+      operationId: visitorReports
+      parameters:
+        - name: visitorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 訪客歷史報告
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  visitorId:
+                    type: string
+                  reports:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnvironmentReport"
+  /v1/audit-logs:
+    get:
+      tags: [system]
+      summary: 敏感操作審計日誌（合規需求）
+      operationId: auditLogs
+      responses:
+        "200":
+          description: 審計日誌
 components:
   schemas:
     Platform:
@@ -536,3 +616,62 @@ components:
           example: not_implemented
         message:
           type: string
+    NetworkAnalysis:
+      type: object
+      required: [ip, proxy, vpn, tor, datacenter, riskLevel, webrtc]
+      properties:
+        ip:
+          type: string
+        geo:
+          type: object
+          nullable: true
+        proxy:
+          type: boolean
+        vpn:
+          type: boolean
+        tor:
+          type: boolean
+        datacenter:
+          type: boolean
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        webrtc:
+          type: object
+          properties:
+            consistency:
+              type: string
+              enum: [consistent, leak, unknown]
+            localIps:
+              type: array
+              items:
+                type: string
+            publicIp:
+              type: string
+        dnsLeak:
+          type: object
+          properties:
+            detected:
+              type: boolean
+            dnsServers:
+              type: array
+              items:
+                type: string
+    NetworkAnalysisResponse:
+      type: object
+      required: [ip, network]
+      properties:
+        ip:
+          type: string
+        network:
+          $ref: "#/components/schemas/NetworkAnalysis"
+    PortScanResult:
+      type: object
+      required: [port, open, durationMs]
+      properties:
+        port:
+          type: integer
+        open:
+          type: boolean
+        durationMs:
+          type: integer

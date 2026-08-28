@@ -1,0 +1,116 @@
+import type { GeoIpInfo, GeoIpProvider } from '../types.js';
+
+/**
+ * 內建離線樣本：用於開發、測試與沒有 GeoIP API 時的 fallback。
+ * 正式環境請用 IpApiProvider 或 MaxMind。
+ */
+const MOCK_DB: Record<string, GeoIpInfo> = {
+  '49.214.1.196': {
+    ip: '49.214.1.196',
+    country: 'Taiwan',
+    countryCode: 'TW',
+    region: 'New Taipei',
+    city: 'Banqiao',
+    latitude: 25.0144,
+    longitude: 121.4675,
+    postalCode: '220',
+    isp: 'Taiwan Fixed Network',
+    asn: 'AS3462',
+    timezone: 'Asia/Taipei',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: false,
+    source: 'mock',
+  },
+  '203.0.113.1': {
+    ip: '203.0.113.1',
+    country: 'Taiwan',
+    isp: 'Chunghwa Telecom',
+    asn: 'AS3462',
+    timezone: 'Asia/Taipei',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: false,
+    source: 'mock',
+  },
+  '203.0.113.10': {
+    ip: '203.0.113.10',
+    country: 'Taiwan',
+    isp: 'Chunghwa Telecom',
+    asn: 'AS3462',
+    timezone: 'Asia/Taipei',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: false,
+    source: 'mock',
+  },
+  '45.155.204.5': {
+    ip: '45.155.204.5',
+    country: 'Netherlands',
+    isp: 'M247',
+    asn: 'AS9009',
+    timezone: 'Europe/Amsterdam',
+    proxy: true,
+    vpn: true,
+    tor: false,
+    datacenter: true,
+    source: 'mock',
+  },
+  '185.220.101.34': {
+    ip: '185.220.101.34',
+    country: 'Germany',
+    isp: 'Digitalcourage',
+    asn: 'AS210444',
+    timezone: 'Europe/Berlin',
+    proxy: true,
+    vpn: false,
+    tor: true,
+    datacenter: true,
+    source: 'mock',
+  },
+  '34.120.35.1': {
+    ip: '34.120.35.1',
+    country: 'United States',
+    isp: 'Google LLC',
+    asn: 'AS396982',
+    timezone: 'America/Chicago',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: true,
+    source: 'mock',
+  },
+  '8.8.8.8': {
+    ip: '8.8.8.8',
+    country: 'United States',
+    isp: 'Google LLC',
+    asn: 'AS15169',
+    timezone: 'America/Los_Angeles',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: true,
+    source: 'mock',
+  },
+  '20.205.243.166': {
+    ip: '20.205.243.166',
+    country: 'Singapore',
+    isp: 'Microsoft',
+    asn: 'AS8075',
+    timezone: 'Asia/Singapore',
+    proxy: false,
+    vpn: false,
+    tor: false,
+    datacenter: true,
+    source: 'mock',
+  },
+};
+
+export class MockGeoIpProvider implements GeoIpProvider {
+  async lookup(ip: string): Promise<GeoIpInfo | null> {
+    return MOCK_DB[ip] ?? null;
+  }
+}

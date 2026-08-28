@@ -27,6 +27,7 @@ Desktop.ini
 # ===== 日後轉為程式碼專案時的建置產物（預留）=====
 node_modules/
 dist/
+dist-test/
 build/
 .next/
 out/

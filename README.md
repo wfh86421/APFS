@@ -40,6 +40,15 @@ docs/          技術文件
 - **驗證**：`pnpm -r typecheck`、`pnpm -r build`（含 Next.js production build）全數通過；`/` 與 `/privacy` HTTP 200。
 - **待辦**：部署上線、自然流量驗證（月掃描 ≥5,000）、`POST /v1/reports` 由網站串接（Phase 2）。
 
+## Phase 2 狀態（2026-08-29）
+
+- **報告儲存與歷史比對**：`packages/repository`（InMemory 開發用 + PostgreSQL 生產用，schema 見 [infra/docker/postgres/init.sql](./infra/docker/postgres/init.sql)）；`GET /v1/reports/{id}`、`GET /v1/visitors/{visitorId}/reports`（同 visitor 跨 IP 追蹤）已可用。
+- **L0/L1 網路層**：`packages/network-intel`（GeoIP mock/ip-api 雙提供者、Proxy/VPN/Tor/DataCenter 判斷、WebRTC 一致性、DNS leak 比對）；已知樣本分類準確率 100%（驗收 ≥95%）。
+- **合規端口檢測**：`packages/port-scanner` + `POST /v1/port-scan`——只掃請求者來源 IP、每 IP 每小時 5 次限流、審計日誌（`GET /v1/audit-logs`）。
+- **Server 端信任錨點**：`POST /v1/reports` 自動附加 HTTP headers 訊號（TLS JA4/TCP 介面預留），並回傳網路分析。
+- **驗證**：repository 3/3、network-intel 4/4、port-scanner 2/2 測試通過；`pnpm -r typecheck` 與 API build 通過；API 冒煙測試（報告儲存/查詢/歷史/網路/限流/審計）全數通過。
+- **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存、ip-api 金鑰/額度設定、JA4/TCP 真實指紋、網站串接 `POST /v1/reports`。
+
 ## 測試
 
 ```bash

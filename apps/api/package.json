@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "@shieldscan/core-schema": "workspace:*",
+    "@shieldscan/network-intel": "workspace:*",
+    "@shieldscan/node-sdk": "workspace:*",
+    "@shieldscan/port-scanner": "workspace:*",
+    "@shieldscan/repository": "workspace:*",
     "@shieldscan/scoring-engine": "workspace:*",
     "fastify": "^5.0.0"
   },

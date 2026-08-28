@@ -7,6 +7,20 @@ import {
   type ValidationFailure,
 } from '@shieldscan/core-schema';
 import {
+  analyzeIp,
+  IpApiProvider,
+  MockGeoIpProvider,
+  type GeoIpProvider,
+  type NetworkAnalysis,
+} from '@shieldscan/network-intel';
+import { collectServerSignals } from '@shieldscan/node-sdk';
+import { scanPorts } from '@shieldscan/port-scanner';
+import {
+  createRepository,
+  type ReportRepository,
+  type VisitorProfile,
+} from '@shieldscan/repository';
+import {
   defaultRules,
   ScoringEngine,
   type ScoreResult,
@@ -16,6 +30,11 @@ import {
 const app = Fastify({ logger: true });
 
 const port = Number(process.env.PORT ?? 3001);
+const databaseUrl = process.env.DATABASE_URL;
+const repository: ReportRepository = createRepository(databaseUrl);
+
+const networkProvider: GeoIpProvider =
+  process.env.NETWORK_PROVIDER === 'ip-api' ? new IpApiProvider() : new MockGeoIpProvider();
 
 /** 預設評分 Profile：與 planning 文件中的 privacy-default 一致。 */
 const DEFAULT_PROFILE: ScoringProfile = {
@@ -33,6 +52,9 @@ const DEFAULT_PROFILE: ScoringProfile = {
     block: 30,
   },
 };
+
+const portScanAttempts = new Map<string, number[]>();
+const auditLog: Array<Record<string, unknown>> = [];
 
 function buildScoringEngine(): ScoringEngine {
   const engine = new ScoringEngine();
@@ -53,8 +75,78 @@ function scoreToPolicy(score: ScoreResult): PolicyDecision {
   }
 }
 
-function validationReply(reply: { code: (code: number) => { send: (body: unknown) => unknown } }, failure: ValidationFailure) {
+function requestIp(request: {
+  headers: Record<string, unknown>;
+  socket: { remoteAddress?: string };
+}): string {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0]?.trim() ?? forwarded.trim();
+  }
+  const remote = request.socket.remoteAddress ?? 'unknown';
+  return remote.replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+}
+
+function validationReply(
+  reply: { code: (code: number) => { send: (body: unknown) => unknown } },
+  failure: ValidationFailure,
+) {
   return reply.code(400).send({ error: 'invalid_report', issues: failure.errors });
+}
+
+function extractVisitorProfile(report: EnvironmentReport): VisitorProfile {
+  const hashOf = (key: string) => report.signals.find((s) => s.key === key)?.hash;
+  const ua = report.signals.find((s) => s.key === 'ua')?.value as
+    | { userAgent?: string }
+    | undefined;
+  const userAgent = String(ua?.userAgent ?? '');
+
+  return {
+    visitorId: report.subjectId ?? report.sessionId,
+    canvasHash: hashOf('canvas'),
+    webglHash: hashOf('webgl'),
+    webgpuHash: hashOf('webgpu'),
+    audioHash: hashOf('audio'),
+    osFamily: /Android/i.test(userAgent)
+      ? 'Android'
+      : /Windows/i.test(userAgent)
+        ? 'Windows'
+        : /iPhone|iPad/i.test(userAgent)
+          ? 'iOS'
+          : /Macintosh/i.test(userAgent)
+            ? 'macOS'
+            : undefined,
+    browserFamily: /Brave/i.test(userAgent)
+      ? 'Brave'
+      : /Edg/i.test(userAgent)
+        ? 'Edge'
+        : /Firefox/i.test(userAgent)
+          ? 'Firefox'
+          : /Chrome/i.test(userAgent)
+            ? 'Chrome'
+            : undefined,
+    firstSeen: report.createdAt,
+    lastSeen: report.createdAt,
+    scanCount: 1,
+    ipHistory: [],
+  };
+}
+
+async function analyzeRequestNetwork(
+  ip: string,
+  report?: EnvironmentReport,
+): Promise<NetworkAnalysis> {
+  const webrtc = report?.signals.find((s) => s.key === 'webrtc')?.value as
+    | { localIps?: string[] }
+    | undefined;
+  const dnsSignal = report?.signals.find((s) => s.key === 'dnsLeak')?.value as
+    | { dnsServers?: string[] }
+    | undefined;
+
+  return analyzeIp(ip, networkProvider, {
+    localIps: webrtc?.localIps,
+    dnsServers: dnsSignal?.dnsServers,
+  });
 }
 
 app.get('/health', async () => ({ status: 'ok', service: 'shieldscan-api' }));
@@ -62,34 +154,63 @@ app.get('/health', async () => ({ status: 'ok', service: 'shieldscan-api' }));
 /**
  * POST /v1/reports
  *
- * Phase 0 雛形：契約驗證 → 評分 → 回傳結果。
- * 持久化、分析插件、完整性簽章驗證將在 Phase 2/3 接入。
+ * Phase 2：契約驗證 → Server 端訊號附加（L0/L1）→ 網路分析 →
+ * 評分 → 儲存（PostgreSQL / InMemory）→ 回傳。
  */
 app.post('/v1/reports', async (request, reply) => {
   const validation = validateEnvironmentReport(request.body);
   if (!validation.ok) return validationReply(reply, validation);
 
+  const ip = requestIp(request);
   const report: EnvironmentReport = validation.data;
+
+  // 附加 Server 端信任錨點訊號（headers / TLS 指紋介面）。
+  const serverSignals = await collectServerSignals({
+    headers: request.headers as Record<string, string | undefined>,
+    ip,
+  });
+  report.signals = [...report.signals, ...serverSignals];
+
+  const network = await analyzeRequestNetwork(ip, report);
   const score = await buildScoringEngine().calculate(report, report.issues, DEFAULT_PROFILE);
+
+  await repository.saveReport(report, {
+    clientIp: ip,
+    privacyScore: score.finalScore,
+    grade: score.grade,
+    riskLevel: score.riskLevel,
+    retentionDays: report.consent.retentionDays,
+  });
+  const visitor = extractVisitorProfile(report);
+  visitor.ipHistory = [ip];
+  await repository.upsertVisitor(visitor.visitorId, visitor);
+
+  app.log.info({ reportId: report.reportId, ip, score: score.finalScore }, 'report ingested');
 
   return reply.code(201).send({
     reportId: report.reportId,
     schemaVersion: report.schemaVersion ?? SCHEMA_VERSION,
     score,
     policy: scoreToPolicy(score),
+    network,
   });
 });
 
-app.get('/v1/reports/:id', async (_request, reply) => {
-  // TODO: 需要報告儲存層（PostgreSQL）後實作。
-  reply.code(501).send({ error: 'not_implemented', message: '報告儲存層尚未接入' });
+app.get('/v1/reports/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const stored = await repository.getReport(id);
+  if (!stored) return reply.code(404).send({ error: 'report_not_found' });
+  return stored;
 });
 
-/**
- * POST /v1/analyze
- *
- * 對已接收的訊號執行分析與評分；profileId 可選（預設 privacy-default）。
- */
+/** GET /v1/visitors/:visitorId/reports：同 visitor 跨 IP 歷史報告（驗收指標）。 */
+app.get('/v1/visitors/:visitorId/reports', async (request, reply) => {
+  const { visitorId } = request.params as { visitorId: string };
+  const reports = await repository.listReportsByVisitor(visitorId);
+  const visitor = await repository.getVisitor(visitorId);
+  return { visitorId, visitor, reports };
+});
+
 app.post('/v1/analyze', async (request, reply) => {
   const body = request.body as { report?: unknown; profileId?: string };
   const validation = validateEnvironmentReport(body?.report);
@@ -110,7 +231,6 @@ app.post('/v1/analyze', async (request, reply) => {
   };
 });
 
-/** POST /v1/scoring/calculate：對任意報告執行評分（供插件/企業測試）。 */
 app.post('/v1/scoring/calculate', async (request, reply) => {
   const body = request.body as { report?: unknown; profile?: ScoringProfile };
   const validation = validateEnvironmentReport(body?.report);
@@ -121,6 +241,59 @@ app.post('/v1/scoring/calculate', async (request, reply) => {
   const score = await buildScoringEngine().calculate(report, report.issues, profile);
   return { score };
 });
+
+/** GET /v1/network/self：L0/L1 信任錨點（來源 IP 的 Geo/ASN/ISP/Proxy/VPN/Tor/DC）。 */
+app.get('/v1/network/self', async (request) => {
+  const ip = requestIp(request);
+  const network = await analyzeRequestNetwork(ip);
+  return { ip, network };
+});
+
+/**
+ * POST /v1/port-scan
+ *
+ * 合規限制：
+ * - 只掃請求者自己的來源 IP（target 由伺服器決定，不接受任意目標）。
+ * - 每 IP 每小時最多 5 次。
+ * - 每次掃描寫審計日誌。
+ */
+app.post('/v1/port-scan', async (request, reply) => {
+  const ip = requestIp(request);
+  const windowMs = 60 * 60 * 1000;
+  const maxAttempts = 5;
+  const now = Date.now();
+  const attempts = (portScanAttempts.get(ip) ?? []).filter((t) => now - t < windowMs);
+
+  if (attempts.length >= maxAttempts) {
+    return reply.code(429).send({
+      error: 'rate_limited',
+      message: `每 IP 每小時最多掃描 ${maxAttempts} 次`,
+      retryAfterSeconds: Math.ceil((windowMs - (now - (attempts[0] ?? now))) / 1000),
+    });
+  }
+
+  const body = request.body as { ports?: number[] };
+  const requestedPorts = Array.isArray(body.ports) ? body.ports : [22, 3389, 445];
+  const allowed = [22, 80, 443, 3389, 445, 8080, 3306];
+  const sanitized = [...new Set(requestedPorts.filter((p) => allowed.includes(p)))];
+
+  portScanAttempts.set(ip, [...attempts, now]);
+  auditLog.unshift({
+    id: auditLog.length + 1,
+    action: 'port-scan',
+    targetIp: ip,
+    actorIp: ip,
+    metadata: { ports: sanitized },
+    createdAt: new Date().toISOString(),
+  });
+
+  const results = await scanPorts(ip, sanitized.length > 0 ? sanitized : [22]);
+  app.log.info({ ip, ports: sanitized }, 'port scan completed');
+  return { ip, results, auditId: auditLog.length };
+});
+
+/** GET /v1/audit-logs：敏感操作審計（合規需求）。 */
+app.get('/v1/audit-logs', async () => ({ logs: auditLog }));
 
 app.get('/v1/plugin-profile', async (_request, reply) => {
   // TODO: 需要 Plugin Registry（資料庫）後實作。

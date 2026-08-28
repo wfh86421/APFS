@@ -333,9 +333,10 @@
 
 **第 31–60 天**
 
-- [ ] API 上線（reports / analyze / plugin-profile）
-- [ ] PostgreSQL + Redis + 報告儲存
-- [ ] IP/Geo/ASN + WebRTC + DNS leak 上線
+- [x] API 上線（reports / analyze / network/self / port-scan；plugin-profile 待 Phase 3）
+- [x] 報告儲存與歷史比對（PostgreSQL schema + InMemory 開發用；同 visitor 跨 IP 追蹤示範通過）
+- [x] IP/Geo/ASN + WebRTC 一致性 + DNS leak 分析（network-intel，樣本準確率 ≥95%）
+- [x] 合規端口檢測（僅掃自身來源 IP、每 IP 每小時 5 次限流、審計日誌）
 - [ ] 網站開始累積真實掃描資料
 
 **第 61–90 天**
