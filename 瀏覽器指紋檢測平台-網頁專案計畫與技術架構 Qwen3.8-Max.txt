@@ -1,0 +1,221 @@
+瀏覽器指紋檢測平台 — 網頁專案計畫與技術架構 Qwen3.8-Max
+
+根據您提供的 browserscan.net 報告，以下為完整的專案規劃：
+一、專案概述與目標
+產品定位： 一站式瀏覽器指紋檢測與網路隱私分析工具，幫助用戶了解「網站到底能看到你什麼」。
+核心價值主張：
+檢測 50+ 項瀏覽器與設備指紋 
+capmonster.cloud
+即時評分隱私暴露風險（如報告中的 90% 隱私評分）
+識別偽裝/模擬環境中的不一致性
+提供修復建議與防護指南
+二、功能模組規劃
+根據報告結構，系統分為以下 8 大檢測模組：
+#
+模組名稱
+功能描述
+對應報告項
+1
+總覽儀表板
+一鍵顯示 IP、位置、瀏覽器、評分
+Overview
+2
+IP 位址分析
+公網 IP、WebRTC IP、STUN 探測、ISP 查詢、7日 IP 歷史
+IP Address
+3
+地理位置偵測
+國家/城市/郵遞區號/經緯度/地圖定位
+Location
+4
+硬體指紋採集
+Canvas/WebGL/Audio/ClientRects/WebGPU/螢幕/記憶體/CPU 核心
+Hardware
+5
+瀏覽器環境
+UA 解析、Incognito 偵測、JS/Cookie/Flash 狀態
+Browser
+6
+軟體與環境
+時區一致性、語言、DNT、Port Scan
+Software
+7
+安全漏洞掃描
+DNS 洩漏、Port 掃描(22/3389)、黑名單比對
+Security
+8
+智慧評分系統
+Canvas 篡改扣分、OS 不一致扣分、綜合評分
+Issues
+三、系統架構設計
+3.1 整體架構圖
+
+1234567891011121314151617181920212223242526272829┌─────────────────────────────────────────────────────────┐│                     使用者瀏覽器                          ││  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ││  │ 指紋採集引擎 │  │ WebRTC探測器 │  │ Canvas渲染器 │  ││  │(FingerprintJS)│  │ (STUN查詢)   │  │(GPU/音訊/字體)│  ││  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  ││         └────────────┬────┴──────────────────┘           ││                      ▼                                   ││            前端狀態管理 + 本地聚合                         │└──────────────────────┬──────────────────────────────────┘                       │ REST API / WebSocket                       ▼┌──────────────────────────────────────────────────────────┐│                     後端服務集群                          ││  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐││  │ IP 分析  │  │ GeoIP    │  │ DNS Leak │  │ Port     │││  │ 服務     │  │ 查詢     │  │ 檢測     │  │ Scanner  │││  └──────────┘  └──────────┘  └──────────┘  └──────────┘││  ┌──────────┐  ┌──────────┐  ┌──────────┐              ││  │ 黑名單   │  │ Bot      │  │ 評分引擎 │              ││  │ 資料庫   │  │ 檢測     │  │ (AI/ML)  │              ││  └──────────┘  └──────────┘  └──────────┘              │└──────────────────────┬──────────────────────────────────┘                       │                       ▼┌──────────────────────────────────────────────────────────┐│                    數據層 / 快取層                       ││  PostgreSQL │ Redis │ MaxMind GeoIP DB │ 黑名單 DB      │└──────────────────────────────────────────────────────────┘
+3.2 資料流
+客戶端採集：JS 引擎收集所有瀏覽器屬性 → 計算本地指紋哈希
+後端聚合：IP 資料 + GeoIP + DNS 洩漏檢測結果
+智慧評分：交叉比對發現不一致項（如 UA Android 10 vs OS Android 14）
+報告生成：結構化 JSON → 視覺化圖表
+四、技術棧選擇
+4.1 前端技術棧
+技術
+選型
+理由
+框架
+Next.js 15 (App Router) / React 19
+SSR + 靜態生成 + API Routes 一體化
+語言
+TypeScript
+指紋資料結構複雜，型別安全至關重要
+指紋庫
+FingerprintJS (開源版) + ThumbmarkJS
+FingerprintJS 市佔 63%，成熟穩定 
+technologychecker.io
+；ThumbmarkJS 為 MIT 開源，可自由商用 
+www.thumbmarkjs.com
+WebRTC 探測
+自研 STUN 探測模組
+需多 STUN 伺服器輪詢以取得真實 IP 
+bloggeek.me
+Canvas 偵測
+CreepJS 技術參考 + 自研
+CreepJS 專精於偵測瀏覽器「說謊」行為 
+github.com
+UI/UX
+Tailwind CSS 4 + Framer Motion
+現代化設計、動畫流暢
+圖表
+Recharts / D3.js
+視覺化指紋資料分佈
+國際化
+next-intl
+支援 zh-TW / en-US / ja 等多語
+4.2 後端技術棧
+技術
+選型
+理由
+語言
+Go (Gin/Fiber) 或 Node.js (Fastify)
+Go 適合高併發 Port Scan；Node.js 可共用 JS 邏輯
+API
+RESTful + WebSocket
+檢測過程可能需要即時反饋
+GeoIP
+MaxMind GeoLite2 + ip-api.com 備援
+精確的城市級定位
+DNS 洩漏
+自建 STUN/DNS 伺服器群
+從不同地區發起 DNS 查詢以判斷真實 ISP
+Port 掃描
+Nmap (libnmap) + 自研 Go scanner
+掃描 SSH(22)/RDP(3389) 等敏感端口
+黑名單
+AbuseIPDB API + Spamhaus + 自建資料庫
+判斷 IP 是否曾被用於惡意行為
+Bot 偵測
+自研規則引擎 + 機器學習模型
+分析請求頻率、指紋熵值等
+4.3 基礎設施
+元件
+選型
+用途
+資料庫
+PostgreSQL 16
+儲存檢測報告、歷史資料
+快取
+Redis 7
+GeoIP 查詢快取、Rate Limiting
+搜尋
+Meilisearch
+全文搜尋 IP 歷史、指紋匹配
+容器化
+Docker + Docker Compose
+標準化部署
+反向代理
+Caddy
+自動 HTTPS、HTTP/3
+CI/CD
+GitHub Actions
+自動化測試與部署
+監控
+Prometheus + Grafana
+系統監控與告警
+CDN
+Cloudflare
+靜態資源加速、DDoS 防護
+五、關鍵技術挑戰與解決方案
+🔴 挑戰 1：Canvas 篡改偵測
+問題： Brave/Tor 等瀏覽器會修改 Canvas 輸出以保護隱私 
+github.com
+
+方案：
+多重繪製策略：同一段文字繪製多次，比對結果一致性
+離屏 Canvas vs 在屏 Canvas 交叉驗證
+偵測 toDataURL() 和 getImageData() 的調用頻率
+🔴 挑戰 2：UA 與真實 OS 不一致
+問題： 模擬器/指纹浏览器可能偽造 User Agent（如報告中 Android 10 vs 14）
+方案：
+
+123456偵測策略：├── navigator.userAgentData (Client Hints API)├── navigator.platform vs userAgent 比對├── WebGL 渲染器資訊 (Adreno 613 對應特定 OS 版本)├── navigator.connection.effectiveType (網路類型)└── Battery API / Permissions API 狀態
+🔴 挑戰 3：WebRTC 洩漏偵測
+問題： VPN 用戶的真實 IP 可能透過 WebRTC STUN 洩漏 
+www.expressvpn.com
+
+方案：
+後端部署多個 STUN 伺服器 (Google STUN + 自建 TURN)
+客戶端輪詢不同 STUN，比對返回的 IP 列表
+比對 RTCPeerConnection 返回的 local IP 與公網 IP
+🔴 挑戰 4：DNS 洩漏檢測
+問題： 用戶可能不知道自己的 DNS 請求走了真實 ISP
+方案：
+後端建立「DNS 誘捕域名」(如 detect.ourdomain.com)
+前端加載子域名資源，後端記錄查詢來源
+比對來源 IP 是否與公網 IP 屬於同一 ISP
+🔴 挑戰 5：Port Scan 的精確性
+問題： 客戶端環境不允許主動端口掃描（瀏覽器沙盒）
+方案：
+後端根據客戶端來源 IP，從多個地理位置反向掃描
+使用 nmap 搭配 TCP SYN 掃描（半開掃描）
+結果快取，避免重複掃描同一 IP
+六、開發路線圖
+Phase 1：MVP (4-6 週)
+基礎指紋採集（IP、UA、Canvas、WebGL）
+地理位置查詢
+簡易隱私評分
+基本 UI 儀表板
+Phase 2：深度偵測 (4-6 週)
+WebRTC 洩漏檢測
+DNS 洩漏檢測
+Port 掃描整合
+Canvas/WebGL 篡改識別
+Bot 偵測引擎
+Phase 3：智慧化 (4-6 週)
+OS 一致性交叉驗證
+歷史 IP 追蹤 (7日/30日)
+報告匯出 (PDF/PNG)
+帳號系統 (Sign In 功能)
+多語言支援
+Phase 4：商業化 (持續迭代)
+API 開放 (供反爬蟲服務使用)
+企業版 (批量檢測、報警系統)
+瀏覽器擴充功能
+指紋資料庫 (匿名化) 用於研究
+七、專案目錄結構建議
+
+12345678910111213141516171819202122232425262728browser-detect/├── apps/│   ├── web/                  # Next.js 前端│   │   ├── src/│   │   │   ├── components/   # UI 組件│   │   │   ├── detectors/    # 指紋採集模組│   │   │   │   ├── canvas.ts│   │   │   │   ├── webrtc.ts│   │   │   │   ├── audio.ts│   │   │   │   └── hardware.ts│   │   │   ├── lib/│   │   │   └── hooks/│   │   └── public/│   └── api/                  # 後端 API│       ├── handlers/│       ├── services/│       │   ├── geoip/│       │   ├── portscanner/│       │   └── dnsleak/│       └── pkg/├── packages/│   ├── shared/               # 共享類型定義│   └── ui/                   # 共享 UI 庫├── infra/                    # 基礎設施配置│   ├── docker/│   └── k8s/├── docs/                     # 文件└── scripts/                  # 工具腳本
+八、預期成果指標 (KPI)
+指標
+目標值
+指紋採集延遲
+< 3 秒
+檢測項目覆蓋
+50+ 項
+OS 不一致偵測準確率
+> 95%
+WebRTC 洩漏偵測率
+> 99%
+隱私評分誤差
+< 5%
+API 響應時間 (P99)
+< 500ms
+如需進一步細化任何模組（例如 Canvas 篡改偵測的演算法、評分權重設計、或具體的資料庫 Schema），請告知，我可以為您深入展開！

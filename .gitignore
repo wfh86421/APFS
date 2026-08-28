@@ -1,0 +1,34 @@
+# ===== 冗餘/不需要的檔案 =====
+
+# PDF 匯出（內容皆已有對應 Markdown，不需納入版控）
+*.pdf
+
+# ===== 作業系統雜訊 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ===== 編輯器 / IDE =====
+.vscode/
+.idea/
+*.swp
+
+# ===== 暫存與備份檔 =====
+*~
+~$*
+*.tmp
+*.bak
+
+# ===== 環境變數（不應進版控）=====
+.env
+.env.*
+!.env.example
+
+# ===== 日後轉為程式碼專案時的建置產物（預留）=====
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.log
