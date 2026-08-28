@@ -295,6 +295,129 @@ paths:
       responses:
         "200":
           description: 審計日誌
+  /v1/tenants:
+    post:
+      tags: [billing]
+      summary: 自助註冊租戶並簽發 API Key（明文僅回傳一次）
+      operationId: createTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                plan:
+                  type: string
+                  enum: [free, developer, business, enterprise]
+                  default: free
+      responses:
+        "201":
+          description: 註冊成功（含明文 apiKey）
+  /v1/tenant/me:
+    get:
+      tags: [billing]
+      summary: 目前租戶資訊與用量（需 API Key）
+      operationId: tenantMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 租戶資訊
+        "401":
+          description: 未授權
+  /v1/billing/current:
+    get:
+      tags: [billing]
+      summary: 本月用量與發票（需 API Key）
+      operationId: billingCurrent
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 用量與發票
+  /v1/billing/invoices/current:
+    post:
+      tags: [billing]
+      summary: 產生本期發票（需 API Key）
+      operationId: createInvoice
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: 發票紀錄
+  /v1/webhooks:
+    post:
+      tags: [analyze]
+      summary: 註冊風險通知 Webhook（需 API Key）
+      operationId: registerWebhook
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        "201":
+          description: 註冊成功
+    get:
+      tags: [analyze]
+      summary: 列出 Webhook（需 API Key）
+      operationId: listWebhooks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Webhook 清單
+  /v1/reports/{reportId}:
+    delete:
+      tags: [reports]
+      summary: 刪除單筆報告（被遺忘權，需 API Key）
+      operationId: deleteReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: 已刪除
+        "404":
+          description: 找不到
+  /v1/visitors/{visitorId}:
+    delete:
+      tags: [reports]
+      summary: 刪除訪客及其全部報告（需 API Key）
+      operationId: deleteVisitor
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: visitorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: 已刪除
+        "404":
+          description: 找不到
 components:
   schemas:
     Platform:
@@ -707,3 +830,8 @@ components:
           type: boolean
         durationMs:
           type: integer
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: shd_live_

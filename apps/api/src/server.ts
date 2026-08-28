@@ -27,6 +27,13 @@ import {
   type ScoreResult,
   type ScoringProfile,
 } from '@shieldscan/scoring-engine';
+import { verifySignedReport } from '@shieldscan/signing';
+import {
+  createTenantStore,
+  TenantService,
+  type ApiKeyRecord,
+  type Tenant,
+} from '@shieldscan/tenant';
 
 const app = Fastify({ logger: true });
 
@@ -40,12 +47,13 @@ void app.register(cors, {
 
 const port = Number(process.env.PORT ?? 3001);
 const databaseUrl = process.env.DATABASE_URL;
+const signingSecret = process.env.REPORT_SIGNING_SECRET;
 const repository: ReportRepository = createRepository(databaseUrl);
+const tenantService = new TenantService(createTenantStore(databaseUrl));
 
 const networkProvider: GeoIpProvider =
   process.env.NETWORK_PROVIDER === 'ip-api' ? new IpApiProvider() : new MockGeoIpProvider();
 
-/** 預設評分 Profile：與 planning 文件中的 privacy-default 一致。 */
 const DEFAULT_PROFILE: ScoringProfile = {
   profileId: 'privacy-default',
   weights: {
@@ -63,7 +71,18 @@ const DEFAULT_PROFILE: ScoringProfile = {
 };
 
 const portScanAttempts = new Map<string, number[]>();
+const keyRateLimits = new Map<string, number[]>();
 const auditLog: Array<Record<string, unknown>> = [];
+
+interface Webhook {
+  id: string;
+  tenantId: string;
+  url: string;
+  events: string[];
+  isEnabled: boolean;
+  createdAt: string;
+}
+const webhooksByTenant = new Map<string, Webhook[]>();
 
 function buildScoringEngine(): ScoringEngine {
   const engine = new ScoringEngine();
@@ -101,6 +120,77 @@ function validationReply(
   failure: ValidationFailure,
 ) {
   return reply.code(400).send({ error: 'invalid_report', issues: failure.errors });
+}
+
+async function resolveAuth(request: {
+  headers: Record<string, unknown>;
+}): Promise<{ tenant: Tenant; key: ApiKeyRecord } | null> {
+  const header = request.headers.authorization;
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return null;
+  const apiKey = header.slice('Bearer '.length).trim();
+  if (!apiKey) return null;
+  const verified = await tenantService.verifyApiKey(apiKey);
+  if (!verified || !verified.key) return null;
+
+  // API Key 限流：每 key 每分鐘 60 次。
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const attempts = (keyRateLimits.get(verified.key.keyId) ?? []).filter((t) => now - t < windowMs);
+  if (attempts.length >= 60) return null;
+  keyRateLimits.set(verified.key.keyId, [...attempts, now]);
+
+  return { tenant: verified.tenant, key: verified.key };
+}
+
+async function verifyReportSignature(
+  report: EnvironmentReport,
+  tenant: Tenant | null,
+): Promise<{ required: boolean; verified: boolean | null; reason?: string }> {
+  if (!signingSecret) return { required: false, verified: null };
+  if (!report.integrity.signature) {
+    return tenant
+      ? { required: true, verified: false, reason: 'missing_signature' }
+      : { required: false, verified: false, reason: 'missing_signature' };
+  }
+  const result = await verifySignedReport(report, signingSecret);
+  return { required: true, verified: result.valid, reason: result.reason };
+}
+
+async function fireRiskWebhooks(input: {
+  tenantId?: string;
+  reportId: string;
+  score: ScoreResult;
+  policy: PolicyDecision;
+  network: NetworkAnalysis;
+}): Promise<void> {
+  const targets = input.tenantId ? (webhooksByTenant.get(input.tenantId) ?? []) : [];
+  for (const webhook of targets) {
+    if (!webhook.isEnabled) continue;
+    const payload = {
+      type: 'risk_event',
+      reportId: input.reportId,
+      score: input.score.finalScore,
+      grade: input.score.grade,
+      riskLevel: input.score.riskLevel,
+      policy: input.policy,
+      networkRisk: input.network.riskLevel,
+      tenantId: input.tenantId,
+      at: new Date().toISOString(),
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch(webhook.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (response.ok) break;
+      } catch (err) {
+        app.log.warn({ webhook: webhook.id, attempt }, 'webhook delivery failed');
+      }
+    }
+  }
 }
 
 function extractVisitorProfile(report: EnvironmentReport): VisitorProfile {
@@ -160,20 +250,121 @@ async function analyzeRequestNetwork(
 
 app.get('/health', async () => ({ status: 'ok', service: 'shieldscan-api' }));
 
-/**
- * POST /v1/reports
- *
- * Phase 2：契約驗證 → Server 端訊號附加（L0/L1）→ 網路分析 →
- * 評分 → 儲存（PostgreSQL / InMemory）→ 回傳。
- */
+/* ------------------------------------------------------------------ */
+/* Phase 3：租戶 / API Key / 計費                                       */
+/* ------------------------------------------------------------------ */
+
+/** 自助註冊：建立租戶並簽發 API Key（明文僅回傳一次）。 */
+app.post('/v1/tenants', async (request, reply) => {
+  const body = request.body as { name?: string; email?: string; plan?: string };
+  if (!body.name || !body.email) {
+    return reply.code(400).send({ error: 'missing_fields', required: ['name', 'email'] });
+  }
+  const { tenant, issued } = await tenantService.createTenant({
+    name: String(body.name),
+    email: String(body.email),
+    plan: (body.plan as Tenant['plan']) ?? 'free',
+  });
+  return reply.code(201).send({
+    tenant,
+    apiKey: issued.apiKey,
+    keyId: issued.keyId,
+    note: '請立即保存 API Key，明文僅此一次顯示。',
+  });
+});
+
+/** 目前租戶資訊（需 API Key）。 */
+app.get('/v1/tenant/me', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const usage = await tenantService.currentUsage(auth.tenant.tenantId);
+  return { tenant: auth.tenant, key: auth.key, usage };
+});
+
+/** 簽發額外 API Key（需 API Key）。 */
+app.post('/v1/tenant/keys', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const body = request.body as { label?: string };
+  const issued = await tenantService.issueApiKey(
+    auth.tenant.tenantId,
+    body.label ?? 'additional',
+  );
+  return reply.code(201).send({ ...issued, note: '明文僅此一次顯示。' });
+});
+
+/** 本月用量與發票（需 API Key）。 */
+app.get('/v1/billing/current', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const usage = await tenantService.currentUsage(auth.tenant.tenantId);
+  const invoices = await tenantService.getInvoices(auth.tenant.tenantId);
+  return { tenant: auth.tenant, usage, invoices };
+});
+
+/** 產生本期發票（需 API Key）。 */
+app.post('/v1/billing/invoices/current', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const invoice = await tenantService.createInvoice(auth.tenant.tenantId);
+  return reply.code(201).send({ invoice });
+});
+
+/** 註冊 Webhook（需 API Key）。 */
+app.post('/v1/webhooks', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const body = request.body as { url?: string; events?: string[] };
+  const isHttps = typeof body.url === 'string' && /^https:\/\//.test(body.url);
+  const isLocalHttp =
+    typeof body.url === 'string' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(body.url);
+  if (!body.url || !(isHttps || isLocalHttp)) {
+    return reply
+      .code(400)
+      .send({ error: 'invalid_url', message: 'Webhook 必須為 https URL（本地可用 http://localhost）' });
+  }
+  const webhook: Webhook = {
+    id: crypto.randomUUID(),
+    tenantId: auth.tenant.tenantId,
+    url: body.url,
+    events: body.events ?? ['risk_event'],
+    isEnabled: true,
+    createdAt: new Date().toISOString(),
+  };
+  const list = webhooksByTenant.get(auth.tenant.tenantId) ?? [];
+  list.push(webhook);
+  webhooksByTenant.set(auth.tenant.tenantId, list);
+  return reply.code(201).send({ webhook });
+});
+
+app.get('/v1/webhooks', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  return { webhooks: webhooksByTenant.get(auth.tenant.tenantId) ?? [] };
+});
+
+/* ------------------------------------------------------------------ */
+/* 報告 / 網路 / 掃描                                                   */
+/* ------------------------------------------------------------------ */
+
 app.post('/v1/reports', async (request, reply) => {
   const validation = validateEnvironmentReport(request.body);
   if (!validation.ok) return validationReply(reply, validation);
 
   const ip = requestIp(request);
   const report: EnvironmentReport = validation.data;
+  const auth = await resolveAuth(request);
 
-  // 附加 Server 端信任錨點訊號（headers / TLS 指紋介面）。
+  // Phase 3 正式簽章驗證：租戶（SDK 客戶）必須簽章，匿名掃描不強制。
+  const integrity = await verifyReportSignature(report, auth?.tenant ?? null);
+  if (integrity.required && integrity.verified === false) {
+    return reply.code(401).send({
+      error: 'invalid_signature',
+      reason: integrity.reason,
+      message: '報告簽章驗證失敗',
+    });
+  }
+
   const serverSignals = await collectServerSignals({
     headers: request.headers as Record<string, string | undefined>,
     ip,
@@ -182,8 +373,9 @@ app.post('/v1/reports', async (request, reply) => {
 
   const network = await analyzeRequestNetwork(ip, report);
   const score = await buildScoringEngine().calculate(report, report.issues, DEFAULT_PROFILE);
+  const policy = scoreToPolicy(score);
 
-  // 把伺服器端的網路分析一併持久化，歷史報告可回溯當時判決。
+  // 把伺服器端網路分析一併持久化，歷史報告可回溯當時判決。
   const reportToStore: EnvironmentReport = {
     ...report,
     raw: { ...(report.raw as object | undefined), network },
@@ -199,26 +391,50 @@ app.post('/v1/reports', async (request, reply) => {
   visitor.ipHistory = [ip];
   await repository.upsertVisitor(visitor.visitorId, visitor);
 
-  app.log.info({ reportId: report.reportId, ip, score: score.finalScore }, 'report ingested');
+  if (auth) {
+    await tenantService.recordUsage(auth.tenant.tenantId, 1, 'report');
+  }
+
+  // 高風險事件 → Webhook 通知。
+  if (score.riskLevel === 'high' || score.riskLevel === 'critical') {
+    await fireRiskWebhooks({
+      tenantId: auth?.tenant.tenantId,
+      reportId: report.reportId,
+      score,
+      policy,
+      network,
+    });
+  }
+
+  app.log.info(
+    { reportId: report.reportId, ip, score: score.finalScore, tenant: auth?.tenant.tenantId },
+    'report ingested',
+  );
 
   return reply.code(201).send({
     reportId: report.reportId,
     schemaVersion: report.schemaVersion ?? SCHEMA_VERSION,
+    tenantId: auth?.tenant.tenantId,
+    integrity,
     score,
-    policy: scoreToPolicy(score),
+    policy,
     network,
   });
 });
 
 app.get('/v1/reports/:id', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { id } = request.params as { id: string };
   const stored = await repository.getReport(id);
   if (!stored) return reply.code(404).send({ error: 'report_not_found' });
   return stored;
 });
 
-/** DELETE /v1/reports/:id：單筆報告刪除（個資刪除請求）。 */
+/** DELETE /v1/reports/:id：刪除單筆報告（GDPR/個資刪除請求，需 API Key）。 */
 app.delete('/v1/reports/:id', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { id } = request.params as { id: string };
   const deleted = await repository.deleteReport(id);
   if (!deleted) return reply.code(404).send({ error: 'report_not_found' });
@@ -233,16 +449,19 @@ app.delete('/v1/reports/:id', async (request, reply) => {
   return reply.code(204).send();
 });
 
-/** GET /v1/visitors/:visitorId/reports：同 visitor 跨 IP 歷史報告（驗收指標）。 */
 app.get('/v1/visitors/:visitorId/reports', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { visitorId } = request.params as { visitorId: string };
   const reports = await repository.listReportsByVisitor(visitorId);
   const visitor = await repository.getVisitor(visitorId);
   return { visitorId, visitor, reports };
 });
 
-/** DELETE /v1/visitors/:visitorId：訪客及其全部報告刪除（被遺忘權）。 */
+/** DELETE /v1/visitors/:visitorId：刪除訪客及其全部報告（被遺忘權，需 API Key）。 */
 app.delete('/v1/visitors/:visitorId', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { visitorId } = request.params as { visitorId: string };
   const deleted = await repository.deleteVisitor(visitorId);
   if (!deleted) return reply.code(404).send({ error: 'visitor_not_found' });
@@ -269,40 +488,25 @@ app.post('/v1/analyze', async (request, reply) => {
       ? { ...DEFAULT_PROFILE, profileId: body.profileId }
       : DEFAULT_PROFILE;
   const score = await engine.calculate(report, report.issues, profile);
-
-  return {
-    score,
-    issues: report.issues,
-    policy: scoreToPolicy(score),
-  };
+  return { score, issues: report.issues, policy: scoreToPolicy(score) };
 });
 
 app.post('/v1/scoring/calculate', async (request, reply) => {
   const body = request.body as { report?: unknown; profile?: ScoringProfile };
   const validation = validateEnvironmentReport(body?.report);
   if (!validation.ok) return validationReply(reply, validation);
-
   const report: EnvironmentReport = validation.data;
   const profile: ScoringProfile = body.profile ?? DEFAULT_PROFILE;
   const score = await buildScoringEngine().calculate(report, report.issues, profile);
   return { score };
 });
 
-/** GET /v1/network/self：L0/L1 信任錨點（來源 IP 的 Geo/ASN/ISP/Proxy/VPN/Tor/DC）。 */
 app.get('/v1/network/self', async (request) => {
   const ip = requestIp(request);
   const network = await analyzeRequestNetwork(ip);
   return { ip, network };
 });
 
-/**
- * POST /v1/port-scan
- *
- * 合規限制：
- * - 只掃請求者自己的來源 IP（target 由伺服器決定，不接受任意目標）。
- * - 每 IP 每小時最多 5 次。
- * - 每次掃描寫審計日誌。
- */
 app.post('/v1/port-scan', async (request, reply) => {
   const ip = requestIp(request);
   const windowMs = 60 * 60 * 1000;
@@ -338,11 +542,9 @@ app.post('/v1/port-scan', async (request, reply) => {
   return { ip, results, auditId: auditLog.length };
 });
 
-/** GET /v1/audit-logs：敏感操作審計（合規需求）。 */
 app.get('/v1/audit-logs', async () => ({ logs: auditLog }));
 
 app.get('/v1/plugin-profile', async (_request, reply) => {
-  // TODO: 需要 Plugin Registry（資料庫）後實作。
   reply.code(501).send({ error: 'not_implemented', message: 'Plugin Registry 尚未接入' });
 });
 

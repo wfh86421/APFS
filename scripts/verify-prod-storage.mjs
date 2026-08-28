@@ -87,14 +87,14 @@ let dbs;
 let api;
 if (!EXTERNAL_DB) {
   dbs = await startDevDatabases();
-  console.log('[verify] 以 DATABASE_URL 啟動 API…');
-  api = spawn(process.execPath, ['apps/api/dist/server.js'], {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL, PORT: '3001' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
-  });
 }
+console.log('[verify] 以 DATABASE_URL 啟動 API…');
+api = spawn(process.execPath, ['apps/api/dist/server.js'], {
+  cwd: process.cwd(),
+  env: { ...process.env, DATABASE_URL, PORT: '3001' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+  shell: false,
+});
 
 try {
   let healthy = false;
@@ -120,12 +120,28 @@ try {
   const pong = await redisPing();
   record('Redis PING → PONG', pong, `${REDIS_HOST}:${REDIS_PORT}`);
 
+  // Phase 3 租戶流程：自助註冊拿 API Key（讀取/刪除需授權）。
+  const reg = await fetch(`${API_URL}/v1/tenants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Verify Bot', email: 'verify@shieldscan.dev', plan: 'developer' }),
+  });
+  const regBody = (await reg.json()) ?? {};
+  const apiKey = regBody.apiKey;
+  record('POST /v1/tenants（自助註冊 + API Key）', reg.status === 201 && typeof apiKey === 'string');
+
+  const authFetch = (url, init = {}) =>
+    fetch(url, {
+      ...init,
+      headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` },
+    });
+
   const a = await postReport('49.214.1.196');
   const b = await postReport('203.0.113.10');
   record('POST /v1/reports 201 × 2', a.status === 201 && b.status === 201);
 
-  const storedA = await (await fetch(`${API_URL}/v1/reports/${a.report.reportId}`)).json();
-  const storedB = await (await fetch(`${API_URL}/v1/reports/${b.report.reportId}`)).json();
+  const storedA = await (await authFetch(`${API_URL}/v1/reports/${a.report.reportId}`)).json();
+  const storedB = await (await authFetch(`${API_URL}/v1/reports/${b.report.reportId}`)).json();
   record(
     'GET /v1/reports/:id（clientIp 記錄）',
     storedA.clientIp === '49.214.1.196' && storedB.clientIp === '203.0.113.10',
@@ -140,7 +156,7 @@ try {
   const dbCount = await countScans();
   record('直接查 PostgreSQL：fingerprint_scans = 2 筆', dbCount === 2, `count=${dbCount}`);
 
-  const history = await (await fetch(`${API_URL}/v1/visitors/${VISITOR}/reports`)).json();
+  const history = await (await authFetch(`${API_URL}/v1/visitors/${VISITOR}/reports`)).json();
   record(
     '同 visitor 跨 IP 歷史',
     history.reports.length === 2 &&
@@ -156,7 +172,7 @@ try {
   const latencies = [];
   for (let i = 0; i < 20; i++) {
     let t = performance.now();
-    await fetch(`${API_URL}/v1/reports/${a.report.reportId}`);
+    await authFetch(`${API_URL}/v1/reports/${a.report.reportId}`);
     latencies.push(performance.now() - t);
     t = performance.now();
     await fetch(`${API_URL}/v1/analyze`, {
@@ -170,12 +186,12 @@ try {
   const p99 = sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.99) - 1)] ?? 0;
   record('P99 < 500ms', p99 < 500, `P99=${p99.toFixed(1)}ms, n=${latencies.length}`);
 
-  const del = await fetch(`${API_URL}/v1/reports/${b.report.reportId}`, { method: 'DELETE' });
-  const gone = await fetch(`${API_URL}/v1/reports/${b.report.reportId}`);
+  const del = await authFetch(`${API_URL}/v1/reports/${b.report.reportId}`, { method: 'DELETE' });
+  const gone = await authFetch(`${API_URL}/v1/reports/${b.report.reportId}`);
   record('DELETE /v1/reports/:id', del.status === 204 && gone.status === 404);
 
-  const delVisitor = await fetch(`${API_URL}/v1/visitors/${VISITOR}`, { method: 'DELETE' });
-  const historyAfter = await (await fetch(`${API_URL}/v1/visitors/${VISITOR}/reports`)).json();
+  const delVisitor = await authFetch(`${API_URL}/v1/visitors/${VISITOR}`, { method: 'DELETE' });
+  const historyAfter = await (await authFetch(`${API_URL}/v1/visitors/${VISITOR}/reports`)).json();
   record(
     'DELETE /v1/visitors/:id（被遺忘權）',
     delVisitor.status === 204 && historyAfter.reports.length === 0,

@@ -44,6 +44,12 @@ importers:
       '@shieldscan/scoring-engine':
         specifier: workspace:*
         version: link:../../packages/scoring-engine
+      '@shieldscan/signing':
+        specifier: workspace:*
+        version: link:../../packages/signing
+      '@shieldscan/tenant':
+        specifier: workspace:*
+        version: link:../../packages/tenant
       fastify:
         specifier: ^5.0.0
         version: 5.12.1
@@ -95,11 +101,36 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  examples/node-demo:
+    dependencies:
+      '@shieldscan/core-schema':
+        specifier: workspace:*
+        version: link:../../packages/core-schema
+      '@shieldscan/node-sdk':
+        specifier: workspace:*
+        version: link:../../packages/node-sdk
+      '@shieldscan/scoring-engine':
+        specifier: workspace:*
+        version: link:../../packages/scoring-engine
+      '@shieldscan/signing':
+        specifier: workspace:*
+        version: link:../../packages/signing
+    devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.23.12
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   packages/browser-sdk:
     dependencies:
       '@shieldscan/core-schema':
         specifier: workspace:*
         version: link:../core-schema
+      '@shieldscan/signing':
+        specifier: workspace:*
+        version: link:../signing
 
   packages/core-schema:
     dependencies:
@@ -215,6 +246,34 @@ importers:
       '@shieldscan/core-schema':
         specifier: workspace:*
         version: link:../core-schema
+
+  packages/signing:
+    dependencies:
+      '@shieldscan/core-schema':
+        specifier: workspace:*
+        version: link:../core-schema
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/tenant:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.0
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
 
 packages:
 

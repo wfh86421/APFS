@@ -97,3 +97,65 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_logs(action);
+
+-- =====================================================================
+-- Phase 3：租戶 / API Key / 用量計費 / Webhook
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS tenants (
+    tenant_id   UUID PRIMARY KEY,
+    name        VARCHAR(128) NOT NULL,
+    email       VARCHAR(256) NOT NULL,
+    plan        VARCHAR(16) NOT NULL DEFAULT 'free',
+    status      VARCHAR(16) NOT NULL DEFAULT 'active',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_id       UUID PRIMARY KEY,
+    tenant_id    UUID NOT NULL REFERENCES tenants(tenant_id),
+    label        VARCHAR(128) NOT NULL,
+    key_hash     VARCHAR(64) UNIQUE NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at   TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id);
+
+CREATE TABLE IF NOT EXISTS usage_records (
+    id         UUID PRIMARY KEY,
+    tenant_id  UUID NOT NULL REFERENCES tenants(tenant_id),
+    units      INTEGER NOT NULL DEFAULT 1,
+    kind       VARCHAR(32) NOT NULL DEFAULT 'report',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_tenant_time ON usage_records(tenant_id, created_at);
+
+CREATE TABLE IF NOT EXISTS billing_records (
+    id            UUID PRIMARY KEY,
+    tenant_id     UUID NOT NULL REFERENCES tenants(tenant_id),
+    period_start  TIMESTAMPTZ NOT NULL,
+    period_end    TIMESTAMPTZ NOT NULL,
+    usage_units   INTEGER NOT NULL DEFAULT 0,
+    base_price    INTEGER NOT NULL DEFAULT 0,
+    overage_units INTEGER NOT NULL DEFAULT 0,
+    overage_price INTEGER NOT NULL DEFAULT 0,
+    total_price   INTEGER NOT NULL DEFAULT 0,
+    currency      VARCHAR(8) NOT NULL DEFAULT 'TWD',
+    status        VARCHAR(16) NOT NULL DEFAULT 'draft',
+    invoice_no    VARCHAR(32),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_billing_tenant ON billing_records(tenant_id);
+
+CREATE TABLE IF NOT EXISTS webhooks (
+    id          UUID PRIMARY KEY,
+    tenant_id   UUID NOT NULL REFERENCES tenants(tenant_id),
+    url         TEXT NOT NULL,
+    events      TEXT[] NOT NULL DEFAULT '{"risk_event"}',
+    is_enabled  BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

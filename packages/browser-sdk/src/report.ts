@@ -5,6 +5,7 @@ import {
   type NormalizedSignal,
   type ReportSource,
 } from '@shieldscan/core-schema';
+import { signReport } from '@shieldscan/signing';
 
 export interface BuildReportOptions {
   sessionId?: string;
@@ -16,6 +17,8 @@ export interface BuildReportOptions {
   };
   sdkName?: string;
   sdkVersion?: string;
+  /** 正式簽章用的共享 secret（由平台簽發，session 級）。未提供則 signature 留空。 */
+  signingSecret?: string;
 }
 
 /**
@@ -32,12 +35,7 @@ export async function buildReport(
   const sdkVersion = options.sdkVersion ?? '0.1.0';
   const nonce = crypto.randomUUID();
 
-  // 信封自雜湊指紋：對 nonce/timestamp/sdkVersion 做 SHA-256，防傳輸途中被改動。
-  // 注意：這不是伺服器可驗證的簽章；Phase 3 會換成正式簽章 + server challenge。
-  const envelope = `${nonce}|${now}|${sdkVersion}`;
-  const signature = await sha256(envelope);
-
-  return {
+  const report: EnvironmentReport = {
     reportId: crypto.randomUUID(),
     schemaVersion: SCHEMA_VERSION,
     sessionId: options.sessionId ?? crypto.randomUUID(),
@@ -62,15 +60,18 @@ export async function buildReport(
       networkTrust: 0,
     },
     integrity: {
-      signature,
+      signature: '',
       nonce,
       timestamp: now,
       sdkVersion,
     },
   };
-}
 
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (options.signingSecret) {
+    // Phase 3 正式簽章：HMAC-SHA256 over reportId/sessionId/schemaVersion/
+    // createdAt/nonce/timestamp/signals-hash，伺服器可用共享 secret 驗證。
+    report.integrity.signature = await signReport(report, options.signingSecret);
+  }
+
+  return report;
 }

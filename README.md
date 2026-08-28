@@ -53,6 +53,16 @@ docs/          技術文件
 - **Phase 2 驗證報告**：[docs/verification-phase2.md](./docs/verification-phase2.md) — API 冒煙 15/15、P99=17.9ms、網路樣本準確率 100%、同 visitor 跨 IP 追蹤、限流/審計/刪除全數通過。
 - **待辦**：docker compose 啟 PostgreSQL/Redis 後切正式儲存（執行期驗證）、ip-api 金鑰/額度設定、JA4/TCP 真實指紋（需邊緣層）、部署上線累積自然流量。
 
+## Phase 3 狀態（2026-08-29）
+
+- **租戶 / API Key / 計費**：`packages/tenant`（自助註冊、`shd_live_` 金鑰簽發與雜湊儲存、用量紀錄、發票產生）；`POST /v1/tenants`、`GET /v1/tenant/me`、`POST /v1/tenant/keys`、`GET /v1/billing/current`、`POST /v1/billing/invoices/current`。
+- **正式簽章**：`packages/signing`（HMAC-SHA256，Web Crypto 瀏覽器/Node 通用）；browser-sdk `buildReport` 支援 `signingSecret`；API 對租戶強制驗證簽章（竄改/過期 → 401）。
+- **Webhook 風險通知**：`POST /v1/webhooks` 註冊（https，本地 localhost 例外），高風險報告自動推送 `risk_event`（3 秒逾時、重試 1 次）。
+- **SDK npm 打包**：core-schema / browser-sdk / react-sdk / node-sdk / signing 皆含 license、publishConfig、prepack；`pnpm pack` 驗證 tarball（`workspace:*` 自動改寫為版本號）；[SDK 整合文件](./docs/sdk-integration.md) + [Node demo](./examples/node-demo)。
+- **定價頁**：[/pricing](./apps/web-scanner/src/app/pricing/page.tsx)（Free / Developer NT$2,500 / Business NT$25,000 / Enterprise 報價制）。
+- **CI Postgres 執行期驗證**：workflow 新增 postgres + redis service；`pnpm test`（單元）→ `node scripts/init-db.mjs`（套用 schema）→ `pnpm test:postgres`（repository 整合）→ `node scripts/verify-prod-storage.mjs`（正式儲存切換：報告落庫/查詢/歷史/P99<500ms/刪除權）。
+- **驗證**：`pnpm -r typecheck`、`pnpm -r build`、`pnpm test` 全數通過；Phase 3 冒煙 9/9（註冊/簽章/竄改 401/高風險 block/Webhook 送達/用量/發票/刪除權）。
+
 ## 測試
 
 ```bash

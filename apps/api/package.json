@@ -19,6 +19,8 @@
     "@shieldscan/port-scanner": "workspace:*",
     "@shieldscan/repository": "workspace:*",
     "@shieldscan/scoring-engine": "workspace:*",
+    "@shieldscan/signing": "workspace:*",
+    "@shieldscan/tenant": "workspace:*",
     "fastify": "^5.0.0"
   },
   "devDependencies": {

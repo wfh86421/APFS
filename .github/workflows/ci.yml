@@ -7,6 +7,31 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: shieldscan_test
+          POSTGRES_USER: shieldscan
+          POSTGRES_PASSWORD: shieldscan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shieldscan"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://shieldscan:shieldscan@localhost:5432/shieldscan_test
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +52,20 @@ jobs:
 
       - name: Build
         run: pnpm -r build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Apply schema（Postgres service）
+        run: node scripts/init-db.mjs
+
+      - name: Postgres repository integration test
+        run: pnpm test:postgres
+
+      - name: 正式儲存切換執行期驗證（Postgres + Redis）
+        run: node scripts/verify-prod-storage.mjs
+        env:
+          EXTERNAL_DB: "1"
 
       - name: Install Playwright Chromium
         run: pnpm --filter @shieldscan/web-scanner exec playwright install --with-deps chromium

@@ -1,0 +1,19 @@
+{
+  "name": "shieldscan-node-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/demo.ts"
+  },
+  "dependencies": {
+    "@shieldscan/core-schema": "workspace:*",
+    "@shieldscan/node-sdk": "workspace:*",
+    "@shieldscan/scoring-engine": "workspace:*",
+    "@shieldscan/signing": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

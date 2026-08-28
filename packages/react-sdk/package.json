@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "React Hook 與元件包",
   "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -14,7 +19,8 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@shieldscan/browser-sdk": "workspace:*",

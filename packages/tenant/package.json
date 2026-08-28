@@ -1,13 +1,8 @@
 {
-  "name": "@shieldscan/node-sdk",
+  "name": "@shieldscan/tenant",
   "version": "0.1.0",
-  "description": "Node.js 後端驗證 SDK：HTTP headers、TLS/JA4 指紋、IP 環境",
+  "description": "租戶 / API Key / 用量計費：自助註冊、金鑰簽發與驗證、發票紀錄",
   "type": "module",
-  "license": "MIT",
-  "sideEffects": false,
-  "publishConfig": {
-    "access": "public"
-  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -20,13 +15,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepack": "tsc -p tsconfig.json"
-  },
-  "dependencies": {
-    "@shieldscan/core-schema": "workspace:*"
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0",
     "typescript": "^5.5.0"
   }
 }

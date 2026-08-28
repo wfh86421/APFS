@@ -1,7 +1,7 @@
 {
-  "name": "@shieldscan/node-sdk",
+  "name": "@shieldscan/signing",
   "version": "0.1.0",
-  "description": "Node.js 後端驗證 SDK：HTTP headers、TLS/JA4 指紋、IP 環境",
+  "description": "報告正式簽章：HMAC-SHA256 簽名與完整性驗證（Web Crypto，瀏覽器/Node 通用）",
   "type": "module",
   "license": "MIT",
   "sideEffects": false,
@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/*.test.js\"",
     "prepack": "tsc -p tsconfig.json"
   },
   "dependencies": {
