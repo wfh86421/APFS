@@ -24,6 +24,14 @@ infra/         基礎設施：Docker、監控、IaC
 docs/          技術文件
 ```
 
+## Phase 0 狀態（2026-08-28）
+
+- **core-schema v0.1.0 定稿**：`EnvironmentReport` / `NormalizedSignal` / `ScoreBundle` / `PluginManifest` 全部由 zod schema 推導，附執行期驗證與 `SCHEMA_VERSION`。
+- **plugin-cli**：`shieldscan-plugin validate <manifest.json>` 驗證 PluginManifest（通過 exit 0，失敗 exit 1，可進 CI）。
+- **OpenAPI 契約**：[docs/openapi.yaml](./docs/openapi.yaml) 為唯一 API 契約來源（/v1/reports、/v1/analyze、/v1/scoring/calculate、/v1/plugin-profile）。
+- **API 雛形**：`POST /v1/reports` 已實作「契約驗證 → 評分 → policy」，其餘端點 501 待 Phase 2/3 接入。
+- **端到端驗證通過**：`pnpm install && pnpm -r build`；`POST /v1/reports` 對示範報告回傳 85 分（os_mismatch -5、dns_leak -10）。
+
 ## 規劃文件
 
 本儲存庫根目錄同時存放各來源 AI 的規劃文件與最優合併方案：
@@ -42,9 +50,27 @@ docs/          技術文件
 
 ```bash
 pnpm install
-pnpm --filter @shieldscan/core-schema build
-pnpm --filter @shieldscan/browser-sdk build
+pnpm -r --filter "./packages/**" build   # 依賴順序建置全部套件
+pnpm -r typecheck                       # 全 workspace 型別檢查
 pnpm --filter @shieldscan/web-scanner dev
+pnpm --filter @shieldscan/api dev
 ```
 
 Node.js >= 22，套件管理使用 pnpm workspace。
+
+### PluginManifest 驗證
+
+```bash
+pnpm --filter @shieldscan/plugin-cli build
+node packages/plugin-cli/dist/cli.js validate plugins/detection/browser.canvas/manifest.json
+```
+
+### API 冒煙測試
+
+```bash
+pnpm --filter @shieldscan/api build
+node apps/api/dist/server.js
+curl -X POST http://localhost:3001/v1/reports \
+  -H 'Content-Type: application/json' \
+  --data @docs/examples/report.example.json
+```

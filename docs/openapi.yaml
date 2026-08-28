@@ -1,0 +1,538 @@
+openapi: 3.1.0
+info:
+  title: ShieldScan Risk API
+  version: 0.1.0
+  description: |
+    環境可信度基礎設施對外 API（Phase 0 契約草案）。
+    所有請求/回應型別與 `@shieldscan/core-schema` 保持一致（schemaVersion 0.1.0）。
+    OpenAPI 是唯一的 API 契約來源，SDK 由本檔生成。
+servers:
+  - url: https://api.shieldscan.dev
+    description: Production
+  - url: http://localhost:3001
+    description: Local development
+tags:
+  - name: reports
+    description: 檢測報告
+  - name: analyze
+    description: 風險分析
+  - name: scoring
+    description: 評分引擎
+  - name: plugins
+    description: 插件管理
+  - name: system
+    description: 系統
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: 健康檢查
+      operationId: health
+      responses:
+        "200":
+          description: 服務正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: shieldscan-api
+  /v1/reports:
+    post:
+      tags: [reports]
+      summary: 接收完整 EnvironmentReport（SDK → API 閉環）
+      operationId: ingestReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvironmentReport"
+      responses:
+        "201":
+          description: 報告已接收並完成評分
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          description: 契約驗證失敗（欄位層級錯誤）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "501":
+          description: 該端點尚未實作（持久化/分析插件）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotImplemented"
+  /v1/reports/{reportId}:
+    get:
+      tags: [reports]
+      summary: 查詢檢測報告
+      operationId: getReport
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 報告內容
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentReport"
+        "404":
+          description: 找不到報告
+        "501":
+          description: 尚未實作（需要報告儲存層）
+  /v1/analyze:
+    post:
+      tags: [analyze]
+      summary: 對已接收的訊號執行分析與評分
+      operationId: analyze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report]
+              properties:
+                report:
+                  $ref: "#/components/schemas/EnvironmentReport"
+                profileId:
+                  type: string
+                  example: privacy-default
+      responses:
+        "200":
+          description: 分析與評分結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResponse"
+        "400":
+          description: 契約驗證失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /v1/scoring/calculate:
+    post:
+      tags: [scoring]
+      summary: 對任意報告執行評分（供插件/企業測試）
+      operationId: calculateScore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report]
+              properties:
+                report:
+                  $ref: "#/components/schemas/EnvironmentReport"
+                profile:
+                  $ref: "#/components/schemas/ScoringProfile"
+      responses:
+        "200":
+          description: 評分結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreResult"
+        "400":
+          description: 契約驗證失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /v1/plugin-profile:
+    get:
+      tags: [plugins]
+      summary: 依租戶/場景回傳可用插件清單（SDK 初始化時呼叫）
+      operationId: getPluginProfile
+      parameters:
+        - name: X-Tenant-Id
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: scenario
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [scanner, login, payment, streaming, game, custom]
+            default: scanner
+      responses:
+        "200":
+          description: 插件 Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginProfile"
+        "501":
+          description: 尚未實作（需要 Plugin Registry 資料庫）
+components:
+  schemas:
+    Platform:
+      type: string
+      enum: [browser, android, ios, webview, node, edge, server]
+    PluginType:
+      type: string
+      enum: [detection, analysis, scoring, policy, output]
+    ReportSource:
+      type: string
+      enum: [web, android, ios, webview, node, api]
+    ConsentMode:
+      type: string
+      enum: [local-only, standard, stored]
+    SignalCategory:
+      type: string
+      enum: [browser, hardware, network, security, mobile, app, content]
+    Severity:
+      type: string
+      enum: [info, low, medium, high, critical]
+    PolicyDecision:
+      type: string
+      enum: [allow, review, challenge, limit, block, log_only]
+    NormalizedSignal:
+      type: object
+      required: [id, pluginId, pluginVersion, platform, category, key, value, confidence, collectedAt]
+      properties:
+        id:
+          type: string
+        pluginId:
+          type: string
+        pluginVersion:
+          type: string
+        platform:
+          $ref: "#/components/schemas/Platform"
+        category:
+          $ref: "#/components/schemas/SignalCategory"
+        key:
+          type: string
+        value: {}
+        hash:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        collectedAt:
+          type: string
+          format: date-time
+    AnalysisIssue:
+      type: object
+      required: [id, type, severity, description, evidence]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        severity:
+          $ref: "#/components/schemas/Severity"
+        description:
+          type: string
+        evidence:
+          type: object
+          additionalProperties: true
+    ScoreBundle:
+      type: object
+      required: [privacyExposure, authenticity, automationRisk, networkTrust]
+      properties:
+        privacyExposure:
+          type: number
+          minimum: 0
+          maximum: 100
+        authenticity:
+          type: number
+          minimum: 0
+          maximum: 100
+        automationRisk:
+          type: number
+          minimum: 0
+          maximum: 100
+        networkTrust:
+          type: number
+          minimum: 0
+          maximum: 100
+        mobileIntegrity:
+          type: number
+          minimum: 0
+          maximum: 100
+        contentAbuseRisk:
+          type: number
+          minimum: 0
+          maximum: 100
+        custom:
+          type: object
+          additionalProperties:
+            type: number
+    ReportIntegrity:
+      type: object
+      required: [signature, nonce, timestamp, sdkVersion]
+      properties:
+        signature:
+          type: string
+        nonce:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        sdkVersion:
+          type: string
+    EnvironmentReport:
+      type: object
+      required:
+        - reportId
+        - schemaVersion
+        - sessionId
+        - source
+        - createdAt
+        - consent
+        - sdk
+        - signals
+        - issues
+        - scores
+        - integrity
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        schemaVersion:
+          type: string
+          example: 0.1.0
+        tenantId:
+          type: string
+        sessionId:
+          type: string
+        subjectId:
+          type: string
+        source:
+          $ref: "#/components/schemas/ReportSource"
+        createdAt:
+          type: string
+          format: date-time
+        consent:
+          type: object
+          required: [mode]
+          properties:
+            mode:
+              $ref: "#/components/schemas/ConsentMode"
+            retentionDays:
+              type: integer
+              minimum: 1
+        sdk:
+          type: object
+          required: [name, version, platform]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            platform:
+              $ref: "#/components/schemas/Platform"
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/NormalizedSignal"
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisIssue"
+        scores:
+          $ref: "#/components/schemas/ScoreBundle"
+        policy:
+          $ref: "#/components/schemas/PolicyDecision"
+        outputs:
+          type: array
+        integrity:
+          $ref: "#/components/schemas/ReportIntegrity"
+        raw: {}
+    PluginManifest:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - type
+        - platforms
+        - capabilities
+        - requiredPermissions
+        - inputSchema
+        - outputSchema
+        - riskLevel
+        - defaultEnabled
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+          pattern: ^\d+\.\d+\.\d+$
+        type:
+          $ref: "#/components/schemas/PluginType"
+        platforms:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Platform"
+        capabilities:
+          type: array
+          items:
+            type: string
+        requiredPermissions:
+          type: array
+          items:
+            type: string
+        inputSchema:
+          type: string
+        outputSchema:
+          type: string
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        defaultEnabled:
+          type: boolean
+        resources:
+          type: object
+          properties:
+            maxMemoryMB:
+              type: number
+            maxExecutionTimeMs:
+              type: number
+            cpuQuota:
+              type: number
+    ScoringProfile:
+      type: object
+      required: [profileId, weights, thresholds]
+      properties:
+        profileId:
+          type: string
+        weights:
+          type: object
+          additionalProperties:
+            type: number
+        thresholds:
+          type: object
+          required: [allow, review, challenge, block]
+          properties:
+            allow:
+              type: number
+            review:
+              type: number
+            challenge:
+              type: number
+            block:
+              type: number
+    ScoreResult:
+      type: object
+      required: [finalScore, maxScore, grade, deductions, riskLevel]
+      properties:
+        finalScore:
+          type: number
+          minimum: 0
+          maximum: 100
+        maxScore:
+          type: number
+          example: 100
+        grade:
+          type: string
+          enum: [A+, A, B, C, D, F]
+        deductions:
+          type: array
+          items:
+            type: object
+            properties:
+              ruleId:
+                type: string
+              points:
+                type: number
+              reason:
+                type: string
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+    ReportResponse:
+      type: object
+      required: [reportId, schemaVersion, score, riskLevel]
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        schemaVersion:
+          type: string
+        score:
+          $ref: "#/components/schemas/ScoreResult"
+        policy:
+          $ref: "#/components/schemas/PolicyDecision"
+    AnalysisResponse:
+      type: object
+      required: [score, issues]
+      properties:
+        score:
+          $ref: "#/components/schemas/ScoreResult"
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisIssue"
+        policy:
+          $ref: "#/components/schemas/PolicyDecision"
+    PluginProfile:
+      type: object
+      required: [profileId, scenario, enabledPlugins]
+      properties:
+        profileId:
+          type: string
+        scenario:
+          type: string
+        enabledPlugins:
+          type: array
+          items:
+            $ref: "#/components/schemas/PluginManifest"
+        disabledPlugins:
+          type: array
+          items:
+            type: string
+        scoringProfile:
+          type: string
+        outputProfile:
+          type: string
+    ValidationError:
+      type: object
+      required: [error, issues]
+      properties:
+        error:
+          type: string
+          example: invalid_report
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                example: signals.0.confidence
+              message:
+                type: string
+    NotImplemented:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: not_implemented
+        message:
+          type: string

@@ -1,16 +1,13 @@
 {
-  "name": "@shieldscan/node-sdk",
+  "name": "@shieldscan/plugin-cli",
   "version": "0.1.0",
-  "description": "Node.js 後端驗證 SDK：HTTP headers、TLS/JA4 指紋、IP 環境",
+  "description": "PluginManifest 驗證 CLI：新插件可被 registry 驗證（Phase 0 交付）",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+  "bin": {
+    "shieldscan-plugin": "./dist/cli.js"
   },
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",

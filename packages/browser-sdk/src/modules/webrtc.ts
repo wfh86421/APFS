@@ -24,7 +24,8 @@ export const webrtcModule: DetectionModule = {
     pc.onicecandidate = (e) => {
       if (!e.candidate) return;
       const match = /([0-9]{1,3}(\.[0-9]{1,3}){3})/.exec(e.candidate.candidate);
-      if (match) ips.add(match[1]);
+      const ip = match?.[1];
+      if (ip) ips.add(ip);
     };
 
     await pc.createOffer().then((offer) => pc.setLocalDescription(offer));

@@ -3,11 +3,22 @@
   "compilerOptions": {
     "jsx": "preserve",
     "noEmit": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "moduleResolution": "bundler",
     "allowJs": true,
-    "incremental": true
+    "incremental": true,
+    "isolatedModules": true
   },
-  "include": ["next-env.d.ts", "src", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "src",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,0 +1,93 @@
+{
+  "reportId": "3f2b8f4c-7f0a-4b7d-9e5c-1a2b3c4d5e6f",
+  "schemaVersion": "0.1.0",
+  "sessionId": "6e8c1f2a-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "source": "web",
+  "createdAt": "2026-08-28T11:10:17+08:00",
+  "consent": {
+    "mode": "standard",
+    "retentionDays": 90
+  },
+  "sdk": {
+    "name": "@shieldscan/browser-sdk",
+    "version": "0.1.0",
+    "platform": "browser"
+  },
+  "signals": [
+    {
+      "id": "sig-canvas-1",
+      "pluginId": "browser.canvas",
+      "pluginVersion": "0.1.0",
+      "platform": "browser",
+      "category": "hardware",
+      "key": "canvas",
+      "value": {
+        "supported": true,
+        "dataUrlLength": 15432,
+        "isTampered": true
+      },
+      "hash": "1bf213f7",
+      "confidence": 0.95,
+      "collectedAt": "2026-08-28T11:10:16+08:00"
+    },
+    {
+      "id": "sig-webrtc-1",
+      "pluginId": "browser.webrtc",
+      "pluginVersion": "0.1.0",
+      "platform": "browser",
+      "category": "network",
+      "key": "webrtc",
+      "value": {
+        "localIps": ["49.214.1.196"]
+      },
+      "confidence": 0.85,
+      "collectedAt": "2026-08-28T11:10:17+08:00"
+    },
+    {
+      "id": "sig-timezone-1",
+      "pluginId": "browser.timezone",
+      "pluginVersion": "0.1.0",
+      "platform": "browser",
+      "category": "browser",
+      "key": "timezone",
+      "value": {
+        "iana": "Asia/Taipei"
+      },
+      "confidence": 1,
+      "collectedAt": "2026-08-28T11:10:16+08:00"
+    }
+  ],
+  "issues": [
+    {
+      "id": "issue-os-mismatch-1",
+      "type": "os_mismatch",
+      "severity": "high",
+      "description": "UA 宣稱 Android 10，但 Platform 偵測為 Android 14",
+      "evidence": {
+        "uaOs": "Android 10",
+        "platformOs": "Android 14"
+      }
+    },
+    {
+      "id": "issue-dns-leak-1",
+      "type": "dns_leak",
+      "severity": "medium",
+      "description": "偵測到真實 ISP 的 DNS 伺服器",
+      "evidence": {
+        "dnsServers": ["175.96.61.48"]
+      }
+    }
+  ],
+  "scores": {
+    "privacyExposure": 70,
+    "authenticity": 80,
+    "automationRisk": 10,
+    "networkTrust": 60
+  },
+  "integrity": {
+    "signature": "signed-by-browser-sdk",
+    "nonce": "nonce-abc-123",
+    "timestamp": "2026-08-28T11:10:17+08:00",
+    "sdkVersion": "0.1.0"
+  }
+}

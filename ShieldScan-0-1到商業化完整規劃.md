@@ -325,8 +325,9 @@
 
 **第 1–30 天**
 
-- [ ] 定稿 `EnvironmentReport` 與 `PluginManifest` schema
-- [ ] 完成 browser-sdk 第一批 8 個採集模組
+- [x] 定稿 `EnvironmentReport` 與 `PluginManifest` schema（core-schema v0.1.0，含 zod 執行期驗證）
+- [x] 完成 browser-sdk 第一批 8 個採集模組（canvas / webgl / webgpu / audio / screen / locale / timezone / webrtc）
+- [x] 建立 monorepo 骨架並通過 `pnpm install && pnpm -r build`（含 plugin-cli manifest 驗證、OpenAPI 契約、API 評分雛形）
 - [ ] 上線檢測網站首版（一鍵掃描 + 報告 + JSON 匯出）
 - [ ] 上線隱私政策與同意機制
 

@@ -1,0 +1,18 @@
+{
+  "id": "browser.canvas",
+  "name": "Canvas 指紋",
+  "version": "0.1.0",
+  "type": "detection",
+  "platforms": ["browser", "webview"],
+  "capabilities": ["canvas.hash", "canvas.tamper"],
+  "requiredPermissions": ["sandbox:canvas", "eventBus:emit:detection.*"],
+  "inputSchema": "https://schema.shieldscan.dev/detection-context-v1.json",
+  "outputSchema": "https://schema.shieldscan.dev/detection-result-v1.json",
+  "riskLevel": "low",
+  "defaultEnabled": true,
+  "resources": {
+    "maxMemoryMB": 64,
+    "maxExecutionTimeMs": 5000,
+    "cpuQuota": 0.1
+  }
+}

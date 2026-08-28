@@ -1,7 +1,7 @@
 {
   "name": "@shieldscan/core-schema",
   "version": "0.1.0",
-  "description": "統一資料契約：EnvironmentReport / NormalizedSignal / ScoreBundle / PluginManifest",
+  "description": "統一資料契約（Phase 0 定稿）：EnvironmentReport / NormalizedSignal / ScoreBundle / PluginManifest + zod 執行期驗證",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,5 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
   }
 }
