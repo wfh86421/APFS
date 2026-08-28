@@ -75,3 +75,32 @@
 **Phase 2 技術驗收達標**：L0/L1 信任錨點（HTTP headers + 網路分析）、報告儲存與跨 IP 歷史、合規端口檢測（限流/審計）、資料刪除（個資請求）皆已實作並通過驗證；P99 17.9ms 遠低於 500ms，網路樣本準確率 100% 高於 95%。
 
 **剩餘事項集中在部署與正式儲存**：PostgreSQL/Redis 執行期驗證（需 Docker/CI）、JA4/TCP 真實擷取（需邊緣層）、網站部署後的商業指標。這些不阻擋 Phase 3（API Key/租戶/計費與 SDK npm 打包）的開發。
+
+## 六、正式儲存（PostgreSQL + Redis）切換驗證
+
+### 本機結果（2026-08-29）
+
+- **Redis ✅ 已在本機實測**：`redis-memory-server` 下載 Memurai（Redis 相容）二進位，直接啟動於 127.0.0.1:6379，`PING → +PONG` 通過。
+- **PostgreSQL ⚠️ 本機受限**：Windows 沙箱使用者無法建立 initdb 所需的 restricted token（OS 層級拒絕，`could not create restricted token: error code 87`），embedded-postgres 無法初始化叢集。已確認非程式問題（手動執行 initdb 同樣失敗），改用 CI 驗證。
+
+### CI（GitHub Actions）自動驗證
+
+新增 [verify-prod-storage.yml](../.github/workflows/verify-prod-storage.yml)：
+
+```text
+docker compose up -d postgres redis
+  → 等待 pg_isready / redis-cli PING
+  → node scripts/init-db.mjs（套用 schema）
+  → EXTERNAL_DB=1 node scripts/verify-prod-storage.mjs
+  → docker compose down -v
+```
+
+驗證腳本（[scripts/verify-prod-storage.mjs](../scripts/verify-prod-storage.mjs)）對正式儲存執行：
+
+- API 以 `DATABASE_URL` 連 PostgreSQL。
+- 兩份報告（同 visitor、不同 IP）→ 儲存/查詢/跨 IP 歷史/ipHistory 累積。
+- **直接查 PostgreSQL** 確認 `fingerprint_scans` 真的有 2 筆（非 InMemory）。
+- Redis PING → PONG。
+- P99 量測、DELETE 報告/訪客（被遺忘權）、刪除後資料庫 0 筆。
+
+> 狀態：已推送 `f809a57` 觸發 CI（私有 repo，需在 GitHub Actions 頁面確認結果）。
