@@ -9,11 +9,15 @@
 #   4. 產生 .env（自動偵測公網 IP、隨機 POSTGRES_PASSWORD / REPORT_SIGNING_SECRET）
 #   5. 執行 ./scripts/deploy-vps.sh（build → up → 冒煙）
 #
-# 可選環境變數覆寫：PUBLIC_IP（自動偵測失敗時手動指定）
+# 可選環境變數覆寫：
+#   PUBLIC_IP     自動偵測失敗時手動指定
+#   GIT_REPO_URL  私人 repo 用（例如 https://<TOKEN>@github.com/wfh86421/APFS.git
+#                 或 git@github.com:wfh86421/APFS.git + deploy key）
 
 set -euo pipefail
 
 echo "[bootstrap] 開始 ShieldScan VPS 引導"
+GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/wfh86421/APFS.git}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[bootstrap] Docker 未安裝。請先安裝："
@@ -37,9 +41,10 @@ command -v git >/dev/null 2>&1 || { apt-get update -y && apt-get install -y git;
 cd /root
 if [ ! -d APFS ]; then
   echo "[bootstrap] git clone …"
-  git clone https://github.com/wfh86421/APFS.git
+  git clone "$GIT_REPO_URL"
 fi
 cd APFS
+git remote set-url origin "$GIT_REPO_URL" || true
 git pull --ff-only || true
 
 if [ ! -f .env ]; then
