@@ -125,3 +125,40 @@ curl -fsS http://127.0.0.1:3001/health
 ```
 
 後續可接 Prometheus + Grafana（infra/ 規劃中）。
+
+## 10. KPanel 控制台部署（Web 終端）
+
+如果 VPS 用的是 KPanel 這類 Web 管理面板（例如 `http://<VPS-IP>:8080/docker`），
+KPanel 提供網頁終端（Docker 控制台頁面可找到 terminal），不需要本機 SSH 金鑰也能部署：
+
+1. 登入 KPanel → Docker 控制台，確認 Docker 正常運作。
+2. 開啟 KPanel 網頁終端（或從本機 SSH 連入）。
+3. 安裝 git 並複製專案（公開 repo 可直接 https clone）：
+
+```bash
+apt install -y git
+cd /root
+git clone https://github.com/wfh86421/APFS.git
+cd APFS
+cp .env.example .env
+nano .env
+# POSTGRES_PASSWORD / REPORT_SIGNING_SECRET 換成正式值
+# NEXT_PUBLIC_API_URL 先填 http://<VPS-IP>:3001（測試期）或正式網域
+```
+
+4. 部署 + 冒煙：
+
+```bash
+./scripts/deploy-vps.sh
+curl http://127.0.0.1:3001/health
+```
+
+5. 瀏覽器驗證：`http://<VPS-IP>:3000`（掃描 → 報告 → JSON 匯出）。
+   若在本機驗證 API，可用 `API_URL=http://<VPS-IP>:3001 node scripts/smoke-compose.mjs`。
+6. 正式上線前：
+   - 用 Caddy 反代 80/443（第 5 節），`.env` 的 `CORS_ORIGIN` 與 `NEXT_PUBLIC_API_URL` 改為正式網域後重建。
+   - 資料庫/Redis 只綁 `127.0.0.1`（第 6 節）。
+   - 管理面板（8080）改為僅本機存取或 SSH 隧道，不要直接暴露公網。
+
+> KPanel 的 Docker 頁面可看容器/映像，但沒有 compose 堆疊 UI；
+> 請用網頁終端跑 `deploy-vps.sh`，一次建立 Postgres/Redis/API/網站四個服務。
