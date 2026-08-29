@@ -63,7 +63,8 @@ async function postReport(ip) {
   report.createdAt = new Date().toISOString();
   report.integrity.nonce = randomUUID();
   report.integrity.timestamp = new Date().toISOString();
-  report.integrity.signature = `prod-${randomUUID()}`;
+  // 匿名上報（網站路徑）：不帶簽章，避免在 REPORT_SIGNING_SECRET 已設定時被誤判。
+  report.integrity.signature = '';
   const res = await fetch(`${API_URL}/v1/reports`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
@@ -76,25 +77,43 @@ async function countScans() {
   const client = new pg.Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
-    const { rows } = await client.query('SELECT count(*)::int AS n FROM fingerprint_scans');
+    const { rows } = await client.query(
+      'SELECT count(*)::int AS n FROM fingerprint_scans WHERE visitor_id = $1',
+      [VISITOR],
+    );
     return rows[0]?.n ?? -1;
   } finally {
     await client.end();
   }
 }
 
+async function apiReachable() {
+  try {
+    const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 let dbs;
 let api;
-if (!EXTERNAL_DB) {
+const reuseApi = !EXTERNAL_DB && (await apiReachable());
+if (!EXTERNAL_DB && !reuseApi) {
+  console.log('[verify] 啟動內嵌 PostgreSQL/Redis…');
   dbs = await startDevDatabases();
 }
-console.log('[verify] 以 DATABASE_URL 啟動 API…');
-api = spawn(process.execPath, ['apps/api/dist/server.js'], {
-  cwd: process.cwd(),
-  env: { ...process.env, DATABASE_URL, PORT: '3001' },
-  stdio: ['ignore', 'pipe', 'pipe'],
-  shell: false,
-});
+if (!reuseApi) {
+  console.log('[verify] 以 DATABASE_URL 啟動 API…');
+  api = spawn(process.execPath, ['apps/api/dist/server.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, DATABASE_URL, PORT: '3001' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
+  });
+} else {
+  console.log('[verify] 偵測到 API 已在運行，直接複用（compose 堆疊模式）…');
+}
 
 try {
   let healthy = false;
@@ -154,7 +173,7 @@ try {
   );
 
   const dbCount = await countScans();
-  record('直接查 PostgreSQL：fingerprint_scans = 2 筆', dbCount === 2, `count=${dbCount}`);
+  record('直接查 PostgreSQL：該訪客 2 筆落庫', dbCount === 2, `count=${dbCount}`);
 
   const history = await (await authFetch(`${API_URL}/v1/visitors/${VISITOR}/reports`)).json();
   record(
@@ -198,7 +217,7 @@ try {
     `剩餘報告=${historyAfter.reports.length}`,
   );
   const dbCountAfter = await countScans();
-  record('直接查 PostgreSQL：刪除後 = 0 筆', dbCountAfter === 0, `count=${dbCountAfter}`);
+  record('直接查 PostgreSQL：該訪客刪除後 = 0 筆', dbCountAfter === 0, `count=${dbCountAfter}`);
 } finally {
   if (api) api.kill();
   if (dbs) await dbs.stop().catch(() => {});

@@ -76,6 +76,8 @@ node scripts/smoke-compose.mjs   # 期望 5/5 通過（網站/匿名報告/租�
 
 - **VPS 上線**：`scripts/deploy-vps.sh`（git pull → build → up → 冒煙）；完整步驟、上線檢查清單、Caddy HTTPS、備份排程見 [docs/deploy-vps.md](./docs/deploy-vps.md)。
 
+**本地完整運行與測試**：見 [docs/local-dev.md](./docs/local-dev.md)——新機器從零跑起（`pnpm check` → E2E → `docker compose up -d --build` → `pnpm verify:compose`）的完整流程。
+
 ## 測試
 
 ```bash
