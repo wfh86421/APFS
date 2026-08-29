@@ -78,6 +78,9 @@ node scripts/smoke-compose.mjs   # 期望 5/5 通過（網站/匿名報告/租�
 
 **本地完整運行與測試**：見 [docs/local-dev.md](./docs/local-dev.md)——新機器從零跑起（`pnpm check` → E2E → `docker compose up -d --build` → `pnpm verify:compose`）的完整流程。
 
+**Windows 舊版/LTSC 跑 Docker**：Docker Desktop 在 Windows 10 LTSC 2021（19044）不可安裝；
+改用 WSL2 + Docker Engine 或專案 Docker-free 路徑，見 [docs/wsl-docker-setup.md](./docs/wsl-docker-setup.md)。
+
 ## 測試
 
 ```bash
