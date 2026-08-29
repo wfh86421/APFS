@@ -1,0 +1,72 @@
+name: shieldscan
+
+# 本地鏡像 / VPS 上線共用組態。
+# 本機測試：docker compose up -d --build
+# VPS 上線：複製 .env.example → .env 後 docker compose up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: shieldscan
+      POSTGRES_USER: shieldscan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shieldscan}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shieldscan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://shieldscan:${POSTGRES_PASSWORD:-shieldscan}@postgres:5432/shieldscan
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      REPORT_SIGNING_SECRET: ${REPORT_SIGNING_SECRET:-dev-only-change-me}
+      NETWORK_PROVIDER: ${NETWORK_PROVIDER:-mock}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web-scanner/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

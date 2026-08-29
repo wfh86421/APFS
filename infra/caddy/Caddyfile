@@ -1,0 +1,13 @@
+# ShieldScan VPS 反向代理（Caddy 自動 HTTPS）
+#
+# 前置：把 example.com 換成你的網域，並確認 DNS A 紀錄指向 VPS。
+# 安裝：sudo apt install caddy（或 docker 跑 caddy:2）
+# 設定：sudo cp infra/caddy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+
+# example.com {
+#     reverse_proxy 127.0.0.1:3000
+# }
+
+# api.example.com {
+#     reverse_proxy 127.0.0.1:3001
+# }

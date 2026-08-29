@@ -63,6 +63,19 @@ docs/          技術文件
 - **CI Postgres 執行期驗證**：workflow 新增 postgres + redis service；`pnpm test`（單元）→ `node scripts/init-db.mjs`（套用 schema）→ `pnpm test:postgres`（repository 整合）→ `node scripts/verify-prod-storage.mjs`（正式儲存切換：報告落庫/查詢/歷史/P99<500ms/刪除權）。
 - **驗證**：`pnpm -r typecheck`、`pnpm -r build`、`pnpm test` 全數通過；Phase 3 冒煙 9/9（註冊/簽章/竄改 401/高風險 block/Webhook 送達/用量/發票/刪除權）。
 
+## Docker 本地鏡像與 VPS 上線（2026-08-29）
+
+- **鏡像**：`apps/api/Dockerfile`（多階段）與 `apps/web-scanner/Dockerfile`（Next.js standalone）；根目錄 `docker-compose.yml` 一次啟動 Postgres/Redis/API/網站。
+- **本機驗證**（需 Docker Desktop）：
+
+```bash
+cp .env.example .env   # 編輯正式值
+docker compose up -d --build
+node scripts/smoke-compose.mjs   # 期望 5/5 通過（網站/匿名報告/租戶簽章/Postgres 落庫）
+```
+
+- **VPS 上線**：`scripts/deploy-vps.sh`（git pull → build → up → 冒煙）；完整步驟、上線檢查清單、Caddy HTTPS、備份排程見 [docs/deploy-vps.md](./docs/deploy-vps.md)。
+
 ## 測試
 
 ```bash

@@ -1,0 +1,102 @@
+#!/usr/bin/env node
+/**
+ * 對「執行中的 docker compose 堆疊」做冒煙測試（本機鏡像驗證用）。
+ *
+ * 前置：docker compose up -d --build 已啟動。
+ * 用法：node scripts/smoke-compose.mjs
+ */
+
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { signReport } from '../packages/signing/dist/index.js';
+
+const API = process.env.API_URL ?? 'http://127.0.0.1:3001';
+const WEB = process.env.WEB_URL ?? 'http://127.0.0.1:3000';
+const SIGNING_SECRET = process.env.REPORT_SIGNING_SECRET ?? 'dev-only-change-me';
+const results = [];
+
+const record = (name, ok, detail = '') => {
+  results.push(ok);
+  console.log(`${ok ? '✔' : '✘'} ${name}${detail ? ` — ${detail}` : ''}`);
+};
+
+async function waitHealthy(url, label, tries = 30) {
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return true;
+    } catch {
+      // retry
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  return false;
+}
+
+const apiReady = await waitHealthy(`${API}/health`);
+record('API /health 就緒', apiReady, API);
+const webReady = await waitHealthy(`${WEB}/`);
+record('網站 / 就緒', webReady, WEB);
+
+// 1. 匿名報告（網站 standard/stored 上傳路徑）
+const raw = await readFile('docs/examples/report.example.json', 'utf8');
+const anonymous = JSON.parse(raw);
+anonymous.reportId = randomUUID();
+anonymous.sessionId = randomUUID();
+anonymous.createdAt = new Date().toISOString();
+anonymous.integrity.nonce = randomUUID();
+anonymous.integrity.timestamp = new Date().toISOString();
+anonymous.integrity.signature = '';
+
+const r1 = await fetch(`${API}/v1/reports`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(anonymous),
+});
+const r1b = await r1.json();
+record('匿名報告 201（網站路徑）', r1.status === 201 && typeof r1b.score?.finalScore === 'number', `score=${r1b.score?.finalScore}`);
+
+// 2. 租戶 + 正式簽章報告
+const reg = await fetch(`${API}/v1/tenants`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: 'Compose Smoke', email: 'smoke@shieldscan.dev', plan: 'developer' }),
+});
+const regBody = await reg.json();
+record('租戶註冊 + API Key', reg.status === 201 && typeof regBody.apiKey === 'string');
+
+const signed = JSON.parse(raw);
+signed.reportId = randomUUID();
+signed.sessionId = randomUUID();
+signed.createdAt = new Date().toISOString();
+signed.integrity.nonce = randomUUID();
+signed.integrity.timestamp = new Date().toISOString();
+signed.integrity.signature = '';
+signed.integrity.signature = await signReport(signed, SIGNING_SECRET);
+
+const r2 = await fetch(`${API}/v1/reports`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${regBody.apiKey}` },
+  body: JSON.stringify(signed),
+});
+const r2b = await r2.json();
+record(
+  '租戶簽章報告 201 + verified',
+  r2.status === 201 && r2b.integrity?.verified === true,
+  `verified=${r2b.integrity?.verified}`,
+);
+
+// 3. PostgreSQL 落庫驗證（透過 API 讀回）
+const stored = await fetch(`${API}/v1/reports/${signed.reportId}`, {
+  headers: { authorization: `Bearer ${regBody.apiKey}` },
+});
+const storedBody = await stored.json();
+record(
+  '報告已落庫（clientIp/raw.network）',
+  stored.status === 200 && storedBody.clientIp !== undefined && storedBody.raw?.network?.ip,
+  `clientIp=${storedBody.clientIp}`,
+);
+
+const failed = results.filter((ok) => !ok).length;
+console.log(`\n=== docker compose 冒煙：${results.length - failed}/${results.length} 通過 ===`);
+process.exit(failed > 0 ? 1 : 0);
