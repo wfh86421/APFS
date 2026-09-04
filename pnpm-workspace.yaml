@@ -3,15 +3,15 @@ packages:
   - packages/*
   - examples/*
 
+# pnpm 11 改從此檔讀取設定。
+# 容器/Docker（Linux）需要平台套件 @embedded-postgres/linux-x64；
+# 本機 Windows 開發則需要 windows 平台套件。
 onlyBuiltDependencies:
   - esbuild
   - sharp
   - embedded-postgres
+  - '@embedded-postgres/linux-x64'
   - "@embedded-postgres/windows-x64"
   - redis-memory-server
   - "@next/swc-win32-x64-msvc"
   - "@img/sharp-win32-x64"
-allowBuilds:
-  '@embedded-postgres/windows-x64': set this to true or false
-  esbuild: set this to true or false
-  redis-memory-server: set this to true or false

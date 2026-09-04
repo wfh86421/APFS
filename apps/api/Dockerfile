@@ -12,9 +12,10 @@ RUN corepack enable
 # 整個 monorepo 為建置 context（.dockerignore 已排除 node_modules/.next/dist 等）
 COPY . .
 
-RUN pnpm install --frozen-lockfile \
-  && pnpm -r --filter './packages/**' build \
-  && pnpm --filter @shieldscan/api build
+# 拆成獨立步驟：若建置失敗，輸出會明確指出是哪一步
+RUN echo "[1/3] pnpm install" && pnpm install --frozen-lockfile
+RUN echo "[2/3] build workspace packages" && pnpm -r --filter './packages/**' build
+RUN echo "[3/3] build api" && pnpm --filter @shieldscan/api build
 
 FROM node:22-alpine AS runtime
 
