@@ -27,7 +27,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=build /app/apps/web-scanner/.next/standalone ./
 COPY --from=build /app/apps/web-scanner/.next/static ./apps/web-scanner/.next/static
-COPY --from=build /app/apps/web-scanner/public ./apps/web-scanner/public
 
 EXPOSE 3000
 CMD ["node", "apps/web-scanner/server.js"]
