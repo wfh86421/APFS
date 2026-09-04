@@ -7,7 +7,7 @@
 #   2. 安裝 git（若缺）
 #   3. clone https://github.com/wfh86421/APFS
 #   4. 產生 .env（自動偵測公網 IP、隨機 POSTGRES_PASSWORD / REPORT_SIGNING_SECRET）
-#   5. 執行 ./scripts/deploy-vps.sh（build → up → 冒煙）
+#   5. 執行 bash scripts/deploy-vps.sh（build → up → 冒煙）
 #
 # 可選環境變數覆寫：
 #   PUBLIC_IP     自動偵測失敗時手動指定
@@ -58,7 +58,7 @@ if [ ! -f .env ]; then
 fi
 
 echo "[bootstrap] 執行 deploy-vps.sh（build → up → 冒煙）…"
-./scripts/deploy-vps.sh
+bash scripts/deploy-vps.sh
 
 echo
 echo "[bootstrap] 完成！驗證網址："
