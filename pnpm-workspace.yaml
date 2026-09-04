@@ -3,15 +3,11 @@ packages:
   - packages/*
   - examples/*
 
-# pnpm 11 改從此檔讀取設定。
-# 容器/Docker（Linux）需要平台套件 @embedded-postgres/linux-x64；
-# 本機 Windows 開發則需要 windows 平台套件。
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - embedded-postgres
-  - '@embedded-postgres/linux-x64'
-  - "@embedded-postgres/windows-x64"
-  - redis-memory-server
-  - "@next/swc-win32-x64-msvc"
-  - "@img/sharp-win32-x64"
+# pnpm 11 注意：
+# - strictDepBuilds 預設 true：未允許的依賴 postinstall 會讓安裝「直接失敗」。
+# - Docker 建置只需要 tsc / next 編譯，不需要 embedded-postgres /
+#   redis-memory-server 下載原生二進位，因此關閉嚴格模式並僅允許 esbuild。
+strictDepBuilds: false
+
+allowBuilds:
+  esbuild: true
