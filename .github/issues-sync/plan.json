@@ -1,0 +1,51 @@
+{
+  "milestones": [
+    {
+      "title": "Day 1-30：0-1 基礎與網站",
+      "description": "資料契約、browser-sdk、monorepo、網站 MVP、隱私政策（多數已完成，供追蹤歷史）。",
+      "dueOn": "2026-10-06"
+    },
+    {
+      "title": "Day 31-60：後端與上線",
+      "description": "API、儲存、網路層、合規端口檢測、開始累積真實掃描資料。",
+      "dueOn": "2026-11-05"
+    },
+    {
+      "title": "Day 61-90：Pilot 與商業驗證",
+      "description": "SDK npm、定價自助註冊、3 個 Pilot、SEO 內容。",
+      "dueOn": "2026-12-05"
+    }
+  ],
+  "issues": [
+    {
+      "title": "網站開始累積真實掃描資料",
+      "milestone": "Day 31-60：後端與上線",
+      "body": "驗證指標：月掃描 ≥ 5,000。\n\n- [ ] 掃描計數/GA 埋點\n- [ ] 公開推廣入口\n- [ ] 每週回報掃描數\n\n追蹤：docs/validation-tracker.md (M1)"
+    },
+    {
+      "title": "端口檢測（合規版）與 IP reputation 上線",
+      "milestone": "Day 31-60：後端與上線",
+      "body": "驗證指標：網路層準確率 ≥ 95%。\n\n- [ ] port-scan 合規範圍與審計\n- [ ] ip_reputation 資料來源與更新\n- [ ] 準確率樣本測試"
+    },
+    {
+      "title": "SDK npm 公開 + React/Node demo",
+      "milestone": "Day 61-90：Pilot 與商業驗證",
+      "body": "驗證指標：開發者 10 分鐘內整合。\n\n- [ ] browser-sdk / react-sdk 發 beta\n- [ ] React/Node demo 可執行\n- [ ] 10 分鐘整合 README"
+    },
+    {
+      "title": "定價頁 + API Key 自助註冊",
+      "milestone": "Day 61-90：Pilot 與商業驗證",
+      "body": "驗證指標：≥10 試用。\n\n- [ ] 定價頁與方案\n- [ ] 自助試用流程（tenant 註冊已可用）\n- [ ] 試用轉 Pilot 漏斗"
+    },
+    {
+      "title": "找到 3 個 Pilot 客戶",
+      "milestone": "Day 61-90：Pilot 與商業驗證",
+      "body": "驗證指標：M3 ≥3 Pilot；M4 第一個付費客戶。\n\n- [ ] 3 個垂直場景 Demo（看劇/登入風控/遊戲）\n- [ ] 每位 Pilot 的驗證報告\n- [ ] 至少 1 個付費 Pilot"
+    },
+    {
+      "title": "建立 SEO 內容排程（每週 2 篇風險教育文章）",
+      "milestone": "Day 61-90：Pilot 與商業驗證",
+      "body": "免費工具 SEO 引擎（0-6 個月）。\n\n- [ ] 內容日曆\n- [ ] 每週 2 篇（fingerprint/WebRTC/DNS/privacy）\n- [ ] 報告分享連結"
+    }
+  ]
+}
