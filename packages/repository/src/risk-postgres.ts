@@ -8,6 +8,7 @@ import type {
   Severity,
 } from '@shieldscan/core-schema';
 import type {
+  AuditLogEntry,
   DeviceFingerprint,
   NetworkSignal,
   ReviewCasePatch,
@@ -129,6 +130,14 @@ interface AppealRow {
   reason: string;
   status: AppealCase['status'];
   decision: AppealCase['decision'];
+  created_at: string;
+}
+
+interface AuditLogRow {
+  action: string;
+  target_ip: string | null;
+  actor_ip: string | null;
+  metadata: unknown;
   created_at: string;
 }
 
@@ -503,6 +512,34 @@ export class PostgresRiskRepository implements RiskRepository {
        WHERE case_id = $1 AND appeal_status = 'none'`,
       [appeal.caseId],
     );
+  }
+
+  async appendAuditLog(entry: AuditLogEntry): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO audit_logs (action, target_ip, actor_ip, metadata)
+       VALUES ($1,$2,$3,$4)`,
+      [
+        entry.action,
+        entry.targetIp ?? null,
+        entry.actorIp ?? null,
+        JSON.stringify(entry.metadata ?? {}),
+      ],
+    );
+  }
+
+  async listAuditLogs(limit = 100): Promise<AuditLogEntry[]> {
+    const { rows } = await this.pool.query<AuditLogRow>(
+      `SELECT action, target_ip, actor_ip, metadata, created_at
+       FROM audit_logs ORDER BY created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return rows.map((row) => ({
+      action: row.action,
+      targetIp: row.target_ip ?? undefined,
+      actorIp: row.actor_ip ?? undefined,
+      metadata: (row.metadata as Record<string, unknown>) ?? undefined,
+      createdAt: new Date(row.created_at).toISOString(),
+    }));
   }
 
   private toRiskEvent(row: RiskEventRow): RiskEvent {

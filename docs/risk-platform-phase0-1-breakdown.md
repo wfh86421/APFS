@@ -147,5 +147,15 @@ Phase 3 完成定義：
 待補（Phase 4 後段）：
 
 - RBAC 角色與 IP／經緯度／Raw JSON 遮罩。
-- 審計 API（讀取 audit_logs 資料表）與敏感操作日誌化。
+- 企業 Dashboard 頁面（報告列表＋事件查詢＋指紋聚類）。
+
+已完成（2026-09-06，Phase 4 後段第一段）：
+
+- repository 新增 `AuditLogEntry`／`appendAuditLog`／`listAuditLogs`（InMemory＋Postgres）。
+- 敏感動作（report-delete、visitor-delete、port-scan、review-open、review-decision）寫入 audit_logs。
+- `GET /v1/audit-logs` 改為需 API Key 並讀取資料庫日誌。
+
+待補（下一輪）：
+
+- RBAC 角色與欄位遮罩（IP／經緯度／Raw JSON）。
 - 企業 Dashboard 頁面（報告列表＋事件查詢＋指紋聚類）。

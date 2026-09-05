@@ -182,6 +182,15 @@ test('InMemory 審查流程：建立 case、更新 decision、建立 appeal', as
   assert.equal(afterAppeal?.appealStatus, 'pending');
 });
 
+test('InMemory 審計日誌：append 後依時間倒序回傳', async () => {
+  const repo = new InMemoryRiskRepository();
+  await repo.appendAuditLog({ action: 'report-delete', targetIp: '49.214.1.196', metadata: { reportId: 'r1' } });
+  await repo.appendAuditLog({ action: 'review-decision', metadata: { caseId: 'c1' } });
+  const logs = await repo.listAuditLogs();
+  assert.equal(logs.length, 2);
+  assert.equal(logs[0]?.action, 'review-decision');
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);
@@ -214,6 +223,8 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
     await repo.createReviewCase(reviewCase);
     assert.ok(await repo.getReviewCase(reviewCase.caseId));
     await repo.createAppeal(makeAppeal(reviewCase.caseId));
+    await repo.appendAuditLog({ action: 'review-decision', metadata: { caseId: reviewCase.caseId } });
+    assert.ok((await repo.listAuditLogs()).length >= 1);
   } finally {
     await repo.close();
   }

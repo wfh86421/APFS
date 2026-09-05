@@ -131,6 +131,14 @@ export interface ReviewCasePatch {
   closedAt?: string;
 }
 
+export interface AuditLogEntry {
+  action: string;
+  targetIp?: string;
+  actorIp?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -151,4 +159,6 @@ export interface RiskRepository {
   getReviewCase(caseId: string): Promise<ReviewCase | null>;
   updateReviewCase(caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null>;
   createAppeal(appeal: AppealCase): Promise<void>;
+  appendAuditLog(entry: AuditLogEntry): Promise<void>;
+  listAuditLogs(limit?: number): Promise<AuditLogEntry[]>;
 }

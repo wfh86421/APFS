@@ -6,6 +6,7 @@ import type {
   RiskEvent,
 } from '@shieldscan/core-schema';
 import type {
+  AuditLogEntry,
   DeviceFingerprint,
   NetworkSignal,
   ReportMeta,
@@ -108,6 +109,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly networkSignals = new Map<string, NetworkSignal>();
   private readonly reviewCases = new Map<string, ReviewCase>();
   private readonly appeals = new Map<string, AppealCase>();
+  private readonly auditLogs: AuditLogEntry[] = [];
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -202,5 +204,13 @@ export class InMemoryRiskRepository implements RiskRepository {
     if (reviewCase && reviewCase.appealStatus === 'none') {
       this.reviewCases.set(appeal.caseId, { ...reviewCase, appealStatus: 'pending' });
     }
+  }
+
+  async appendAuditLog(entry: AuditLogEntry): Promise<void> {
+    this.auditLogs.unshift({ ...entry, createdAt: entry.createdAt ?? new Date().toISOString() });
+  }
+
+  async listAuditLogs(limit = 100): Promise<AuditLogEntry[]> {
+    return this.auditLogs.slice(0, limit);
   }
 }

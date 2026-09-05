@@ -472,6 +472,11 @@ app.post('/v1/reports/:id/review', async (request, reply) => {
     appealStatus: 'none' as const,
   };
   await riskRepository.createReviewCase(reviewCase);
+  await riskRepository.appendAuditLog({
+    action: 'review-open',
+    actorIp: requestIp(request),
+    metadata: { reportId: report.reportId, caseId: reviewCase.caseId, reason },
+  });
   return reply.code(201).send({ case: reviewCase });
 });
 
@@ -505,6 +510,11 @@ app.put('/v1/review-cases/:caseId', async (request, reply) => {
     closedAt: body.status === 'closed' || body.status === 'reviewed' ? new Date().toISOString() : undefined,
   });
   if (!updated) return reply.code(404).send({ error: 'review_case_not_found' });
+  await riskRepository.appendAuditLog({
+    action: 'review-decision',
+    actorIp: requestIp(request),
+    metadata: { caseId, decision: updated.decision, status: updated.status },
+  });
   return { ok: true, case: updated };
 });
 
@@ -657,6 +667,12 @@ app.delete('/v1/reports/:id', async (request, reply) => {
     metadata: { reportId: id },
     createdAt: new Date().toISOString(),
   });
+  await riskRepository.appendAuditLog({
+    action: 'report-delete',
+    targetIp: requestIp(request),
+    actorIp: requestIp(request),
+    metadata: { reportId: id },
+  });
   return reply.code(204).send();
 });
 
@@ -683,6 +699,12 @@ app.delete('/v1/visitors/:visitorId', async (request, reply) => {
     actorIp: requestIp(request),
     metadata: { visitorId },
     createdAt: new Date().toISOString(),
+  });
+  await riskRepository.appendAuditLog({
+    action: 'visitor-delete',
+    targetIp: requestIp(request),
+    actorIp: requestIp(request),
+    metadata: { visitorId },
   });
   return reply.code(204).send();
 });
@@ -747,13 +769,26 @@ app.post('/v1/port-scan', async (request, reply) => {
     metadata: { ports: sanitized },
     createdAt: new Date().toISOString(),
   });
+  await riskRepository.appendAuditLog({
+    action: 'port-scan',
+    targetIp: ip,
+    actorIp: ip,
+    metadata: { ports: sanitized },
+  });
 
   const results = await scanPorts(ip, sanitized.length > 0 ? sanitized : [22]);
   app.log.info({ ip, ports: sanitized }, 'port scan completed');
   return { ip, results, auditId: auditLog.length };
 });
 
-app.get('/v1/audit-logs', async () => ({ logs: auditLog }));
+app.get('/v1/audit-logs', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { limit?: string };
+  const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
+  const logs = await riskRepository.listAuditLogs(limit);
+  return { logs };
+});
 
 app.get('/v1/plugin-profile', async (_request, reply) => {
   reply.code(501).send({ error: 'not_implemented', message: 'Plugin Registry 尚未接入' });
