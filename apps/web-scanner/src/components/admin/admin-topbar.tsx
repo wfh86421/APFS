@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const TITLES: Record<string, string> = {
   '/admin': '管理者工作台',
+  '/admin/homepage': '首頁設定',
   '/admin/reports': '報告列表',
   '/admin/events': '事件查詢',
   '/admin/devices': '設備指紋',

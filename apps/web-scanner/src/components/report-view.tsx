@@ -53,6 +53,7 @@ export default function ReportView({
   analysisSource,
   warning,
   onExport,
+  sections,
 }: {
   report: EnvironmentReport;
   score: ScoreResult;
@@ -62,7 +63,23 @@ export default function ReportView({
   analysisSource: 'local' | 'server';
   warning?: string;
   onExport: () => void;
+  sections?: {
+    score?: boolean;
+    issues?: boolean;
+    hardware?: boolean;
+    browser?: boolean;
+    network?: boolean;
+    next?: boolean;
+  };
 }) {
+  const show = {
+    score: sections?.score ?? true,
+    issues: sections?.issues ?? true,
+    hardware: sections?.hardware ?? true,
+    browser: sections?.browser ?? true,
+    network: sections?.network ?? true,
+    next: sections?.next ?? true,
+  };
   const riskClass =
     score.riskLevel === 'critical' || score.riskLevel === 'high'
       ? 'badge-bad'
@@ -88,6 +105,7 @@ export default function ReportView({
         </section>
       )}
 
+      {show.score && (
       <section className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -162,25 +180,9 @@ export default function ReportView({
           </div>
         )}
       </section>
+      )}
 
-      <section className="card">
-        <h2>下一步</h2>
-        <p className="muted" style={{ marginTop: 0 }}>
-          想讓偵測成為你產品流程的一環？
-        </p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <a className="btn" href="/register">
-            API 自助註冊
-          </a>
-          <a className="btn" href="/demo/login-risk">
-            看登入風控 Demo
-          </a>
-          <a className="btn" href="/pricing">
-            查看定價
-          </a>
-        </div>
-      </section>
-
+      {show.issues && (
       <section className="card">
         <h2>異常與風險（Issues）</h2>
         {report.issues.length === 0 && (
@@ -210,7 +212,9 @@ export default function ReportView({
           </div>
         ))}
       </section>
+      )}
 
+      {show.hardware && (
       <section className="card">
         <h2>硬體指紋（Hardware）</h2>
         {hardwareSignals.length === 0 && (
@@ -230,7 +234,9 @@ export default function ReportView({
           </details>
         ))}
       </section>
+      )}
 
+      {show.browser && (
       <section className="card">
         <h2>瀏覽器環境（Browser）</h2>
         {browserSignals.length === 0 && (
@@ -250,7 +256,9 @@ export default function ReportView({
           </details>
         ))}
       </section>
+      )}
 
+      {show.network && (
       <section className="card">
         <h2>網路環境（Network）</h2>
         {network && (
@@ -303,6 +311,27 @@ export default function ReportView({
           </p>
         )}
       </section>
+      )}
+
+      {show.next && (
+        <section className="card">
+          <h2>下一步</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            想讓偵測成為你產品流程的一環？
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <a className="btn" href="/register">
+              API 自助註冊
+            </a>
+            <a className="btn" href="/demo/login-risk">
+              看登入風控 Demo
+            </a>
+            <a className="btn" href="/pricing">
+              查看定價
+            </a>
+          </div>
+        </section>
+      )}
     </>
   );
 }

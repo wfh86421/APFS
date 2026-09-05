@@ -12,6 +12,8 @@ import ConsentBanner, {
 import ReportView from '../components/report-view';
 import ScanPanel from '../components/scan-panel';
 import { analyzeSignals } from '../lib/analyze';
+import type { HomeConfig } from '../modules/homepage';
+import { loadHomeConfig } from '../modules/homepage';
 
 interface ScanResult {
   report: EnvironmentReport;
@@ -29,9 +31,11 @@ export default function Home() {
   const [consent, setConsent] = useState<ConsentState>({ mode: 'local-only' });
   const consentRef = useRef(consent);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [home, setHome] = useState<HomeConfig | null>(null);
 
   useEffect(() => {
     setConsent(loadConsent());
+    setHome(loadHomeConfig());
   }, []);
 
   useEffect(() => {
@@ -90,22 +94,41 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const blockState = (id: string) => {
+    const block = home?.blocks.find((item) => item.id === id);
+    return { visible: block?.visible ?? true, enabled: block?.enabled ?? true };
+  };
+  const contentOn = (id: string) => {
+    const state = blockState(id);
+    return state.visible && state.enabled;
+  };
+  const reportSections = {
+    score: contentOn('result.score'),
+    issues: contentOn('result.issues'),
+    hardware: contentOn('result.hardware'),
+    browser: contentOn('result.browser'),
+    network: contentOn('result.network'),
+    next: contentOn('result.next'),
+  };
+
   return (
     <main>
-      <header>
-        <h1>🛡️ ShieldScan 隱盾檢測</h1>
-        <p className="subtitle">
-          一站式瀏覽器指紋與網路環境安全檢測：即時隱私評分、風險預警與環境一致性驗證。
-        </p>
-        <p style={{ margin: '0 0 16px' }}>
-          <a href="/demo/login-risk">登入風控 Demo</a>・
-          <a href="/register">API 自助註冊</a>・
-          <a href="/admin/overview">企業後台</a>
-        </p>
-      </header>
+      {contentOn('home.header') && (
+        <header>
+          <h1>🛡️ ShieldScan 隱盾檢測</h1>
+          <p className="subtitle">
+            一站式瀏覽器指紋與網路環境安全檢測：即時隱私評分、風險預警與環境一致性驗證。
+          </p>
+          <p style={{ margin: '0 0 16px' }}>
+            <a href="/demo/login-risk">登入風控 Demo</a>・
+            <a href="/register">API 自助註冊</a>・
+            <a href="/admin/overview">企業後台</a>
+          </p>
+        </header>
+      )}
 
-      <ConsentBanner value={consent} onChange={setConsent} />
-      <ScanPanel consent={consent} onComplete={handleComplete} />
+      {contentOn('home.consent') && <ConsentBanner value={consent} onChange={setConsent} />}
+      {contentOn('home.scan') && <ScanPanel consent={consent} onComplete={handleComplete} />}
 
       {result && (
         <ReportView
@@ -117,17 +140,20 @@ export default function Home() {
           analysisSource={result.analysisSource}
           warning={result.warning}
           onExport={handleExport}
+          sections={reportSections}
         />
       )}
 
-      <footer className="muted" style={{ marginTop: 32, fontSize: 13 }}>
-        ShieldScan Phase 1 MVP — 本地分析預覽。正式風險判斷由 Server 端分析引擎提供。
-        <span style={{ marginLeft: 16 }}>
-          <a href="/register">API 自助註冊</a>・
-          <a href="/pricing">定價</a>・
-          <a href="/privacy">隱私政策</a>
-        </span>
-      </footer>
+      {contentOn('home.footer') && (
+        <footer className="muted" style={{ marginTop: 32, fontSize: 13 }}>
+          ShieldScan Phase 1 MVP — 本地分析預覽。正式風險判斷由 Server 端分析引擎提供。
+          <span style={{ marginLeft: 16 }}>
+            <a href="/register">API 自助註冊</a>・
+            <a href="/pricing">定價</a>・
+            <a href="/privacy">隱私政策</a>
+          </span>
+        </footer>
+      )}
     </main>
   );
 }
