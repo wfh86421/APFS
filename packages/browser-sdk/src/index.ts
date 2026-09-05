@@ -1,4 +1,5 @@
 import type { NormalizedSignal, Platform } from '@shieldscan/core-schema';
+import { newUuid } from './uuid.js';
 
 export interface DetectionModule {
   id: string;
@@ -72,7 +73,7 @@ export class ShieldScanSDK {
     const listeners = new Set<(event: ScanProgressEvent) => void>();
 
     return {
-      sessionId: crypto.randomUUID(),
+      sessionId: newUuid(),
       onProgress(cb) {
         listeners.add(cb);
       },
@@ -96,7 +97,7 @@ export class ShieldScanSDK {
           try {
             const payload = await module.collect();
             signals.push({
-              id: crypto.randomUUID(),
+              id: newUuid(),
               pluginId: module.id,
               pluginVersion: module.version,
               platform: 'browser',
@@ -149,3 +150,4 @@ export { webrtcModule } from './modules/webrtc.js';
 export { uaModule } from './modules/ua.js';
 export { clientHintsModule } from './modules/clientHints.js';
 export { buildReport } from './report.js';
+export { newUuid } from './uuid.js';

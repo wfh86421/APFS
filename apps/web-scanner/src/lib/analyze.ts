@@ -1,4 +1,4 @@
-import { buildReport } from '@shieldscan/browser-sdk';
+import { buildReport, newUuid } from '@shieldscan/browser-sdk';
 import type {
   AnalysisIssue,
   ConsentMode,
@@ -53,7 +53,7 @@ export async function analyzeSignals(
   const canvas = asRecord(findSignal(signals, 'canvas')?.value);
   if (canvas.isTampered === true) {
     issues.push({
-      id: crypto.randomUUID(),
+      id: newUuid(),
       type: 'canvas_tampered',
       severity: 'low',
       description: '偵測到 Canvas API 被修改，可能是 Brave 等隱私瀏覽器的保護機制',
@@ -81,7 +81,7 @@ export async function analyzeSignals(
 
   if (chPlatform && uaOsFamily && chPlatform !== uaOsFamily) {
     issues.push({
-      id: crypto.randomUUID(),
+      id: newUuid(),
       type: 'os_mismatch',
       severity: 'high',
       description: 'User-Agent 宣稱的作業系統與 Client Hints 回報的平台不一致',
@@ -93,7 +93,7 @@ export async function analyzeSignals(
   const localIps = Array.isArray(webrtc.localIps) ? (webrtc.localIps as string[]) : [];
   if (localIps.length > 0) {
     issues.push({
-      id: crypto.randomUUID(),
+      id: newUuid(),
       type: 'webrtc_local_ip',
       severity: 'info',
       description: 'WebRTC 回報了本地 IP（是否為洩漏需與 Server 端公網 IP 比對）',

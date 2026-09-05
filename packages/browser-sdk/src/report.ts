@@ -6,6 +6,7 @@ import {
   type ReportSource,
 } from '@shieldscan/core-schema';
 import { signReport } from '@shieldscan/signing';
+import { newUuid } from './uuid.js';
 
 export interface BuildReportOptions {
   sessionId?: string;
@@ -33,12 +34,12 @@ export async function buildReport(
 ): Promise<EnvironmentReport> {
   const now = new Date().toISOString();
   const sdkVersion = options.sdkVersion ?? '0.1.0';
-  const nonce = crypto.randomUUID();
+  const nonce = newUuid();
 
   const report: EnvironmentReport = {
-    reportId: crypto.randomUUID(),
+    reportId: newUuid(),
     schemaVersion: SCHEMA_VERSION,
-    sessionId: options.sessionId ?? crypto.randomUUID(),
+    sessionId: options.sessionId ?? newUuid(),
     subjectId: options.subjectId,
     source: options.source ?? 'web',
     createdAt: now,
