@@ -171,3 +171,12 @@ Phase 3 完成定義：
 
 - 事件查詢（risk-events 列表 UI）、指紋聚類與趨勢圖表。
 - 客服/分析師 UI 層角色切換。
+
+已完成（2026-09-06）：
+
+- `/admin/events` 事件查詢頁：管理 API Key＋session/severity 篩選，顯示 Event／Type／Severity／Confidence／Rule／Review 狀態。
+
+待補（下一輪）：
+
+- 指紋聚類與趨勢圖表。
+- UI 角色切換（客服/分析師遮罩預覽）。
