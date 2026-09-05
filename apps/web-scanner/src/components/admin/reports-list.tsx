@@ -19,6 +19,7 @@ export default function AdminReportsList() {
     return window.localStorage.getItem('shieldscan.admin.apiKey') ?? '';
   });
   const [reports, setReports] = useState<ListReport[]>([]);
+  const [role, setRole] = useState('security_admin');
   const [status, setStatus] = useState('');
 
   const load = async () => {
@@ -29,7 +30,10 @@ export default function AdminReportsList() {
     window.localStorage.setItem('shieldscan.admin.apiKey', apiKey);
     try {
       const response = await fetch(`${apiBaseUrl()}/v1/reports?limit=50`, {
-        headers: { authorization: `Bearer ${apiKey}` },
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'x-role': role,
+        },
       });
       if (!response.ok) throw new Error(`API 回應 ${response.status}`);
       const body = (await response.json()) as { reports?: ListReport[] };
@@ -52,6 +56,14 @@ export default function AdminReportsList() {
             onChange={(event) => setApiKey(event.target.value)}
             placeholder="shd_live_..."
           />
+        </label>
+        <label>
+          角色預覽（需 security_admin key）
+          <select value={role} onChange={(event) => setRole(event.target.value)}>
+            <option value="security_admin">資安主管</option>
+            <option value="risk_analyst">風控分析師</option>
+            <option value="customer_support">客服</option>
+          </select>
         </label>
         <button className="btn" onClick={load}>
           載入報告

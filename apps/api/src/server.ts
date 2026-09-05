@@ -131,6 +131,19 @@ function roleOfAuth(auth: { key: ApiKeyRecord } | null): AdminRoleValue {
   return auth?.key.role ?? 'security_admin';
 }
 
+/** 角色預覽：僅 security_admin 可用 x-role 模擬其他角色；其餘角色以金鑰角色為準。 */
+function roleOfRequest(
+  request: { headers: Record<string, unknown> },
+  auth: { key: ApiKeyRecord } | null,
+): AdminRoleValue {
+  const base = roleOfAuth(auth);
+  if (base !== 'security_admin') return base;
+  const header = request.headers['x-role'];
+  return typeof header === 'string' && (ADMIN_ROLES as readonly string[]).includes(header)
+    ? (header as AdminRoleValue)
+    : base;
+}
+
 function maskIp(ip?: string): string | undefined {
   if (!ip) return undefined;
   const parts = ip.split('.');
@@ -676,7 +689,7 @@ app.post('/v1/reports', async (request, reply) => {
 app.get('/v1/reports', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-  const role = roleOfAuth(auth);
+  const role = roleOfRequest(request, auth);
   const query = request.query as { limit?: string };
   const limit = query.limit ? Math.max(1, Math.min(200, Number(query.limit))) : 50;
   const reports = (await repository.listReportsByTenant(auth.tenant.tenantId, limit)).map(
@@ -688,7 +701,7 @@ app.get('/v1/reports', async (request, reply) => {
 app.get('/v1/reports/:id', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-  const role = roleOfAuth(auth);
+  const role = roleOfRequest(request, auth);
   const { id } = request.params as { id: string };
   const stored = await repository.getReport(id);
   if (!stored) return reply.code(404).send({ error: 'report_not_found' });

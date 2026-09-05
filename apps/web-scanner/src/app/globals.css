@@ -989,6 +989,16 @@ a {
   font-size: 13px;
 }
 
+.decision-config select {
+  width: 220px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .decision-hero {
   display: grid;
   grid-template-columns: 1fr 240px;
