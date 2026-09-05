@@ -154,8 +154,9 @@ Phase 3 完成定義：
 - repository 新增 `AuditLogEntry`／`appendAuditLog`／`listAuditLogs`（InMemory＋Postgres）。
 - 敏感動作（report-delete、visitor-delete、port-scan、review-open、review-decision）寫入 audit_logs。
 - `GET /v1/audit-logs` 改為需 API Key 並讀取資料庫日誌。
+- `/admin/reports` 企業 Dashboard 報告列表頁：輸入管理 API Key 後載入租戶報告（Report ID／Session／IP／分數／風險／時間）。
 
 待補（下一輪）：
 
 - RBAC 角色與欄位遮罩（IP／經緯度／Raw JSON）。
-- 企業 Dashboard 頁面（報告列表＋事件查詢＋指紋聚類）。
+- 事件查詢、指紋聚類與趨勢圖表。
