@@ -149,7 +149,8 @@ export type ScoreBundle = z.infer<typeof zScoreBundle>;
 
 export const zReportIntegrity = z
   .object({
-    signature: z.string().min(1),
+    // 匿名掃描（瀏覽器 SDK 無密鑰）允許空簽章；伺服器會依租戶判定是否必填。
+    signature: z.string(),
     nonce: z.string().min(1),
     timestamp: z.string().datetime({ offset: true }),
     sdkVersion: z.string().min(1),
