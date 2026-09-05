@@ -117,6 +117,11 @@ export default function Home() {
 
       <footer className="muted" style={{ marginTop: 32, fontSize: 13 }}>
         ShieldScan Phase 1 MVP — 本地分析預覽。正式風險判斷由 Server 端分析引擎提供。
+        <span style={{ marginLeft: 16 }}>
+          <a href="/register">API 自助註冊</a>・
+          <a href="/pricing">定價</a>・
+          <a href="/privacy">隱私政策</a>
+        </span>
       </footer>
     </main>
   );

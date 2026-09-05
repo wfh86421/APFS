@@ -73,3 +73,5 @@
 - SDK 發佈前置：docs/sdk-publish-checklist.md（prepack/files 已具備；實際 npm publish 待帳號授權）。
 - 前台註冊表單：`/register` 自助註冊→取得 API Key→存入 localStorage。
 - SEO 內容日曆：docs/seo-content-calendar.md（16 篇排程＋每週 SOP）。
+- `/register` 入口：首頁 footer＋定價頁 CTA（Free/Developer 前往註冊）。
+- 垂直 Demo：新增 `/demo` Hub 與 `/demo/login-risk`（真實掃描→伺服器評分→allow/challenge/review/block 建議）。

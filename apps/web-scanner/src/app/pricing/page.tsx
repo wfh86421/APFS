@@ -97,9 +97,13 @@ export default function PricingPage() {
                 <li key={feature}>{feature}</li>
               ))}
             </ul>
-            <button className={`btn ${plan.highlight ? 'btn-primary' : ''}`}>
+            <a
+              className={`btn ${plan.highlight ? 'btn-primary' : ''}`}
+              href={plan.name === 'Free' || plan.name === 'Developer' ? '/register' : '/demo'}
+              style={{ textDecoration: 'none', display: 'inline-block' }}
+            >
               {plan.cta}
-            </button>
+            </a>
           </section>
         ))}
       </div>
