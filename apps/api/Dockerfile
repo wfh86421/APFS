@@ -28,6 +28,8 @@ COPY --from=build /app/tsconfig.base.json ./tsconfig.base.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages ./packages
 COPY --from=build /app/apps/api ./apps/api
+COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/infra ./infra
 
 EXPOSE 3001
 CMD ["node", "apps/api/dist/server.js"]
