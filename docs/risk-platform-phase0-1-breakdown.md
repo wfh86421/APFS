@@ -79,3 +79,18 @@
 待補（下一輪）：
 
 - `/admin` 6＋1 模組目錄與後台決策頁（Phase 2）。
+
+## Phase 2 進度（/admin 6＋1 模組目錄，2026-09-06）
+
+已完成：
+
+- `apps/web-scanner/src/modules/catalog.ts` 改為定版目錄：
+  decision（決策樞紐）、risk（異常矩陣）、network（網路地理）、hardware（硬體指紋）、browser（瀏覽器環境）、raw（原始與稽核）、governance（治理）。
+- `ModuleKind` 新增 `governance`；`ModuleItem` 新增 `accessLevel`（restricted 供治理抽屜使用）。
+- `raw.payload` 與 `governance.audit` 預設 `visible=false`（不干擾主決策流）。
+- `WorkspaceConfig.version` 升為 2，讓舊 localStorage 自動改用新目錄。
+
+待補（Phase 2 後半）：
+
+- `/admin` 報告詳情「決策頁」：依 6＋1 模組順序渲染真實報告欄位（需接 `/v1/reports` 資料）。
+- 異常矩陣／決策樞紐卡片元件與快速處置（白名單／標記／封鎖按鈕）。

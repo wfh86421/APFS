@@ -11,7 +11,8 @@ export type ModuleKind =
   | 'analysis' // 分析（IP/ASN/網路信任等）
   | 'scoring' // 評分（分數、等級、風險維度）
   | 'policy' // 政策（allow/review/challenge/block）
-  | 'output'; // 輸出（報告明細、匯出）
+  | 'output' // 輸出（報告明細、匯出）
+  | 'governance'; // 治理（RBAC / 審計 / 保留）
 
 export interface ModuleCategory {
   id: string;
@@ -35,12 +36,14 @@ export interface ModuleItem {
   enabled: boolean;
   /** UI 是否顯示（關閉仍可能參與，但看不到） */
   visible: boolean;
+  /** 權限等級：restricted 表示需高權限（例如治理抽屜） */
+  accessLevel?: 'normal' | 'restricted';
   /** 分類內排序 */
   order: number;
 }
 
 export interface WorkspaceConfig {
-  version: 1;
+  version: 2;
   categories: ModuleCategory[];
   modules: ModuleItem[];
 }
@@ -51,106 +54,112 @@ export const KIND_LABEL: Record<ModuleKind, string> = {
   scoring: '評分',
   policy: '政策',
   output: '輸出',
+  governance: '治理',
 };
 
 export const DEFAULT_CONFIG: WorkspaceConfig = {
-  version: 1,
+  version: 2,
   categories: [
-    { id: 'overview', label: '綜合評分', icon: '📊', order: 0, visible: true, collapsed: false },
-    { id: 'browser', label: '瀏覽器與隱私', icon: '🖥️', order: 1, visible: true, collapsed: false },
-    { id: 'network', label: '網路環境', icon: '🌐', order: 2, visible: true, collapsed: false },
-    { id: 'report', label: '報告輸出', icon: '📄', order: 3, visible: true, collapsed: false },
+    { id: 'decision', label: '決策樞紐', icon: '⚖️', order: 0, visible: true, collapsed: false },
+    { id: 'risk', label: '異常矩陣', icon: '🚨', order: 1, visible: true, collapsed: false },
+    { id: 'network', label: '網路地理', icon: '🌍', order: 2, visible: true, collapsed: false },
+    { id: 'hardware', label: '硬體指紋', icon: '🧬', order: 3, visible: true, collapsed: false },
+    { id: 'browser', label: '瀏覽器環境', icon: '🖥️', order: 4, visible: true, collapsed: false },
+    { id: 'raw', label: '原始與稽核', icon: '🗃️', order: 5, visible: true, collapsed: false },
+    { id: 'governance', label: '治理', icon: '🛡️', order: 6, visible: true, collapsed: false },
   ],
   modules: [
-    // —— 綜合評分 ——
+    // ① 決策樞紐與快速處置
     {
-      id: 'overview.score',
-      categoryId: 'overview',
-      label: '總分與風險等級',
-      icon: '🎯',
-      description: '單一總分（0–100）、等級與風險摘要。',
-      kind: 'scoring',
+      id: 'decision.verdict',
+      categoryId: 'decision',
+      label: '決策樞紐與快速處置',
+      icon: '⚖️',
+      description: '0.5–3 秒決策：訪客/評分/風險因素/建議動作/白名單黑名單。',
+      kind: 'policy',
       enabled: true,
       visible: true,
       order: 0,
     },
+    // ② 異常與一致性矩陣
     {
-      id: 'overview.dimensions',
-      categoryId: 'overview',
-      label: '四維評分',
-      icon: '📐',
-      description: '隱私暴露、環境真實性、自動化風險、網路信任。',
-      kind: 'scoring',
+      id: 'risk.conflicts',
+      categoryId: 'risk',
+      label: '異常與一致性矩陣',
+      icon: '🔍',
+      description: '宣稱 vs 事實 vs 判定：OS/端口/DNS/WebRTC/Canvas/地理。',
+      kind: 'analysis',
       enabled: true,
       visible: true,
       order: 1,
     },
-    // —— 瀏覽器與隱私（對應 browser-sdk 採集模組，id 即 plugin id）——
-    ...(
-      [
-        ['browser.ua', '👤', 'User-Agent / Platform'],
-        ['browser.clientHints', '🧩', 'Client Hints'],
-        ['browser.canvas', '🎨', 'Canvas 指紋'],
-        ['browser.webgl', '🧊', 'WebGL'],
-        ['browser.webgpu', '⚡', 'WebGPU'],
-        ['browser.audio', '🔊', 'Audio 指紋'],
-        ['browser.screen', '🖥️', '螢幕資訊'],
-        ['browser.locale', '🌏', '語言與區域'],
-        ['browser.timezone', '🕐', '時區'],
-        ['browser.webrtc', '🔌', 'WebRTC 本地 IP'],
-      ] as const
-    ).map(([id, icon, label], index) => ({
-      id,
-      categoryId: 'browser',
-      label,
-      icon,
-      description: '瀏覽器端環境訊號採集（browser-sdk detection plugin）。',
-      kind: 'detection' as const,
-      enabled: true,
-      visible: true,
-      order: index,
-    })),
-    // —— 網路環境 ——
+    // ③ 網路、IP 與地理
     {
-      id: 'network.ip',
+      id: 'network.geo',
       categoryId: 'network',
-      label: '出口 IP / 網路分析',
-      icon: '🌍',
-      description: '伺服器端以來源 IP 分析的網路信任資訊。',
+      label: '網路、IP 與地理',
+      icon: '🌐',
+      description: 'IP/ISP/7天活躍、WebRTC/STUN、DNS 洩漏、開放端口、地理卡與時區矩陣。',
       kind: 'analysis',
       enabled: true,
       visible: true,
       order: 0,
     },
-    // —— 報告輸出 ——
+    // ④ 硬體與設備指紋
     {
-      id: 'report.detail',
-      categoryId: 'report',
-      label: '檢測報告明細',
-      icon: '🗂️',
-      description: '完整環境報告（訊號、問題、政策與網路判讀）。',
-      kind: 'output',
+      id: 'hardware.fp',
+      categoryId: 'hardware',
+      label: '硬體與設備指紋',
+      icon: '🧬',
+      description: 'GPU/CPU/RAM/螢幕/觸控與 Canvas/WebGL/Audio/Fonts 指紋群。',
+      kind: 'detection',
       enabled: true,
       visible: true,
       order: 0,
     },
+    // ⑤ 瀏覽器與軟體環境
     {
-      id: 'report.export',
-      categoryId: 'report',
-      label: 'JSON 匯出',
-      icon: '⬇️',
-      description: '把標準化 EnvironmentReport 下載成 JSON。',
-      kind: 'output',
+      id: 'browser.env',
+      categoryId: 'browser',
+      label: '瀏覽器與軟體環境',
+      icon: '🖥️',
+      description: 'OS/瀏覽器/UA 比對/語言/字體/無痕/外掛狀態。',
+      kind: 'detection',
       enabled: true,
       visible: true,
-      order: 1,
+      order: 0,
+    },
+    // ⑥ 原始資料與稽核抽屜（預設隱藏但仍參與）
+    {
+      id: 'raw.payload',
+      categoryId: 'raw',
+      label: '原始資料與稽核抽屜',
+      icon: '🗃️',
+      description: 'Raw JSON/版本/consent/retention；預設收合，存取需高權限並記錄。',
+      kind: 'output',
+      enabled: true,
+      visible: false,
+      order: 0,
+    },
+    // ⑦ 治理抽屜（restricted，預設不顯示）
+    {
+      id: 'governance.audit',
+      categoryId: 'governance',
+      label: '治理（RBAC/審計/保留）',
+      icon: '🛡️',
+      description: 'RBAC 遮罩、審計日誌、保留策略、刪除流程、模型版本。',
+      kind: 'governance',
+      enabled: true,
+      visible: false,
+      accessLevel: 'restricted',
+      order: 0,
     },
   ],
 };
 
 export function cloneDefaultConfig(): WorkspaceConfig {
   return {
-    version: 1,
+    version: 2,
     categories: DEFAULT_CONFIG.categories.map((c) => ({ ...c })),
     modules: DEFAULT_CONFIG.modules.map((m) => ({ ...m })),
   };

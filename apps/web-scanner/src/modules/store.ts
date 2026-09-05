@@ -14,7 +14,7 @@ const STORAGE_KEY = 'shieldscan.admin.workspace.v1';
 function isWorkspaceConfig(value: unknown): value is WorkspaceConfig {
   if (!value || typeof value !== 'object') return false;
   const v = value as WorkspaceConfig;
-  return v.version === 1 && Array.isArray(v.categories) && Array.isArray(v.modules);
+  return v.version === 2 && Array.isArray(v.categories) && Array.isArray(v.modules);
 }
 
 export function loadWorkspaceConfig(): WorkspaceConfig {
