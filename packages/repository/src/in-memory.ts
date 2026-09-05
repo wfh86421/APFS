@@ -1,6 +1,8 @@
 import type {
+  AppealCase,
   EnvironmentReport,
   FieldDefinition,
+  ReviewCase,
   RiskEvent,
 } from '@shieldscan/core-schema';
 import type {
@@ -8,6 +10,7 @@ import type {
   NetworkSignal,
   ReportMeta,
   ReportRepository,
+  ReviewCasePatch,
   RiskEventFilter,
   RiskRepository,
   StoredReport,
@@ -96,6 +99,8 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly definitions = new Map<string, FieldDefinition>();
   private readonly devices = new Map<string, DeviceFingerprint>();
   private readonly networkSignals = new Map<string, NetworkSignal>();
+  private readonly reviewCases = new Map<string, ReviewCase>();
+  private readonly appeals = new Map<string, AppealCase>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -158,5 +163,37 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async getNetworkSignal(sessionId: string): Promise<NetworkSignal | null> {
     return this.networkSignals.get(sessionId) ?? null;
+  }
+
+  async createReviewCase(caseData: ReviewCase): Promise<void> {
+    this.reviewCases.set(caseData.caseId, caseData);
+  }
+
+  async listReviewCases(filter = {}): Promise<ReviewCase[]> {
+    const { status, limit } = filter as { status?: string; limit?: number };
+    return [...this.reviewCases.values()]
+      .filter((item) => !status || item.status === status)
+      .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
+      .slice(0, limit ?? 100);
+  }
+
+  async getReviewCase(caseId: string): Promise<ReviewCase | null> {
+    return this.reviewCases.get(caseId) ?? null;
+  }
+
+  async updateReviewCase(caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null> {
+    const current = this.reviewCases.get(caseId);
+    if (!current) return null;
+    const next: ReviewCase = { ...current, ...patch };
+    this.reviewCases.set(caseId, next);
+    return next;
+  }
+
+  async createAppeal(appeal: AppealCase): Promise<void> {
+    this.appeals.set(appeal.appealId, appeal);
+    const reviewCase = this.reviewCases.get(appeal.caseId);
+    if (reviewCase && reviewCase.appealStatus === 'none') {
+      this.reviewCases.set(appeal.caseId, { ...reviewCase, appealStatus: 'pending' });
+    }
   }
 }

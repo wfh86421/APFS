@@ -272,3 +272,41 @@ CREATE TABLE IF NOT EXISTS network_signals (
 CREATE INDEX IF NOT EXISTS idx_network_report ON network_signals(report_id);
 CREATE INDEX IF NOT EXISTS idx_network_tenant ON network_signals(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_network_open_ports ON network_signals USING GIN(open_ports);
+
+CREATE TABLE IF NOT EXISTS review_cases (
+    case_id           UUID PRIMARY KEY,
+    session_id        VARCHAR(64) NOT NULL,
+    report_id         UUID,
+    risk_event_ids    UUID[] NOT NULL DEFAULT '{}',
+    status            VARCHAR(16) NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','in_review','reviewed','closed')),
+    priority          VARCHAR(8) NOT NULL DEFAULT 'medium'
+                      CHECK (priority IN ('low','medium','high','urgent')),
+    assigned_to       VARCHAR(64),
+    reviewer_id       VARCHAR(64),
+    opened_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    closed_at         TIMESTAMPTZ,
+    decision          VARCHAR(16) CHECK (decision IN ('allow','review','challenge','limit','block','log_only')),
+    reason            TEXT NOT NULL,
+    false_positive_flag BOOLEAN,
+    appeal_status     VARCHAR(16) NOT NULL DEFAULT 'none'
+                      CHECK (appeal_status IN ('none','pending','accepted','rejected')),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_status    ON review_cases(status);
+CREATE INDEX IF NOT EXISTS idx_review_report    ON review_cases(report_id);
+CREATE INDEX IF NOT EXISTS idx_review_opened    ON review_cases(opened_at DESC);
+
+CREATE TABLE IF NOT EXISTS appeal_cases (
+    appeal_id     UUID PRIMARY KEY,
+    case_id       UUID NOT NULL REFERENCES review_cases(case_id),
+    reason        TEXT NOT NULL,
+    status        VARCHAR(16) NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','accepted','rejected')),
+    decision      VARCHAR(16) CHECK (decision IN ('allow','review','challenge','limit','block','log_only')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_appeal_case   ON appeal_cases(case_id);
+CREATE INDEX IF NOT EXISTS idx_appeal_status ON appeal_cases(status);

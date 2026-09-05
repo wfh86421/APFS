@@ -1,6 +1,10 @@
 import type {
+  AppealCase,
   EnvironmentReport,
   FieldDefinition,
+  PolicyDecision,
+  ReviewCase,
+  ReviewStatus,
   RiskEvent,
   RiskEventType,
   Severity,
@@ -112,6 +116,20 @@ export interface NetworkSignal {
   timeConsistency?: boolean;
 }
 
+export interface ReviewCaseFilter {
+  status?: ReviewStatus;
+  limit?: number;
+}
+
+export interface ReviewCasePatch {
+  status?: ReviewStatus;
+  decision?: PolicyDecision;
+  reason?: string;
+  reviewerId?: string;
+  falsePositiveFlag?: boolean;
+  closedAt?: string;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -127,4 +145,9 @@ export interface RiskRepository {
   listDeviceFingerprints(limit?: number): Promise<DeviceFingerprint[]>;
   upsertNetworkSignal(signal: NetworkSignal): Promise<void>;
   getNetworkSignal(sessionId: string): Promise<NetworkSignal | null>;
+  createReviewCase(caseData: ReviewCase): Promise<void>;
+  listReviewCases(filter?: ReviewCaseFilter): Promise<ReviewCase[]>;
+  getReviewCase(caseId: string): Promise<ReviewCase | null>;
+  updateReviewCase(caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null>;
+  createAppeal(appeal: AppealCase): Promise<void>;
 }

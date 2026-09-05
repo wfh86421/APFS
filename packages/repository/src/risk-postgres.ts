@@ -1,13 +1,16 @@
 import pg from 'pg';
 import type {
+  AppealCase,
   EvidenceConfidence,
   FieldDefinition,
+  ReviewCase,
   RiskEvent,
   Severity,
 } from '@shieldscan/core-schema';
 import type {
   DeviceFingerprint,
   NetworkSignal,
+  ReviewCasePatch,
   RiskEventFilter,
   RiskRepository,
 } from './types.js';
@@ -101,6 +104,32 @@ interface NetworkSignalRow {
   timezone_ip: string | null;
   timezone_js: string | null;
   time_consistency: boolean | null;
+}
+
+interface ReviewCaseRow {
+  case_id: string;
+  session_id: string;
+  report_id: string | null;
+  risk_event_ids: string[];
+  status: ReviewCase['status'];
+  priority: ReviewCase['priority'];
+  assigned_to: string | null;
+  reviewer_id: string | null;
+  opened_at: string;
+  closed_at: string | null;
+  decision: ReviewCase['decision'];
+  reason: string;
+  false_positive_flag: boolean | null;
+  appeal_status: ReviewCase['appealStatus'];
+}
+
+interface AppealRow {
+  appeal_id: string;
+  case_id: string;
+  reason: string;
+  status: AppealCase['status'];
+  decision: AppealCase['decision'];
+  created_at: string;
 }
 
 /** Phase 1：PostgreSQL 風險事件／欄位定義（使用 init.sql 新增表）。 */
@@ -370,6 +399,112 @@ export class PostgresRiskRepository implements RiskRepository {
     return row ? this.toNetworkSignal(row) : null;
   }
 
+  async createReviewCase(caseData: ReviewCase): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO review_cases (
+        case_id, session_id, report_id, risk_event_ids, status, priority,
+        assigned_to, reviewer_id, opened_at, closed_at, decision,
+        reason, false_positive_flag, appeal_status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      ON CONFLICT (case_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        decision = EXCLUDED.decision,
+        reason = EXCLUDED.reason,
+        false_positive_flag = EXCLUDED.false_positive_flag,
+        appeal_status = EXCLUDED.appeal_status`,
+      [
+        caseData.caseId,
+        caseData.sessionId,
+        caseData.reportId ?? null,
+        caseData.riskEventIds ?? [],
+        caseData.status,
+        caseData.priority,
+        caseData.assignedTo ?? null,
+        caseData.assignedTo ?? null,
+        caseData.openedAt,
+        caseData.closedAt ?? null,
+        caseData.decision ?? null,
+        caseData.reason,
+        caseData.falsePositiveFlag ?? null,
+        caseData.appealStatus,
+      ],
+    );
+  }
+
+  async listReviewCases(filter: {
+    status?: ReviewCase['status'];
+    limit?: number;
+  } = {}): Promise<ReviewCase[]> {
+    const params: unknown[] = [];
+    let where = '';
+    if (filter.status) {
+      params.push(filter.status);
+      where = `WHERE status = $1`;
+    }
+    params.push(filter.limit ?? 100);
+    const { rows } = await this.pool.query<ReviewCaseRow>(
+      `SELECT * FROM review_cases ${where} ORDER BY opened_at DESC LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map(this.toReviewCase);
+  }
+
+  async getReviewCase(caseId: string): Promise<ReviewCase | null> {
+    const { rows } = await this.pool.query<ReviewCaseRow>(
+      `SELECT * FROM review_cases WHERE case_id = $1`,
+      [caseId],
+    );
+    const row = rows[0];
+    return row ? this.toReviewCase(row) : null;
+  }
+
+  async updateReviewCase(
+    caseId: string,
+    patch: ReviewCasePatch,
+  ): Promise<ReviewCase | null> {
+    await this.pool.query(
+      `UPDATE review_cases SET
+        status = COALESCE($2, status),
+        decision = COALESCE($3, decision),
+        reason = COALESCE($4, reason),
+        reviewer_id = COALESCE($5, reviewer_id),
+        false_positive_flag = COALESCE($6, false_positive_flag),
+        closed_at = COALESCE($7, closed_at)
+      WHERE case_id = $1`,
+      [
+        caseId,
+        patch.status ?? null,
+        patch.decision ?? null,
+        patch.reason ?? null,
+        patch.reviewerId ?? null,
+        patch.falsePositiveFlag ?? null,
+        patch.closedAt ?? null,
+      ],
+    );
+    return this.getReviewCase(caseId);
+  }
+
+  async createAppeal(appeal: AppealCase): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO appeal_cases (appeal_id, case_id, reason, status, decision, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (appeal_id) DO NOTHING`,
+      [
+        appeal.appealId,
+        appeal.caseId,
+        appeal.reason,
+        appeal.status,
+        appeal.decision ?? null,
+        appeal.createdAt,
+      ],
+    );
+    await this.pool.query(
+      `UPDATE review_cases SET appeal_status = 'pending'
+       WHERE case_id = $1 AND appeal_status = 'none'`,
+      [appeal.caseId],
+    );
+  }
+
   private toRiskEvent(row: RiskEventRow): RiskEvent {
     return {
       eventId: row.event_id,
@@ -465,6 +600,24 @@ export class PostgresRiskRepository implements RiskRepository {
       timezoneIp: row.timezone_ip ?? undefined,
       timezoneJs: row.timezone_js ?? undefined,
       timeConsistency: row.time_consistency ?? undefined,
+    };
+  }
+
+  private toReviewCase(row: ReviewCaseRow): ReviewCase {
+    return {
+      caseId: row.case_id,
+      sessionId: row.session_id,
+      reportId: row.report_id ?? undefined,
+      riskEventIds: row.risk_event_ids,
+      status: row.status,
+      priority: row.priority,
+      assignedTo: row.assigned_to ?? undefined,
+      openedAt: new Date(row.opened_at).toISOString(),
+      closedAt: row.closed_at ? new Date(row.closed_at).toISOString() : undefined,
+      decision: row.decision ?? undefined,
+      reason: row.reason,
+      falsePositiveFlag: row.false_positive_flag ?? undefined,
+      appealStatus: row.appeal_status,
     };
   }
 }

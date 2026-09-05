@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { FieldDefinition, RiskEvent } from '@shieldscan/core-schema';
+import type {
+  AppealCase,
+  FieldDefinition,
+  ReviewCase,
+  RiskEvent,
+} from '@shieldscan/core-schema';
 import {
   InMemoryRiskRepository,
   PostgresRiskRepository,
@@ -43,6 +48,30 @@ function makeFieldDefinition(): FieldDefinition {
     uiModule: 'network.geo',
     status: 'active',
     version: '1.0.0',
+  };
+}
+
+function makeReviewCase(): ReviewCase {
+  return {
+    caseId: crypto.randomUUID(),
+    sessionId: 'session_review',
+    reportId: crypto.randomUUID(),
+    riskEventIds: [crypto.randomUUID()],
+    status: 'pending',
+    priority: 'high',
+    openedAt: new Date().toISOString(),
+    reason: '開放端口與 OS 衝突，需人工複核',
+    appealStatus: 'none',
+  };
+}
+
+function makeAppeal(caseId: string): AppealCase {
+  return {
+    appealId: crypto.randomUUID(),
+    caseId,
+    reason: '此為隱私瀏覽器正常行為，請求複查',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -128,6 +157,31 @@ test('InMemory 網路訊號：upsert 後可取回結構化 open_ports/dns_leak',
   assert.equal(signal.isp, 'Taiwan Fixed Network');
 });
 
+test('InMemory 審查流程：建立 case、更新 decision、建立 appeal', async () => {
+  const repo = new InMemoryRiskRepository();
+  const reviewCase = makeReviewCase();
+  await repo.createReviewCase(reviewCase);
+
+  const list = await repo.listReviewCases({ status: 'pending' });
+  assert.equal(list.length, 1);
+  assert.equal(list[0]?.caseId, reviewCase.caseId);
+
+  const updated = await repo.updateReviewCase(reviewCase.caseId, {
+    status: 'reviewed',
+    decision: 'review',
+    reviewerId: 'admin-sec',
+    falsePositiveFlag: false,
+    closedAt: new Date().toISOString(),
+  });
+  assert.ok(updated);
+  assert.equal(updated.status, 'reviewed');
+  assert.equal(updated.decision, 'review');
+
+  await repo.createAppeal(makeAppeal(reviewCase.caseId));
+  const afterAppeal = await repo.getReviewCase(reviewCase.caseId);
+  assert.equal(afterAppeal?.appealStatus, 'pending');
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);
@@ -155,6 +209,11 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
       dnsLeakList: ['175.96.61.48'],
     });
     assert.ok(await repo.getNetworkSignal('session-network-ci'));
+
+    const reviewCase = makeReviewCase();
+    await repo.createReviewCase(reviewCase);
+    assert.ok(await repo.getReviewCase(reviewCase.caseId));
+    await repo.createAppeal(makeAppeal(reviewCase.caseId));
   } finally {
     await repo.close();
   }

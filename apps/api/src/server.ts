@@ -4,6 +4,7 @@ import {
   SCHEMA_VERSION,
   type EnvironmentReport,
   type PolicyDecision,
+  type ReviewStatus,
   type RiskEvent,
   type RiskEventType,
   validateFieldDefinition,
@@ -420,6 +421,112 @@ app.put('/v1/fields', async (request, reply) => {
   }
   await riskRepository.upsertFieldDefinition(result.data);
   return { ok: true, definition: result.data };
+});
+
+/* ------------------------------------------------------------------ */
+/* 審查流程（Phase 3：review_cases / appeals）                           */
+/* ------------------------------------------------------------------ */
+
+const POLICY_VALUES = ['allow', 'review', 'challenge', 'limit', 'block', 'log_only'];
+const REVIEW_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+type ReviewPriorityValue = (typeof REVIEW_PRIORITIES)[number];
+
+app.post('/v1/reports/:id/review', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+
+  const { id } = request.params as { id: string };
+  const report = await repository.getReport(id);
+  if (!report) return reply.code(404).send({ error: 'report_not_found' });
+
+  const body = request.body as {
+    reason?: string;
+    decision?: string;
+    priority?: string;
+    falsePositiveFlag?: boolean;
+  };
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (!reason) {
+    return reply.code(400).send({ error: 'reason_required' });
+  }
+  if (body.decision && !POLICY_VALUES.includes(body.decision)) {
+    return reply.code(400).send({ error: 'invalid_decision' });
+  }
+  const priority: ReviewPriorityValue = (REVIEW_PRIORITIES as readonly string[]).includes(
+    body.priority ?? '',
+  )
+    ? (body.priority as ReviewPriorityValue)
+    : 'medium';
+
+  const reviewCase = {
+    caseId: crypto.randomUUID(),
+    sessionId: report.sessionId,
+    reportId: report.reportId,
+    riskEventIds: [],
+    status: 'pending' as const,
+    priority,
+    openedAt: new Date().toISOString(),
+    decision: body.decision as PolicyDecision | undefined,
+    reason,
+    falsePositiveFlag: body.falsePositiveFlag,
+    appealStatus: 'none' as const,
+  };
+  await riskRepository.createReviewCase(reviewCase);
+  return reply.code(201).send({ case: reviewCase });
+});
+
+app.get('/v1/review-cases', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { status?: string; limit?: string };
+  const cases = await riskRepository.listReviewCases({
+    status: query.status as ReviewStatus | undefined,
+    limit: query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : undefined,
+  });
+  return { cases };
+});
+
+app.put('/v1/review-cases/:caseId', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { caseId } = request.params as { caseId: string };
+  const body = request.body as {
+    status?: string;
+    decision?: string;
+    reason?: string;
+    falsePositiveFlag?: boolean;
+  };
+  const updated = await riskRepository.updateReviewCase(caseId, {
+    status: body.status as ReviewStatus | undefined,
+    decision: body.decision as PolicyDecision | undefined,
+    reason: body.reason,
+    reviewerId: auth.tenant.tenantId,
+    falsePositiveFlag: body.falsePositiveFlag,
+    closedAt: body.status === 'closed' || body.status === 'reviewed' ? new Date().toISOString() : undefined,
+  });
+  if (!updated) return reply.code(404).send({ error: 'review_case_not_found' });
+  return { ok: true, case: updated };
+});
+
+app.post('/v1/review-cases/:caseId/appeal', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { caseId } = request.params as { caseId: string };
+  const existing = await riskRepository.getReviewCase(caseId);
+  if (!existing) return reply.code(404).send({ error: 'review_case_not_found' });
+  const body = request.body as { reason?: string };
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (!reason) return reply.code(400).send({ error: 'reason_required' });
+
+  const appeal = {
+    appealId: crypto.randomUUID(),
+    caseId,
+    reason,
+    status: 'pending' as const,
+    createdAt: new Date().toISOString(),
+  };
+  await riskRepository.createAppeal(appeal);
+  return reply.code(201).send({ appeal });
 });
 
 /* ------------------------------------------------------------------ */

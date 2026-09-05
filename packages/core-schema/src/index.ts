@@ -75,6 +75,15 @@ export const zPolicyDecision = z.enum([
 ]);
 export type PolicyDecision = z.infer<typeof zPolicyDecision>;
 
+export const zReviewStatus = z.enum(['pending', 'in_review', 'reviewed', 'closed']);
+export type ReviewStatus = z.infer<typeof zReviewStatus>;
+
+export const zReviewPriority = z.enum(['low', 'medium', 'high', 'urgent']);
+export type ReviewPriority = z.infer<typeof zReviewPriority>;
+
+export const zAppealStatus = z.enum(['none', 'pending', 'accepted', 'rejected']);
+export type AppealStatus = z.infer<typeof zAppealStatus>;
+
 /* ------------------------------------------------------------------ */
 /* 治理與證據鏈列舉（嚴謹查證模式定版）                                   */
 /* ------------------------------------------------------------------ */
@@ -210,9 +219,7 @@ export const zRiskEvent = z
     autoAction: zPolicyDecision.optional(),
     reviewRequired: z.boolean(),
     detectedAt: z.string().datetime({ offset: true }),
-    reviewStatus: z
-      .enum(['pending', 'in_review', 'reviewed', 'closed'])
-      .optional(),
+    reviewStatus: zReviewStatus.optional(),
     reviewerId: z.string().optional(),
     falsePositiveFlag: z.boolean().optional(),
   })
@@ -240,6 +247,37 @@ export const zFieldDefinition = z
   })
   .strict();
 export type FieldDefinition = z.infer<typeof zFieldDefinition>;
+
+export const zReviewCase = z
+  .object({
+    caseId: z.string().min(1),
+    sessionId: z.string().min(1),
+    reportId: z.string().optional(),
+    riskEventIds: z.array(z.string()).optional(),
+    status: zReviewStatus,
+    priority: zReviewPriority,
+    assignedTo: z.string().optional(),
+    openedAt: z.string().datetime({ offset: true }),
+    closedAt: z.string().datetime({ offset: true }).optional(),
+    decision: zPolicyDecision.optional(),
+    reason: z.string().min(1),
+    falsePositiveFlag: z.boolean().optional(),
+    appealStatus: zAppealStatus,
+  })
+  .strict();
+export type ReviewCase = z.infer<typeof zReviewCase>;
+
+export const zAppealCase = z
+  .object({
+    appealId: z.string().min(1),
+    caseId: z.string().min(1),
+    reason: z.string().min(1),
+    status: z.enum(['pending', 'accepted', 'rejected']),
+    decision: zPolicyDecision.optional(),
+    createdAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+export type AppealCase = z.infer<typeof zAppealCase>;
 
 export const zScoreBundle = z
   .object({
@@ -363,5 +401,15 @@ export function validateRiskEvent(input: unknown): Validation<RiskEvent> {
 
 export function validateFieldDefinition(input: unknown): Validation<FieldDefinition> {
   const result = zFieldDefinition.safeParse(input);
+  return result.success ? { ok: true, data: result.data } : toFailure(result.error);
+}
+
+export function validateReviewCase(input: unknown): Validation<ReviewCase> {
+  const result = zReviewCase.safeParse(input);
+  return result.success ? { ok: true, data: result.data } : toFailure(result.error);
+}
+
+export function validateAppealCase(input: unknown): Validation<AppealCase> {
+  const result = zAppealCase.safeParse(input);
   return result.success ? { ok: true, data: result.data } : toFailure(result.error);
 }

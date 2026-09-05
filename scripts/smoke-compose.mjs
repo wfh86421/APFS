@@ -204,6 +204,29 @@ record(
   eventListRes.status === 200 && eventListBody.events?.some((item) => item.eventId === riskEvent.eventId),
 );
 
+// 5. Phase 3：審查流程（review case + 更新決策）
+const reviewRes = await fetch(`${API}/v1/reports/${signed.reportId}/review`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${regBody.apiKey}` },
+  body: JSON.stringify({
+    reason: '開放端口與 OS 衝突，進入人工複核',
+    priority: 'high',
+  }),
+});
+const reviewBody = await reviewRes.json();
+record('開啟審查案例', reviewRes.status === 201 && typeof reviewBody.case?.caseId === 'string');
+
+const decisionRes = await fetch(`${API}/v1/review-cases/${reviewBody.case?.caseId}`, {
+  method: 'PUT',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${regBody.apiKey}` },
+  body: JSON.stringify({ status: 'reviewed', decision: 'review', reason: '需二次驗證' }),
+});
+const decisionBody = await decisionRes.json();
+record(
+  '審查決策更新',
+  decisionRes.status === 200 && decisionBody.case?.status === 'reviewed',
+);
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n=== docker compose 冒煙：${results.length - failed}/${results.length} 通過 ===`);
 process.exit(failed > 0 ? 1 : 0);

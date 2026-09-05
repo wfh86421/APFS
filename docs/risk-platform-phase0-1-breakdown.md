@@ -104,3 +104,19 @@
 
 - 串接 `/v1/reports`＋風險事件 API，以真實資料取代示範資料。
 - 快速處置動作（白名單／標記／封鎖）後端化與審計日誌。
+
+## Phase 3 進度（審查流程，2026-09-06）
+
+已完成：
+
+- `core-schema` 新增 `ReviewCase`／`AppealCase` 契約（status、priority、decision、appealStatus）與驗證函式。
+- `init.sql` 新增 `review_cases`、`appeal_cases` 表。
+- repository 擴充：create/list/get/update review case、create appeal（InMemory＋Postgres＋測試）。
+- API：`POST /v1/reports/:id/review`（開啟審查）、`GET /v1/review-cases`、`PUT /v1/review-cases/:caseId`（決策更新）、`POST /v1/review-cases/:caseId/appeal`。
+- 冒煙測試新增「開啟審查案例、審查決策更新」。
+
+待補（下一輪）：
+
+- 雙軌可解釋風險分數（privacy/fraud）與 factor 說明。
+- review_cases 自動由高風險報告觸發（事件→case）。
+- 前端快速處置按鈕串接上述 API。
