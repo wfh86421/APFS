@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 核心檢測報告表
 CREATE TABLE IF NOT EXISTS fingerprint_scans (
     report_id       UUID PRIMARY KEY,
+    tenant_id       UUID,
     schema_version  VARCHAR(16) NOT NULL DEFAULT '0.1.0',
     visitor_id      VARCHAR(64) NOT NULL,
     subject_id      VARCHAR(64),
@@ -31,7 +32,10 @@ CREATE TABLE IF NOT EXISTS fingerprint_scans (
     UNIQUE (visitor_id, session_id)
 );
 
+ALTER TABLE fingerprint_scans ADD COLUMN IF NOT EXISTS tenant_id UUID;
+
 CREATE INDEX IF NOT EXISTS idx_scans_visitor_id  ON fingerprint_scans(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_scans_tenant_id   ON fingerprint_scans(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_scans_created_at  ON fingerprint_scans(created_at);
 CREATE INDEX IF NOT EXISTS idx_scans_client_ip   ON fingerprint_scans(client_ip);
 CREATE INDEX IF NOT EXISTS idx_scans_score       ON fingerprint_scans(privacy_score);

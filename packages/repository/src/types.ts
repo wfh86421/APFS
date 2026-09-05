@@ -44,6 +44,7 @@ export interface StoredReport extends EnvironmentReport {
 export interface ReportRepository {
   saveReport(report: EnvironmentReport, meta?: ReportMeta): Promise<void>;
   getReport(reportId: string): Promise<StoredReport | null>;
+  listReportsByTenant(tenantId: string, limit?: number): Promise<StoredReport[]>;
   listReportsByVisitor(visitorId: string, limit?: number): Promise<StoredReport[]>;
   upsertVisitor(visitorId: string, profile: VisitorProfile): Promise<void>;
   getVisitor(visitorId: string): Promise<VisitorProfile | null>;

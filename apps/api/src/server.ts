@@ -540,6 +540,7 @@ app.post('/v1/reports', async (request, reply) => {
   const ip = requestIp(request);
   const report: EnvironmentReport = validation.data;
   const auth = await resolveAuth(request);
+  if (auth && !report.tenantId) report.tenantId = auth.tenant.tenantId;
 
   // Phase 3 正式簽章驗證：租戶（SDK 客戶）必須簽章，匿名掃描不強制。
   const integrity = await verifyReportSignature(report, auth?.tenant ?? null);
@@ -621,6 +622,15 @@ app.post('/v1/reports', async (request, reply) => {
     policy,
     network,
   });
+});
+
+app.get('/v1/reports', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { limit?: string };
+  const limit = query.limit ? Math.max(1, Math.min(200, Number(query.limit))) : 50;
+  const reports = await repository.listReportsByTenant(auth.tenant.tenantId, limit);
+  return { tenantId: auth.tenant.tenantId, reports };
 });
 
 app.get('/v1/reports/:id', async (request, reply) => {

@@ -227,6 +227,18 @@ record(
   decisionRes.status === 200 && decisionBody.case?.status === 'reviewed',
 );
 
+// 6. Phase 4：租戶報告列表（隔離）
+const reportsRes = await fetch(`${API}/v1/reports`, {
+  headers: { authorization: `Bearer ${regBody.apiKey}` },
+});
+const reportsBody = await reportsRes.json();
+record(
+  '租戶報告列表（含本次報告）',
+  reportsRes.status === 200 &&
+    Array.isArray(reportsBody.reports) &&
+    reportsBody.reports.some((item) => item.reportId === signed.reportId),
+);
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n=== docker compose 冒煙：${results.length - failed}/${results.length} 通過 ===`);
 process.exit(failed > 0 ? 1 : 0);

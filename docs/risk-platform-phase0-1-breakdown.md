@@ -134,3 +134,18 @@ Phase 3 完成定義：
 - 風險分數非黑箱：privacy/fraud 雙軌＋explanations ✅
 
 下一階段（Phase 4）：多租戶報告列表、RBAC 遮罩、審計 API 與企業 Dashboard。
+
+## Phase 4 進度（企業 Dashboard 第一段，2026-09-06）
+
+已完成：
+
+- `fingerprint_scans` 新增 `tenant_id`（CREATE＋ALTER IF NOT EXISTS＋索引），報告落庫綁定租戶。
+- `ReportRepository` 新增 `listReportsByTenant`（InMemory＋Postgres）。
+- API 新增 `GET /v1/reports`：租戶只能列出自己的報告（預設 50，上限 200）。
+- repository 測試新增「租戶隔離」案例；冒煙新增「租戶報告列表」。
+
+待補（Phase 4 後段）：
+
+- RBAC 角色與 IP／經緯度／Raw JSON 遮罩。
+- 審計 API（讀取 audit_logs 資料表）與敏感操作日誌化。
+- 企業 Dashboard 頁面（報告列表＋事件查詢＋指紋聚類）。

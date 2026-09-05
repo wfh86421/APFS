@@ -6,6 +6,7 @@ const { Pool } = pg;
 
 interface ScanRow {
   report_id: string;
+  tenant_id: string | null;
   schema_version: string;
   visitor_id: string;
   session_id: string;
@@ -62,11 +63,11 @@ export class PostgresReportRepository implements ReportRepository {
     const visitorId = report.subjectId ?? report.sessionId;
     await this.pool.query(
       `INSERT INTO fingerprint_scans (
-        report_id, schema_version, visitor_id, session_id, source,
+        report_id, tenant_id, schema_version, visitor_id, session_id, source,
         consent_mode, retention_days, sdk_name, sdk_version, client_ip,
         privacy_score, grade, risk_level, signals, issues, scores, integrity, raw,
         created_at, expires_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       ON CONFLICT (visitor_id, session_id) DO UPDATE SET
         signals = EXCLUDED.signals,
         issues = EXCLUDED.issues,
@@ -76,6 +77,7 @@ export class PostgresReportRepository implements ReportRepository {
         risk_level = EXCLUDED.risk_level`,
       [
         report.reportId,
+        report.tenantId ?? null,
         report.schemaVersion,
         visitorId,
         report.sessionId,
@@ -109,6 +111,16 @@ export class PostgresReportRepository implements ReportRepository {
     const row = rows[0];
     if (!row) return null;
     return this.toStoredReport(row);
+  }
+
+  async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
+    const { rows } = await this.pool.query<ScanRow>(
+      `SELECT *, subject_id FROM fingerprint_scans
+       WHERE tenant_id = $1
+       ORDER BY created_at DESC LIMIT $2`,
+      [tenantId, limit],
+    );
+    return rows.map((row) => this.toStoredReport(row));
   }
 
   async listReportsByVisitor(visitorId: string, limit = 20): Promise<StoredReport[]> {
@@ -195,6 +207,7 @@ export class PostgresReportRepository implements ReportRepository {
   private toStoredReport(row: ScanRow): StoredReport {
     return {
       reportId: row.report_id,
+      tenantId: row.tenant_id ?? undefined,
       schemaVersion: row.schema_version,
       sessionId: row.session_id,
       subjectId: row.subject_id ?? undefined,

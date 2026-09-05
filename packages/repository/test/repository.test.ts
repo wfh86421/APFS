@@ -118,3 +118,21 @@ test('deleteReport / deleteVisitor（可刪除驗收）', async () => {
   assert.equal(await repo.getVisitor('visitor-a'), null);
   assert.equal((await repo.listReportsByVisitor('visitor-a')).length, 0);
 });
+
+test('租戶隔離：listReportsByTenant 只看得到自己的報告', async () => {
+  const repo = new InMemoryReportRepository();
+  await repo.saveReport(
+    makeReport({ reportId: crypto.randomUUID(), tenantId: 'tenant-a', sessionId: 's-a1' }),
+  );
+  await repo.saveReport(
+    makeReport({ reportId: crypto.randomUUID(), tenantId: 'tenant-b', sessionId: 's-b1' }),
+  );
+
+  const tenantA = await repo.listReportsByTenant('tenant-a');
+  assert.equal(tenantA.length, 1);
+  assert.equal(tenantA[0]?.tenantId, 'tenant-a');
+
+  const tenantB = await repo.listReportsByTenant('tenant-b');
+  assert.equal(tenantB.length, 1);
+  assert.equal(tenantB[0]?.tenantId, 'tenant-b');
+});

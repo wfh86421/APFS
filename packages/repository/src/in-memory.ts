@@ -48,6 +48,13 @@ export class InMemoryReportRepository implements ReportRepository {
     return this.reports.get(reportId) ?? null;
   }
 
+  async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
+    return [...this.reports.values()]
+      .filter((report) => report.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   async listReportsByVisitor(visitorId: string, limit = 20): Promise<StoredReport[]> {
     return [...this.reports.values()]
       .filter((r) => r.subjectId === visitorId || r.sessionId === visitorId)
