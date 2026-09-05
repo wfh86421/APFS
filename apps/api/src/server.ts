@@ -577,6 +577,21 @@ app.post('/v1/reports', async (request, reply) => {
   visitor.ipHistory = [ip];
   await repository.upsertVisitor(visitor.visitorId, visitor);
 
+  // Phase 3：高風險報告自動進入人工複核（不高風險不自動封鎖）。
+  if (score.riskLevel === 'high' || score.riskLevel === 'critical') {
+    await riskRepository.createReviewCase({
+      caseId: crypto.randomUUID(),
+      sessionId: report.sessionId,
+      reportId: report.reportId,
+      riskEventIds: [],
+      status: 'pending',
+      priority: score.riskLevel === 'critical' ? 'urgent' : 'high',
+      openedAt: new Date().toISOString(),
+      reason: `自動開啟審查：risk_level=${score.riskLevel}，需人工複核後再決定是否封鎖`,
+      appealStatus: 'none',
+    });
+  }
+
   if (auth) {
     await tenantService.recordUsage(auth.tenant.tenantId, 1, 'report');
   }

@@ -115,8 +115,13 @@
 - API：`POST /v1/reports/:id/review`（開啟審查）、`GET /v1/review-cases`、`PUT /v1/review-cases/:caseId`（決策更新）、`POST /v1/review-cases/:caseId/appeal`。
 - 冒煙測試新增「開啟審查案例、審查決策更新」。
 
+已完成（2026-09-06，Phase 3 後半第一段）：
+
+- scoring-engine：規則加入 `track`（privacy/fraud），`ScoreResult` 輸出 `privacyScore`／`fraudScore`／`privacyDeductions`／`fraudDeductions`／`explanations`。
+- 新增 `scripts/verify-scoring.mjs`：驗證 Canvas（隱私軌）與 OS 衝突（欺詐軌）不會互相污染。
+- API 收錄報告時，risk_level=high/critical 自動建立 review case（urgent/high），不自動封鎖。
+
 待補（下一輪）：
 
-- 雙軌可解釋風險分數（privacy/fraud）與 factor 說明。
-- review_cases 自動由高風險報告觸發（事件→case）。
 - 前端快速處置按鈕串接上述 API。
+- 決策示範頁改用真實 ScoreResult 的 explanations 渲染。
