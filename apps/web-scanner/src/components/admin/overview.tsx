@@ -5,11 +5,13 @@ import { apiBaseUrl } from '../../lib/api';
 
 interface ReportItem {
   riskLevel?: string;
+  createdAt?: string;
 }
 
 interface EventItem {
   severity?: string;
   eventType?: string;
+  detectedAt?: string;
 }
 
 interface OverviewData {
@@ -61,6 +63,19 @@ export default function AdminOverview() {
       severity,
       count: events.filter((event) => event.severity === severity).length,
     }));
+
+  const dailyCounts = (items: Array<{ at?: string }>) => {
+    const days: string[] = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - offset);
+      days.push(date.toISOString().slice(0, 10));
+    }
+    return days.map((day) => ({
+      day: day.slice(5),
+      count: items.filter((item) => (item.at ?? '').slice(0, 10) === day).length,
+    }));
+  };
 
   return (
     <div className="decision-page">
@@ -121,6 +136,37 @@ export default function AdminOverview() {
                 <span className="trend-count">{count}</span>
               </div>
             ))}
+          </div>
+
+          <div className="trend-grid">
+            <div className="decision-card">
+              <h2>報告近 7 天趨勢</h2>
+              {dailyCounts(data.reports.map((report) => ({ at: report.createdAt }))).map(
+                ({ day, count }) => (
+                  <div key={day} className="trend-row">
+                    <span className="trend-label">{day}</span>
+                    <div className="bar">
+                      <div className="bar-fill" style={{ width: `${Math.min(100, count * 10)}%` }} />
+                    </div>
+                    <span className="trend-count">{count}</span>
+                  </div>
+                ),
+              )}
+            </div>
+            <div className="decision-card">
+              <h2>事件近 7 天趨勢</h2>
+              {dailyCounts(data.events.map((event) => ({ at: event.detectedAt }))).map(
+                ({ day, count }) => (
+                  <div key={day} className="trend-row">
+                    <span className="trend-label">{day}</span>
+                    <div className="bar">
+                      <div className="bar-fill warn" style={{ width: `${Math.min(100, count * 10)}%` }} />
+                    </div>
+                    <span className="trend-count">{count}</span>
+                  </div>
+                ),
+              )}
+            </div>
           </div>
         </>
       )}
