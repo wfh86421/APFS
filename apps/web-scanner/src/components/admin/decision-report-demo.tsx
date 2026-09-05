@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { loadWorkspaceConfig } from '../../modules/store';
+import { apiBaseUrl } from '../../lib/api';
 
 const DEMO = {
   visitorId: '61849C57',
@@ -18,18 +19,24 @@ const RISK_FACTORS = [
     title: '開放端口 22 / 3389（疑似行動環境）',
     severity: 'High',
     confidence: 'Medium',
+    track: 'fraud',
+    points: 15,
     explanation: '手機行動網路不應開放 SSH/RDP；疑似雲手機、模擬器或跳板機。',
   },
   {
     title: 'OS 版本衝突：UA Android 10 vs Platform Android 14',
     severity: 'Medium',
     confidence: 'Medium',
+    track: 'fraud',
+    points: 5,
     explanation: '可能為 UA reduction、隱私瀏覽器或抹機工具痕跡。',
   },
   {
     title: 'DNS 洩漏（VPN 情境下）',
     severity: 'Contextual',
     confidence: 'Medium',
+    track: 'privacy',
+    points: 10,
     explanation: '若使用者宣稱匿名/VPN，洩漏電信 DNS 屬高隱私風險。',
   },
 ];
@@ -77,6 +84,47 @@ export default function DecisionReportDemo() {
   );
   const show = (id: string) => moduleIds.has(id);
   const [rawOpen, setRawOpen] = useState(false);
+  const [apiKey, setApiKey] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem('shieldscan.admin.apiKey') ?? '';
+  });
+  const [reportId, setReportId] = useState(DEMO.reportId);
+  const [actionStatus, setActionStatus] = useState('');
+
+  const saveApiKey = (value: string) => {
+    setApiKey(value);
+    window.localStorage.setItem('shieldscan.admin.apiKey', value);
+  };
+
+  const runQuickAction = async (decision: 'allow' | 'review' | 'block', reason: string) => {
+    if (!apiKey) {
+      setActionStatus('請先填入管理 API Key（可於上方測試租戶註冊取得）。');
+      return;
+    }
+    try {
+      const headers = {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`,
+      };
+      const reviewRes = await fetch(`${apiBaseUrl()}/v1/reports/${reportId}/review`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason, decision, priority: 'high' }),
+      });
+      if (!reviewRes.ok) throw new Error(`開啟審查失敗：${reviewRes.status}`);
+      const reviewBody = (await reviewRes.json()) as { case?: { caseId?: string } };
+      if (!reviewBody.case?.caseId) throw new Error('未取得 caseId');
+      const updateRes = await fetch(`${apiBaseUrl()}/v1/review-cases/${reviewBody.case.caseId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status: 'reviewed', decision, reason: `${reason}（前端快速處置）` }),
+      });
+      if (!updateRes.ok) throw new Error(`更新決策失敗：${updateRes.status}`);
+      setActionStatus(`已完成：${decision}（case ${reviewBody.case.caseId.slice(0, 8)}…）`);
+    } catch (err) {
+      setActionStatus(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   return (
     <div className="decision-page">
@@ -89,8 +137,23 @@ export default function DecisionReportDemo() {
         <section className="decision-card decision-hero">
           <div>
             <h2>① 決策樞紐與快速處置</h2>
+            <div className="decision-config">
+              <label>
+                管理 API Key
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => saveApiKey(event.target.value)}
+                  placeholder="shd_live_..."
+                />
+              </label>
+              <label>
+                Report ID
+                <input value={reportId} onChange={(event) => setReportId(event.target.value)} />
+              </label>
+            </div>
             <p className="muted">
-              Visitor <b>{DEMO.visitorId}</b>・Report {DEMO.reportId}
+              Visitor <b>{DEMO.visitorId}</b>・Report {reportId}
             </p>
             <div className="decision-score-row">
               <div>
@@ -101,6 +164,8 @@ export default function DecisionReportDemo() {
                 <span className="badge badge-bad">Risk Level: {DEMO.riskLevel}</span>
                 <span className="badge badge-warn">Confidence: {DEMO.confidence}</span>
                 <span className="badge badge-warn">Action: {DEMO.recommendation}</span>
+                <span className="badge badge-good">Privacy: 90</span>
+                <span className="badge badge-bad">Fraud: 80</span>
               </div>
             </div>
             <h3>Top Risk Factors</h3>
@@ -108,20 +173,25 @@ export default function DecisionReportDemo() {
               <div className="decision-factor" key={factor.title}>
                 <b>{factor.title}</b>
                 <span>
-                  Severity {factor.severity}・Confidence {factor.confidence}
+                  Track {factor.track}・Severity {factor.severity}・Confidence {factor.confidence}・
+                  Points -{factor.points}
                 </span>
                 <p>{factor.explanation}</p>
               </div>
             ))}
+            {actionStatus && <p className="decision-status">{actionStatus}</p>}
           </div>
           <div className="decision-actions">
-            <button className="btn" onClick={() => window.alert('白名單動作尚未串接後端。')}>
+            <button className="btn" onClick={() => runQuickAction('allow', '判定為正常使用者，加入白名單')}>
               加入白名單
             </button>
-            <button className="btn" onClick={() => window.alert('標記可疑動作尚未串接後端。')}>
+            <button className="btn" onClick={() => runQuickAction('review', '標記可疑，進入複核')}>
               標記可疑
             </button>
-            <button className="btn btn-danger" onClick={() => window.alert('封鎖需要多訊號＋人工複核流程。')}>
+            <button
+              className="btn btn-danger"
+              onClick={() => runQuickAction('block', '多訊號高風險，封鎖並留存審計')}
+            >
               加入黑名單／封鎖
             </button>
             <button className="btn" onClick={() => window.alert('匯出報告（JSON/PDF）尚未串接。')}>

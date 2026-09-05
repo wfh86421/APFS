@@ -121,7 +121,16 @@
 - 新增 `scripts/verify-scoring.mjs`：驗證 Canvas（隱私軌）與 OS 衝突（欺詐軌）不會互相污染。
 - API 收錄報告時，risk_level=high/critical 自動建立 review case（urgent/high），不自動封鎖。
 
-待補（下一輪）：
+已完成（2026-09-06，Phase 3 收尾）：
 
-- 前端快速處置按鈕串接上述 API。
-- 決策示範頁改用真實 ScoreResult 的 explanations 渲染。
+- 決策示範頁加入「管理 API Key／Report ID」輸入（API Key 存 localStorage）。
+- 快速處置（白名單／標記可疑／封鎖）串接 `POST /v1/reports/:id/review`＋`PUT /v1/review-cases/:caseId`。
+- 決策樞紐顯示雙軌分數（Privacy／Fraud）與 Top Risk Factors（track／severity／confidence／points）。
+
+Phase 3 完成定義：
+
+- 高風險報告可自動/手動進入人工複核 ✅
+- 封鎖動作需有 decision＋reason＋reviewer（審計雛形）✅
+- 風險分數非黑箱：privacy/fraud 雙軌＋explanations ✅
+
+下一階段（Phase 4）：多租戶報告列表、RBAC 遮罩、審計 API 與企業 Dashboard。
