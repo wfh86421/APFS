@@ -11,7 +11,7 @@ const THEME_KEY = 'shieldscan.admin.theme';
 const LANG_KEY = 'shieldscan.admin.lang';
 
 export default function AdminShell({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>('system');
   const [lang, setLang] = useState<Lang>('zh-TW');
 

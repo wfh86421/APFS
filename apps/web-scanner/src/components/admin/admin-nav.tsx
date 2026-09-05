@@ -31,18 +31,47 @@ export default function AdminNav({
 
   return (
     <aside className="admin-nav" aria-label="管理側邊欄">
-      <div className="admin-nav-brand">
-        <span className="admin-nav-mark">🛡</span>
+      <button
+        type="button"
+        className="admin-nav-brand"
+        onClick={onToggleCollapse}
+        title={collapsed ? '展開側邊欄' : '收起側邊欄'}
+        aria-label={collapsed ? '展開側邊欄' : '收起側邊欄'}
+      >
+        <span className="admin-nav-mark">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z" />
+          </svg>
+        </span>
         <span className="admin-nav-brand-text">ShieldScan</span>
-        <button
-          className="admin-collapse admin-nav-collapse"
-          onClick={onToggleCollapse}
-          title={collapsed ? '展開側邊欄' : '收起側邊欄'}
-          aria-label={collapsed ? '展開側邊欄' : '收起側邊欄'}
-        >
-          {collapsed ? '▸' : '◂'}
-        </button>
-      </div>
+        <span className="admin-nav-brand-toggle" aria-hidden="true">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="4" width="14" height="12" rx="2" />
+            <line x1="8" y1="4" x2="8" y2="16" />
+          </svg>
+        </span>
+        <span className="admin-nav-brand-hover-label" aria-hidden="true">
+          展開側欄
+        </span>
+      </button>
       <nav>
         {NAV.map((item) => {
           const active = pathname === item.href;
