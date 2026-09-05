@@ -183,6 +183,8 @@ interface ModuleItem {
 | 權重可配置評分 + 場景模板 | 不同產業不同 Profile |
 | ML 異常模型 v1 + 指紋相似度（Milvus） | 模型 AUC ≥ 0.85 |
 
+**架構定版（2026-09-06）**：Phase 4 企業 Dashboard 正式採納「嚴謹查證模式 3 — 風險偵測管理平台」定版：6＋1 模組決策後台（決策樞紐 → 異常矩陣 → 網路地理 → 硬體指紋 → 瀏覽器環境 → Raw/稽核抽屜 → 治理），並補入證據鏈、置信度、可解釋雙軌風險、人工複核、RBAC、審計、保留/刪除與 Schema/Model Registry。詳細導入規劃見 [risk-detection-platform-adopted-plan.md](./docs/risk-detection-platform-adopted-plan.md)。
+
 **0-1 完成定義（第一個商業化閉環）**：
 
 > 月經常性收入（MRR）≥ NT$100,000（約 10 個小型客戶或 1–2 個中型客戶），且至少 1 個客戶持續使用超過 3 個月、可量化其風險事件減少成效。
