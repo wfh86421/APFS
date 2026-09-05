@@ -152,6 +152,58 @@ record(
   `clientIp=${storedBody.clientIp}`,
 );
 
+// 4. Phase 1：欄位定義 + 風險事件（需 API Key）
+const fieldDefinition = {
+  fieldPath: 'network.open_ports',
+  displayName: '開放端口',
+  category: 'network',
+  sensitivity: 'high',
+  defaultConfidence: 'medium',
+  stability: 'volatile',
+  purpose: '識別疑似伺服器/模擬器環境',
+  retentionClass: 'short',
+  accessRoles: ['security_admin', 'risk_analyst'],
+  uiModule: 'network.geo',
+  status: 'active',
+  version: '1.0.0',
+};
+const fieldRes = await fetch(`${API}/v1/fields`, {
+  method: 'PUT',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${regBody.apiKey}` },
+  body: JSON.stringify(fieldDefinition),
+});
+record('欄位定義 upsert', fieldRes.status === 200);
+
+const riskEvent = {
+  eventId: randomUUID(),
+  sessionId: signed.sessionId,
+  reportId: signed.reportId,
+  eventType: 'open_ports',
+  severity: 'high',
+  confidence: 'medium',
+  evidenceJson: { openPorts: [22, 3389] },
+  ruleId: 'rule.open_ports_mobile',
+  ruleVersion: '1.0.0',
+  reviewRequired: true,
+  detectedAt: new Date().toISOString(),
+  reviewStatus: 'pending',
+};
+const eventRes = await fetch(`${API}/v1/risk-events`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${regBody.apiKey}` },
+  body: JSON.stringify(riskEvent),
+});
+record('風險事件寫入', eventRes.status === 201);
+
+const eventListRes = await fetch(`${API}/v1/risk-events?sessionId=${encodeURIComponent(signed.sessionId)}`, {
+  headers: { authorization: `Bearer ${regBody.apiKey}` },
+});
+const eventListBody = await eventListRes.json();
+record(
+  '風險事件可依 session 查詢',
+  eventListRes.status === 200 && eventListBody.events?.some((item) => item.eventId === riskEvent.eventId),
+);
+
 const failed = results.filter((ok) => !ok).length;
 console.log(`\n=== docker compose 冒煙：${results.length - failed}/${results.length} 通過 ===`);
 process.exit(failed > 0 ? 1 : 0);

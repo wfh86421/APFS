@@ -30,6 +30,9 @@ docker compose build --pull
 echo "[deploy] docker compose up -d …"
 docker compose up -d
 
+echo "[deploy] 套用/更新 DB schema（init.sql，冪等）…"
+docker compose exec -T postgres psql -U shieldscan -d shieldscan < infra/docker/postgres/init.sql
+
 echo "[deploy] 等待 API 就緒 …"
 for i in $(seq 1 30); do
   if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then

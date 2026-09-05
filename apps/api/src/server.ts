@@ -4,7 +4,11 @@ import {
   SCHEMA_VERSION,
   type EnvironmentReport,
   type PolicyDecision,
+  type RiskEvent,
+  type RiskEventType,
+  validateFieldDefinition,
   validateEnvironmentReport,
+  validateRiskEvent,
   type ValidationFailure,
 } from '@shieldscan/core-schema';
 import {
@@ -18,7 +22,9 @@ import { collectServerSignals } from '@shieldscan/node-sdk';
 import { scanPorts } from '@shieldscan/port-scanner';
 import {
   createRepository,
+  createRiskRepository,
   type ReportRepository,
+  type RiskRepository,
   type VisitorProfile,
 } from '@shieldscan/repository';
 import {
@@ -49,6 +55,7 @@ const port = Number(process.env.PORT ?? 3001);
 const databaseUrl = process.env.DATABASE_URL;
 const signingSecret = process.env.REPORT_SIGNING_SECRET;
 const repository: ReportRepository = createRepository(databaseUrl);
+const riskRepository: RiskRepository = createRiskRepository(databaseUrl);
 const tenantService = new TenantService(createTenantStore(databaseUrl));
 
 const networkProvider: GeoIpProvider =
@@ -341,6 +348,78 @@ app.get('/v1/webhooks', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   return { webhooks: webhooksByTenant.get(auth.tenant.tenantId) ?? [] };
+});
+
+/* ------------------------------------------------------------------ */
+/* 風險事件 / 欄位定義（Phase 1 風險偵測管理平台）                        */
+/* ------------------------------------------------------------------ */
+
+app.post('/v1/risk-events', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+
+  const body = request.body as unknown;
+  const items = Array.isArray(body) ? body : [body];
+  if (items.length === 0 || items.length > 200) {
+    return reply.code(400).send({ error: 'invalid_payload' });
+  }
+
+  const events: RiskEvent[] = [];
+  for (const item of items) {
+    const result = validateRiskEvent(item);
+    if (!result.ok) {
+      return reply
+        .code(400)
+        .send({ error: 'invalid_risk_event', issues: result.errors });
+    }
+    events.push({
+      ...result.data,
+      tenantId: result.data.tenantId ?? auth.tenant.tenantId,
+    });
+  }
+  await riskRepository.insertRiskEvents(events);
+  return reply.code(201).send({ inserted: events.length });
+});
+
+app.get('/v1/risk-events', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+
+  const query = request.query as {
+    sessionId?: string;
+    severity?: 'info' | 'low' | 'medium' | 'high' | 'critical';
+    eventType?: string;
+    limit?: string;
+  };
+  const events = await riskRepository.listRiskEvents({
+    sessionId: query.sessionId,
+    severity: query.severity,
+    eventType: query.eventType as RiskEventType,
+    limit: query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : undefined,
+  });
+  return { events };
+});
+
+app.get('/v1/fields', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { limit?: string };
+  const definitions = await riskRepository.listFieldDefinitions(
+    query.limit ? Math.max(1, Math.min(1000, Number(query.limit))) : undefined,
+  );
+  return { definitions };
+});
+
+app.put('/v1/fields', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+
+  const result = validateFieldDefinition(request.body);
+  if (!result.ok) {
+    return reply.code(400).send({ error: 'invalid_field_definition', issues: result.errors });
+  }
+  await riskRepository.upsertFieldDefinition(result.data);
+  return { ok: true, definition: result.data };
 });
 
 /* ------------------------------------------------------------------ */
