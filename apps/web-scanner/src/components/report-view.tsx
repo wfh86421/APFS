@@ -109,6 +109,10 @@ export default function ReportView({
               <span className="badge badge-good">{score.grade}</span>
               <span className={`badge ${riskClass}`}>{score.riskLevel}</span>
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <span className="badge badge-good">隱私軌 {score.privacyScore}/100</span>
+              <span className="badge badge-warn">欺詐軌 {score.fraudScore}/100</span>
+            </div>
           </div>
           <button className="btn" onClick={onExport}>
             匯出 JSON
@@ -142,6 +146,38 @@ export default function ReportView({
           <ScoreBar label="環境真實性" value={report.scores.authenticity} />
           <ScoreBar label="自動化風險" value={report.scores.automationRisk} />
           <ScoreBar label="網路信任" value={report.scores.networkTrust} />
+        </div>
+
+        {score.explanations && score.explanations.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <h3 style={{ fontSize: 14 }}>風險因素解釋</h3>
+            {score.explanations.map((factor) => (
+              <div className="decision-factor" key={factor.ruleId} style={{ fontSize: 13 }}>
+                <b>{factor.reason}</b>
+                <span>
+                  Track {factor.track}・Severity {factor.severity}・扣 {factor.points} 分
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>下一步</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          想讓偵測成為你產品流程的一環？
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <a className="btn" href="/register">
+            API 自助註冊
+          </a>
+          <a className="btn" href="/demo/login-risk">
+            看登入風控 Demo
+          </a>
+          <a className="btn" href="/pricing">
+            查看定價
+          </a>
         </div>
       </section>
 

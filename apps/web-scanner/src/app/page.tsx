@@ -97,6 +97,11 @@ export default function Home() {
         <p className="subtitle">
           一站式瀏覽器指紋與網路環境安全檢測：即時隱私評分、風險預警與環境一致性驗證。
         </p>
+        <p style={{ margin: '0 0 16px' }}>
+          <a href="/demo/login-risk">登入風控 Demo</a>・
+          <a href="/register">API 自助註冊</a>・
+          <a href="/admin/overview">企業後台</a>
+        </p>
       </header>
 
       <ConsentBanner value={consent} onChange={setConsent} />

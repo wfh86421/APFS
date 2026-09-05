@@ -75,3 +75,4 @@
 - SEO 內容日曆：docs/seo-content-calendar.md（16 篇排程＋每週 SOP）。
 - `/register` 入口：首頁 footer＋定價頁 CTA（Free/Developer 前往註冊）。
 - 垂直 Demo：新增 `/demo` Hub 與 `/demo/login-risk`（真實掃描→伺服器評分→allow/challenge/review/block 建議）。
+- 首頁完整化：掃描結果顯示隱私軌/欺詐軌分數、風險因素解釋與「下一步」CTA（註冊／登入風控 Demo／定價）；首頁頂部加入產品入口。
