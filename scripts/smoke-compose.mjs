@@ -8,7 +8,42 @@
 
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { signReport } from '../packages/signing/dist/index.js';
+
+// 簽章函式內建於此（主機無需先編譯 packages）。
+// 演算法與 packages/signing/src/index.ts 一致；若不一致，API 回傳
+// verified=false 時本測試即會失敗，可即時發現兩邊不同步。
+const encoder = new TextEncoder();
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hmacSha256Hex(secret, text) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(text));
+  return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function signReport(report, secret) {
+  const signalsHash = await sha256Hex(JSON.stringify(report.signals));
+  const canonical = [
+    report.reportId,
+    report.sessionId,
+    report.schemaVersion,
+    report.createdAt,
+    report.integrity.nonce,
+    report.integrity.timestamp,
+    signalsHash,
+  ].join('|');
+  return hmacSha256Hex(secret, canonical);
+}
 
 const API = process.env.API_URL ?? 'http://127.0.0.1:3001';
 const WEB = process.env.WEB_URL ?? 'http://127.0.0.1:3000';
