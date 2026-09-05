@@ -136,3 +136,15 @@ test('租戶隔離：listReportsByTenant 只看得到自己的報告', async () 
   assert.equal(tenantB.length, 1);
   assert.equal(tenantB[0]?.tenantId, 'tenant-b');
 });
+
+test('掃描計數：countReports 支援全部與租戶範圍', async () => {
+  const repo = new InMemoryReportRepository();
+  await repo.saveReport(
+    makeReport({ reportId: crypto.randomUUID(), tenantId: 'tenant-a', sessionId: 's-a' }),
+  );
+  await repo.saveReport(
+    makeReport({ reportId: crypto.randomUUID(), tenantId: 'tenant-b', sessionId: 's-b' }),
+  );
+  assert.equal(await repo.countReports(), 2);
+  assert.equal(await repo.countReports('tenant-a'), 1);
+});

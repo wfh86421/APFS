@@ -453,6 +453,43 @@ app.get('/v1/devices', async (request, reply) => {
   return { devices };
 });
 
+app.get('/v1/network/ip-reputation', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { ip?: string };
+  if (!query.ip) return reply.code(400).send({ error: 'ip_required' });
+  const reputation = await riskRepository.getIpReputation(query.ip);
+  return { reputation };
+});
+
+app.post('/v1/network/ip-reputation', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const body = request.body as {
+    ipRange?: string;
+    reputationScore?: number;
+    categories?: string[];
+    source?: string;
+  };
+  if (!body.ipRange || typeof body.reputationScore !== 'number') {
+    return reply.code(400).send({ error: 'invalid_payload' });
+  }
+  const score = Math.max(0, Math.min(100, Math.round(body.reputationScore)));
+  const reputation = {
+    ipRange: body.ipRange,
+    reputationScore: score,
+    categories: Array.isArray(body.categories) ? body.categories.slice(0, 20) : [],
+    source: body.source,
+  };
+  await riskRepository.upsertIpReputation(reputation);
+  await riskRepository.appendAuditLog({
+    action: 'ip-reputation-upsert',
+    targetIp: body.ipRange,
+    metadata: { reputationScore: score },
+  });
+  return { ok: true, reputation };
+});
+
 app.get('/v1/fields', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
@@ -696,6 +733,14 @@ app.get('/v1/reports', async (request, reply) => {
     (report) => maskStoredReport(report, role),
   );
   return { tenantId: auth.tenant.tenantId, reports };
+});
+
+app.get('/v1/stats/scans', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const tenantCount = await repository.countReports(auth.tenant.tenantId);
+  const platformCount = await repository.countReports();
+  return { tenantCount, platformCount };
 });
 
 app.get('/v1/reports/:id', async (request, reply) => {

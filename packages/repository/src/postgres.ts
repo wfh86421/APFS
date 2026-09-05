@@ -113,6 +113,18 @@ export class PostgresReportRepository implements ReportRepository {
     return this.toStoredReport(row);
   }
 
+  async countReports(tenantId?: string): Promise<number> {
+    const { rows } = tenantId
+      ? await this.pool.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM fingerprint_scans WHERE tenant_id = $1`,
+          [tenantId],
+        )
+      : await this.pool.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM fingerprint_scans`,
+        );
+    return Number(rows[0]?.count ?? 0);
+  }
+
   async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
     const { rows } = await this.pool.query<ScanRow>(
       `SELECT *, subject_id FROM fingerprint_scans

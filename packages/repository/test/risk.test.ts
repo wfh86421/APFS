@@ -191,6 +191,20 @@ test('InMemory 審計日誌：append 後依時間倒序回傳', async () => {
   assert.equal(logs[0]?.action, 'review-decision');
 });
 
+test('InMemory IP reputation：upsert 後可取回', async () => {
+  const repo = new InMemoryRiskRepository();
+  await repo.upsertIpReputation({
+    ipRange: '49.214.1.196',
+    reputationScore: 100,
+    categories: ['clean'],
+    source: 'test',
+  });
+  const reputation = await repo.getIpReputation('49.214.1.196');
+  assert.ok(reputation);
+  assert.equal(reputation.reputationScore, 100);
+  assert.equal(reputation.categories[0], 'clean');
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);

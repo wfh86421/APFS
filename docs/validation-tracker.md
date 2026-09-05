@@ -66,3 +66,10 @@
 2. 依此文件把對應 ✅/🟡/⬜ 更新。
 3. 未達標項目必須列出「下一個具體行動」與負責人。
 
+## G. 2026-09-06 完成紀錄
+
+- 掃描計數：`GET /v1/stats/scans`（租戶數＋平台總數）＋ repository countReports。
+- IP reputation：`GET/POST /v1/network/ip-reputation`（資料庫存取＋審計）。
+- SDK 發佈前置：docs/sdk-publish-checklist.md（prepack/files 已具備；實際 npm publish 待帳號授權）。
+- 前台註冊表單：`/register` 自助註冊→取得 API Key→存入 localStorage。
+- SEO 內容日曆：docs/seo-content-calendar.md（16 篇排程＋每週 SOP）。

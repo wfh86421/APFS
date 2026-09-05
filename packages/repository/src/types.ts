@@ -44,6 +44,7 @@ export interface StoredReport extends EnvironmentReport {
 export interface ReportRepository {
   saveReport(report: EnvironmentReport, meta?: ReportMeta): Promise<void>;
   getReport(reportId: string): Promise<StoredReport | null>;
+  countReports(tenantId?: string): Promise<number>;
   listReportsByTenant(tenantId: string, limit?: number): Promise<StoredReport[]>;
   listReportsByVisitor(visitorId: string, limit?: number): Promise<StoredReport[]>;
   upsertVisitor(visitorId: string, profile: VisitorProfile): Promise<void>;
@@ -139,6 +140,14 @@ export interface AuditLogEntry {
   createdAt?: string;
 }
 
+export interface IpReputation {
+  ipRange: string;
+  reputationScore: number;
+  categories: string[];
+  source?: string;
+  lastSeen?: string;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -161,4 +170,6 @@ export interface RiskRepository {
   createAppeal(appeal: AppealCase): Promise<void>;
   appendAuditLog(entry: AuditLogEntry): Promise<void>;
   listAuditLogs(limit?: number): Promise<AuditLogEntry[]>;
+  getIpReputation(ip: string): Promise<IpReputation | null>;
+  upsertIpReputation(reputation: IpReputation): Promise<void>;
 }

@@ -8,6 +8,7 @@ import type {
 import type {
   AuditLogEntry,
   DeviceFingerprint,
+  IpReputation,
   NetworkSignal,
   ReportMeta,
   ReportRepository,
@@ -47,6 +48,12 @@ export class InMemoryReportRepository implements ReportRepository {
 
   async getReport(reportId: string): Promise<StoredReport | null> {
     return this.reports.get(reportId) ?? null;
+  }
+
+  async countReports(tenantId?: string): Promise<number> {
+    return tenantId
+      ? [...this.reports.values()].filter((report) => report.tenantId === tenantId).length
+      : this.reports.size;
   }
 
   async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
@@ -110,6 +117,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly reviewCases = new Map<string, ReviewCase>();
   private readonly appeals = new Map<string, AppealCase>();
   private readonly auditLogs: AuditLogEntry[] = [];
+  private readonly ipReputations = new Map<string, IpReputation>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -212,5 +220,16 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async listAuditLogs(limit = 100): Promise<AuditLogEntry[]> {
     return this.auditLogs.slice(0, limit);
+  }
+
+  async getIpReputation(ip: string): Promise<IpReputation | null> {
+    return this.ipReputations.get(ip) ?? null;
+  }
+
+  async upsertIpReputation(reputation: IpReputation): Promise<void> {
+    this.ipReputations.set(reputation.ipRange, {
+      ...reputation,
+      lastSeen: reputation.lastSeen ?? new Date().toISOString(),
+    });
   }
 }

@@ -10,6 +10,7 @@ import type {
 import type {
   AuditLogEntry,
   DeviceFingerprint,
+  IpReputation,
   NetworkSignal,
   ReviewCasePatch,
   RiskEventFilter,
@@ -139,6 +140,15 @@ interface AuditLogRow {
   actor_ip: string | null;
   metadata: unknown;
   created_at: string;
+}
+
+interface IpReputationRow {
+  ip_range: string;
+  reputation_score: number;
+  categories: string[];
+  first_seen: string;
+  last_seen: string;
+  source: string | null;
 }
 
 /** Phase 1：PostgreSQL 風險事件／欄位定義（使用 init.sql 新增表）。 */
@@ -540,6 +550,41 @@ export class PostgresRiskRepository implements RiskRepository {
       metadata: (row.metadata as Record<string, unknown>) ?? undefined,
       createdAt: new Date(row.created_at).toISOString(),
     }));
+  }
+
+  async getIpReputation(ip: string): Promise<IpReputation | null> {
+    const { rows } = await this.pool.query<IpReputationRow>(
+      `SELECT * FROM ip_reputation WHERE ip_range = $1::cidr`,
+      [ip],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      ipRange: row.ip_range,
+      reputationScore: row.reputation_score,
+      categories: row.categories,
+      source: row.source ?? undefined,
+      lastSeen: row.last_seen ? new Date(row.last_seen).toISOString() : undefined,
+    };
+  }
+
+  async upsertIpReputation(reputation: IpReputation): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO ip_reputation (ip_range, reputation_score, categories, last_seen, source)
+       VALUES ($1::cidr,$2,$3,$4,$5)
+       ON CONFLICT (ip_range) DO UPDATE SET
+         reputation_score = EXCLUDED.reputation_score,
+         categories = EXCLUDED.categories,
+         last_seen = EXCLUDED.last_seen,
+         source = EXCLUDED.source`,
+      [
+        reputation.ipRange,
+        reputation.reputationScore,
+        reputation.categories,
+        reputation.lastSeen ?? new Date().toISOString(),
+        reputation.source ?? null,
+      ],
+    );
   }
 
   private toRiskEvent(row: RiskEventRow): RiskEvent {
