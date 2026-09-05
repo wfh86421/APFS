@@ -7,6 +7,7 @@ const NAV: Array<{ href: string; label: string; icon: string; ready: boolean }> 
   { href: '/admin', label: '管理者工作台', icon: '🛠️', ready: true },
   { href: '/admin/reports', label: '報告列表', icon: '🗂️', ready: true },
   { href: '/admin/events', label: '事件查詢', icon: '🚨', ready: true },
+  { href: '/admin/devices', label: '設備指紋', icon: '🧬', ready: true },
   { href: '/admin/reports/demo', label: '報告決策示範', icon: '📋', ready: true },
   { href: '/admin/overview', label: '管理概覽', icon: '📊', ready: false },
   { href: '/admin/modules', label: '模組市場', icon: '🧩', ready: false },

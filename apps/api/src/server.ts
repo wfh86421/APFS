@@ -431,6 +431,15 @@ app.get('/v1/risk-events', async (request, reply) => {
   return { events };
 });
 
+app.get('/v1/devices', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { limit?: string };
+  const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
+  const devices = await riskRepository.listDeviceFingerprints(limit);
+  return { devices };
+});
+
 app.get('/v1/fields', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });

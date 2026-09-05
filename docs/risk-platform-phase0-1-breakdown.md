@@ -180,3 +180,13 @@ Phase 3 完成定義：
 
 - 指紋聚類與趨勢圖表。
 - UI 角色切換（客服/分析師遮罩預覽）。
+
+已完成（2026-09-06）：
+
+- API `GET /v1/devices`（跨 session 設備指紋列表）。
+- `/admin/devices` 設備指紋聚類頁：Fingerprint／Canvas／WebGL／GPU／Sessions／IPs／Last Seen。
+
+待補（下一輪）：
+
+- 趨勢圖表（分數/事件/設備分布）。
+- UI 角色切換（客服/分析師遮罩預覽）。
