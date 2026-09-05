@@ -7,7 +7,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 // 簽章函式內建於此（主機無需先編譯 packages）。
 // 演算法與 packages/signing/src/index.ts 一致；若不一致，API 回傳
@@ -44,6 +46,24 @@ async function signReport(report, secret) {
   ].join('|');
   return hmacSha256Hex(secret, canonical);
 }
+
+/** VPS 部署時 .env 與執行目錄同在 repo 根目錄，自動載入正式密鑰。 */
+async function loadDotEnvIfPresent() {
+  const file = join(process.cwd(), '.env');
+  if (!existsSync(file)) return;
+  const text = await readFile(file, 'utf8');
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim();
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+await loadDotEnvIfPresent();
 
 const API = process.env.API_URL ?? 'http://127.0.0.1:3001';
 const WEB = process.env.WEB_URL ?? 'http://127.0.0.1:3000';
