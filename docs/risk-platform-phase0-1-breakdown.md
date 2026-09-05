@@ -73,9 +73,9 @@
 - 新增測試 `packages/repository/test/risk.test.ts`：InMemory 正例（insert/list/filter/upsert）全數通過；PostgreSQL 整合測試在提供 `DATABASE_URL` 時執行。
 - `apps/api` 新增 `POST/GET /v1/risk-events`、`GET/PUT /v1/fields`（皆需 API Key）。
 - `scripts/deploy-vps.sh` 在 `docker compose up` 後自動套用 `init.sql`（冪等），既有 volume 也能新增 Phase 1 表。
+- `init.sql` 新增 `device_fingerprints`（跨 session 聚類）與 `network_signals`（open_ports/dns_leak 結構化）。
+- repository 擴充 `RiskRepository`：`upsert/get/list device_fingerprints`、`upsert/get network_signals`；測試新增 4 個案例（InMemory 8 pass / PG 整合 skip 同前）。
 
 待補（下一輪）：
 
-- `device_fingerprints`（跨 session 聚類）。
-- `network_signals`（open_ports/dns_leak 結構化查詢）。
 - `/admin` 6＋1 模組目錄與後台決策頁（Phase 2）。

@@ -209,3 +209,66 @@ CREATE TABLE IF NOT EXISTS field_definitions (
 
 CREATE INDEX IF NOT EXISTS idx_field_defs_status    ON field_definitions(status);
 CREATE INDEX IF NOT EXISTS idx_field_defs_category  ON field_definitions(category);
+
+CREATE TABLE IF NOT EXISTS device_fingerprints (
+    fingerprint_hash   VARCHAR(64) PRIMARY KEY,
+    tenant_id          UUID,
+    canvas_hash        VARCHAR(64),
+    webgl_hash         VARCHAR(64),
+    webgpu_hash        VARCHAR(64),
+    audio_hash         VARCHAR(64),
+    fonts_hash         VARCHAR(64),
+    client_rects_hash  VARCHAR(64),
+    unmasked_vendor    VARCHAR(128),
+    unmasked_renderer  VARCHAR(128),
+    screen_signature   VARCHAR(128),
+    hardware_signature VARCHAR(128),
+    first_seen         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    session_count      INTEGER NOT NULL DEFAULT 1,
+    ip_count           INTEGER NOT NULL DEFAULT 1,
+    stability_score    DOUBLE PRECISION,
+    entropy_score      DOUBLE PRECISION,
+    retention_until    TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_fp_tenant   ON device_fingerprints(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_device_fp_last_seen ON device_fingerprints(last_seen DESC);
+
+CREATE TABLE IF NOT EXISTS network_signals (
+    session_id         VARCHAR(64) PRIMARY KEY,
+    report_id          UUID,
+    tenant_id          UUID,
+    ip_address         INET,
+    ip_confidence      VARCHAR(8) CHECK (ip_confidence IN ('low','medium','high')),
+    isp                VARCHAR(128),
+    asn                VARCHAR(32),
+    network_type       VARCHAR(32),
+    ip_history_7d      INTEGER,
+    ip_history_30d     INTEGER,
+    proxy_detected     BOOLEAN,
+    vpn_detected       BOOLEAN,
+    tor_detected       BOOLEAN,
+    webrtc_ip          INET,
+    webrtc_stun_ip     INET,
+    webrtc_mismatch    BOOLEAN,
+    dns_leak_status    VARCHAR(16),
+    dns_leak_list      TEXT[] NOT NULL DEFAULT '{}',
+    open_ports         INTEGER[] NOT NULL DEFAULT '{}',
+    country            VARCHAR(64),
+    region             VARCHAR(64),
+    city               VARCHAR(64),
+    postal_code        VARCHAR(16),
+    latitude           DOUBLE PRECISION,
+    longitude          DOUBLE PRECISION,
+    geo_confidence     VARCHAR(8) CHECK (geo_confidence IN ('low','medium','high')),
+    timezone_ip        VARCHAR(64),
+    timezone_js        VARCHAR(64),
+    time_consistency   BOOLEAN,
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_network_report ON network_signals(report_id);
+CREATE INDEX IF NOT EXISTS idx_network_tenant ON network_signals(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_network_open_ports ON network_signals USING GIN(open_ports);

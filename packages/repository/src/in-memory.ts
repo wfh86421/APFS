@@ -4,6 +4,8 @@ import type {
   RiskEvent,
 } from '@shieldscan/core-schema';
 import type {
+  DeviceFingerprint,
+  NetworkSignal,
   ReportMeta,
   ReportRepository,
   RiskEventFilter,
@@ -92,6 +94,8 @@ export class InMemoryReportRepository implements ReportRepository {
 export class InMemoryRiskRepository implements RiskRepository {
   private readonly events = new Map<string, RiskEvent>();
   private readonly definitions = new Map<string, FieldDefinition>();
+  private readonly devices = new Map<string, DeviceFingerprint>();
+  private readonly networkSignals = new Map<string, NetworkSignal>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -120,5 +124,39 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async listFieldDefinitions(limit = 500): Promise<FieldDefinition[]> {
     return [...this.definitions.values()].slice(0, limit);
+  }
+
+  async upsertDeviceFingerprint(device: DeviceFingerprint): Promise<void> {
+    const existing = this.devices.get(device.fingerprintHash);
+    if (!existing) {
+      this.devices.set(device.fingerprintHash, device);
+      return;
+    }
+    this.devices.set(device.fingerprintHash, {
+      ...existing,
+      ...device,
+      sessionCount: existing.sessionCount + device.sessionCount,
+      ipCount: existing.ipCount + device.ipCount,
+      lastSeen: device.lastSeen ?? existing.lastSeen,
+    });
+  }
+
+  async getDeviceFingerprint(fingerprintHash: string): Promise<DeviceFingerprint | null> {
+    return this.devices.get(fingerprintHash) ?? null;
+  }
+
+  async listDeviceFingerprints(limit = 100): Promise<DeviceFingerprint[]> {
+    return [...this.devices.values()]
+      .sort((a, b) => (b.lastSeen ?? '').localeCompare(a.lastSeen ?? ''))
+      .slice(0, limit);
+  }
+
+  async upsertNetworkSignal(signal: NetworkSignal): Promise<void> {
+    const existing = this.networkSignals.get(signal.sessionId);
+    this.networkSignals.set(signal.sessionId, { ...existing, ...signal });
+  }
+
+  async getNetworkSignal(sessionId: string): Promise<NetworkSignal | null> {
+    return this.networkSignals.get(sessionId) ?? null;
   }
 }

@@ -82,6 +82,52 @@ test('InMemory 欄位定義：upsert 後可列出且覆寫', async () => {
   assert.equal(list[0]?.status, 'deprecated');
 });
 
+test('InMemory 設備指紋：upsert 累計 session/ip 並可依 hash 查詢', async () => {
+  const repo = new InMemoryRiskRepository();
+  const hash = 'fp-sha256-abc';
+  await repo.upsertDeviceFingerprint({
+    fingerprintHash: hash,
+    canvasHash: 'canvas-1',
+    webglHash: 'webgl-1',
+    sessionCount: 1,
+    ipCount: 1,
+    lastSeen: '2026-08-03T20:10:17+08:00',
+  });
+  await repo.upsertDeviceFingerprint({
+    fingerprintHash: hash,
+    sessionCount: 1,
+    ipCount: 2,
+    lastSeen: '2026-09-01T08:00:00+08:00',
+  });
+
+  const found = await repo.getDeviceFingerprint(hash);
+  assert.ok(found);
+  assert.equal(found.sessionCount, 2);
+  assert.equal(found.ipCount, 3);
+  assert.equal(found.canvasHash, 'canvas-1');
+
+  const list = await repo.listDeviceFingerprints();
+  assert.equal(list.length, 1);
+  assert.equal(list[0]?.lastSeen, '2026-09-01T08:00:00+08:00');
+});
+
+test('InMemory 網路訊號：upsert 後可取回結構化 open_ports/dns_leak', async () => {
+  const repo = new InMemoryRiskRepository();
+  await repo.upsertNetworkSignal({
+    sessionId: 's-network',
+    ipAddress: '49.214.1.196',
+    isp: 'Taiwan Fixed Network',
+    openPorts: [22, 3389],
+    dnsLeakList: ['175.96.61.48'],
+    geoConfidence: 'low',
+  });
+  const signal = await repo.getNetworkSignal('s-network');
+  assert.ok(signal);
+  assert.deepEqual(signal.openPorts, [22, 3389]);
+  assert.deepEqual(signal.dnsLeakList, ['175.96.61.48']);
+  assert.equal(signal.isp, 'Taiwan Fixed Network');
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);
@@ -95,6 +141,20 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
     await repo.upsertFieldDefinition(definition);
     const fields = await repo.listFieldDefinitions();
     assert.ok(fields.some((field) => field.fieldPath === definition.fieldPath));
+
+    await repo.upsertDeviceFingerprint({
+      fingerprintHash: 'fp-ci-001',
+      sessionCount: 1,
+      ipCount: 1,
+    });
+    assert.ok(await repo.getDeviceFingerprint('fp-ci-001'));
+
+    await repo.upsertNetworkSignal({
+      sessionId: 'session-network-ci',
+      openPorts: [22],
+      dnsLeakList: ['175.96.61.48'],
+    });
+    assert.ok(await repo.getNetworkSignal('session-network-ci'));
   } finally {
     await repo.close();
   }

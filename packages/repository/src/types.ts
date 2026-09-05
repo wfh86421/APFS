@@ -56,6 +56,62 @@ export interface RiskEventFilter {
   limit?: number;
 }
 
+/** Phase 1：設備指紋（跨 session 聚類用，對應 device_fingerprints）。 */
+export interface DeviceFingerprint {
+  fingerprintHash: string;
+  tenantId?: string;
+  canvasHash?: string;
+  webglHash?: string;
+  webgpuHash?: string;
+  audioHash?: string;
+  fontsHash?: string;
+  clientRectsHash?: string;
+  unmaskedVendor?: string;
+  unmaskedRenderer?: string;
+  screenSignature?: string;
+  hardwareSignature?: string;
+  firstSeen?: string;
+  lastSeen?: string;
+  sessionCount: number;
+  ipCount: number;
+  stabilityScore?: number;
+  entropyScore?: number;
+  retentionUntil?: string;
+}
+
+/** Phase 1：結構化網路訊號（對應 network_signals）。 */
+export interface NetworkSignal {
+  sessionId: string;
+  reportId?: string;
+  tenantId?: string;
+  ipAddress?: string;
+  ipConfidence?: 'low' | 'medium' | 'high';
+  isp?: string;
+  asn?: string;
+  networkType?: string;
+  ipHistory7d?: number;
+  ipHistory30d?: number;
+  proxyDetected?: boolean;
+  vpnDetected?: boolean;
+  torDetected?: boolean;
+  webrtcIp?: string;
+  webrtcStunIp?: string;
+  webrtcMismatch?: boolean;
+  dnsLeakStatus?: string;
+  dnsLeakList?: string[];
+  openPorts?: number[];
+  country?: string;
+  region?: string;
+  city?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+  geoConfidence?: 'low' | 'medium' | 'high';
+  timezoneIp?: string;
+  timezoneJs?: string;
+  timeConsistency?: boolean;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -66,4 +122,9 @@ export interface RiskRepository {
   listRiskEvents(filter?: RiskEventFilter): Promise<RiskEvent[]>;
   upsertFieldDefinition(definition: FieldDefinition): Promise<void>;
   listFieldDefinitions(limit?: number): Promise<FieldDefinition[]>;
+  upsertDeviceFingerprint(device: DeviceFingerprint): Promise<void>;
+  getDeviceFingerprint(fingerprintHash: string): Promise<DeviceFingerprint | null>;
+  listDeviceFingerprints(limit?: number): Promise<DeviceFingerprint[]>;
+  upsertNetworkSignal(signal: NetworkSignal): Promise<void>;
+  getNetworkSignal(sessionId: string): Promise<NetworkSignal | null>;
 }
