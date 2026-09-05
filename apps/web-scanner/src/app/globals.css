@@ -945,3 +945,112 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 報告詳情決策頁（Phase 2 示範） ---------- */
+.decision-page {
+  padding: 28px 24px 80px;
+  max-width: 1100px;
+}
+
+.decision-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.decision-card h2 {
+  margin: 0 0 10px;
+}
+
+.decision-hero {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 20px;
+}
+
+.decision-score-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 12px 0;
+}
+
+.decision-score {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.decision-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.decision-factor {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.decision-factor span {
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.decision-factor p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.decision-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-danger {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.decision-table-wrap {
+  overflow-x: auto;
+}
+
+.decision-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.decision-table th,
+.decision-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.decision-table th {
+  background: var(--card-2);
+  color: var(--muted);
+}
+
+.decision-raw {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 14px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .decision-hero {
+    grid-template-columns: 1fr;
+  }
+}
