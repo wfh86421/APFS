@@ -76,6 +76,60 @@ export const zPolicyDecision = z.enum([
 export type PolicyDecision = z.infer<typeof zPolicyDecision>;
 
 /* ------------------------------------------------------------------ */
+/* 治理與證據鏈列舉（嚴謹查證模式定版）                                   */
+/* ------------------------------------------------------------------ */
+
+export const zSensitivity = z.enum(['low', 'medium', 'high', 'critical']);
+export type Sensitivity = z.infer<typeof zSensitivity>;
+
+export const zEvidenceConfidence = z.enum(['low', 'medium', 'high']);
+export type EvidenceConfidence = z.infer<typeof zEvidenceConfidence>;
+
+export const zFieldStatus = z.enum(['active', 'experimental', 'deprecated', 'removed']);
+export type FieldStatus = z.infer<typeof zFieldStatus>;
+
+export const zRetentionClass = z.enum(['short', 'medium', 'long', 'policy']);
+export type RetentionClass = z.infer<typeof zRetentionClass>;
+
+export const zRiskEventType = z.enum([
+  'open_ports',
+  'os_mismatch',
+  'canvas_tampering',
+  'dns_leak',
+  'webrtc_mismatch',
+  'proxy_detected',
+  'vpn_detected',
+  'tor_detected',
+  'blacklist_hit',
+  'bot_suspected',
+  'geo_velocity_anomaly',
+  'fingerprint_instability',
+  'timezone_mismatch',
+  'language_mismatch',
+]);
+export type RiskEventType = z.infer<typeof zRiskEventType>;
+
+export const zSignalEvidence = z
+  .object({
+    source: z.string().min(1),
+    method: z.string().optional(),
+    confidence: zEvidenceConfidence,
+    sensitivity: zSensitivity,
+    collectedAt: z.string().datetime({ offset: true }).optional(),
+    schemaVersion: z.string().regex(/^\d+\.\d+\.\d+$/, '版本必須為 semver，例如 1.4.0'),
+    rawReference: z.string().optional(),
+    policy: z
+      .object({
+        accessRoles: z.array(z.string()).min(1),
+        retentionClass: zRetentionClass,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type SignalEvidence = z.infer<typeof zSignalEvidence>;
+
+/* ------------------------------------------------------------------ */
 /* PluginManifest                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -119,6 +173,8 @@ export const zNormalizedSignal = z
     hash: z.string().optional(),
     confidence: z.number().min(0).max(1),
     collectedAt: z.string().datetime({ offset: true }),
+    sensitivity: zSensitivity.optional(),
+    evidence: zSignalEvidence.optional(),
   })
   .strict();
 export type NormalizedSignal = z.infer<typeof zNormalizedSignal>;
@@ -133,6 +189,57 @@ export const zAnalysisIssue = z
   })
   .strict();
 export type AnalysisIssue = z.infer<typeof zAnalysisIssue>;
+
+/* ------------------------------------------------------------------ */
+/* RiskEvent（risk_events 查詢層契約）                                   */
+/* ------------------------------------------------------------------ */
+
+export const zRiskEvent = z
+  .object({
+    eventId: z.string().min(1),
+    tenantId: z.string().optional(),
+    sessionId: z.string().min(1),
+    reportId: z.string().optional(),
+    eventType: zRiskEventType,
+    severity: zSeverity,
+    confidence: zEvidenceConfidence,
+    evidenceJson: z.record(z.string(), z.unknown()),
+    ruleId: z.string().min(1),
+    ruleVersion: z.string().regex(/^\d+\.\d+\.\d+$/, '版本必須為 semver，例如 1.2.0'),
+    scoreImpact: z.number().optional(),
+    autoAction: zPolicyDecision.optional(),
+    reviewRequired: z.boolean(),
+    detectedAt: z.string().datetime({ offset: true }),
+    reviewStatus: z
+      .enum(['pending', 'in_review', 'reviewed', 'closed'])
+      .optional(),
+    reviewerId: z.string().optional(),
+    falsePositiveFlag: z.boolean().optional(),
+  })
+  .strict();
+export type RiskEvent = z.infer<typeof zRiskEvent>;
+
+/* ------------------------------------------------------------------ */
+/* FieldDefinition（Schema Registry / field_definitions）               */
+/* ------------------------------------------------------------------ */
+
+export const zFieldDefinition = z
+  .object({
+    fieldPath: z.string().min(1),
+    displayName: z.string().min(1),
+    category: zSignalCategory,
+    sensitivity: zSensitivity,
+    defaultConfidence: zEvidenceConfidence,
+    stability: z.enum(['stable', 'volatile', 'unknown']),
+    purpose: z.string().min(1),
+    retentionClass: zRetentionClass,
+    accessRoles: z.array(z.string()).min(1),
+    uiModule: z.string().min(1),
+    status: zFieldStatus,
+    version: z.string().regex(/^\d+\.\d+\.\d+$/, '版本必須為 semver，例如 1.0.0'),
+  })
+  .strict();
+export type FieldDefinition = z.infer<typeof zFieldDefinition>;
 
 export const zScoreBundle = z
   .object({
@@ -241,5 +348,20 @@ export function validateNormalizedSignal(input: unknown): Validation<NormalizedS
 
 export function validateScoreBundle(input: unknown): Validation<ScoreBundle> {
   const result = zScoreBundle.safeParse(input);
+  return result.success ? { ok: true, data: result.data } : toFailure(result.error);
+}
+
+export function validateSignalEvidence(input: unknown): Validation<SignalEvidence> {
+  const result = zSignalEvidence.safeParse(input);
+  return result.success ? { ok: true, data: result.data } : toFailure(result.error);
+}
+
+export function validateRiskEvent(input: unknown): Validation<RiskEvent> {
+  const result = zRiskEvent.safeParse(input);
+  return result.success ? { ok: true, data: result.data } : toFailure(result.error);
+}
+
+export function validateFieldDefinition(input: unknown): Validation<FieldDefinition> {
+  const result = zFieldDefinition.safeParse(input);
   return result.success ? { ok: true, data: result.data } : toFailure(result.error);
 }
