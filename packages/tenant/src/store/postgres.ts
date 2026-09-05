@@ -23,6 +23,7 @@ interface ApiKeyRow {
   tenant_id: string;
   label: string;
   key_hash: string;
+  role: string | null;
   created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
@@ -90,9 +91,16 @@ export class PostgresTenantStore implements TenantStore {
 
   async createApiKey(record: ApiKeyRecord): Promise<void> {
     await this.pool.query(
-      `INSERT INTO api_keys (key_id, tenant_id, label, key_hash, created_at)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [record.keyId, record.tenantId, record.label, record.keyHash, record.createdAt],
+      `INSERT INTO api_keys (key_id, tenant_id, label, key_hash, role, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        record.keyId,
+        record.tenantId,
+        record.label,
+        record.keyHash,
+        record.role ?? 'security_admin',
+        record.createdAt,
+      ],
     );
   }
 
@@ -108,6 +116,7 @@ export class PostgresTenantStore implements TenantStore {
       tenantId: row.tenant_id,
       label: row.label,
       keyHash: row.key_hash,
+      role: (row.role as ApiKeyRecord['role']) ?? 'security_admin',
       createdAt: row.created_at,
       lastUsedAt: row.last_used_at ?? undefined,
       revokedAt: row.revoked_at ?? undefined,

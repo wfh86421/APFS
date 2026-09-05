@@ -26,6 +26,7 @@ import {
   createRiskRepository,
   type ReportRepository,
   type RiskRepository,
+  type StoredReport,
   type VisitorProfile,
 } from '@shieldscan/repository';
 import {
@@ -121,6 +122,30 @@ function requestIp(request: {
   }
   const remote = request.socket.remoteAddress ?? 'unknown';
   return remote.replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+}
+
+const ADMIN_ROLES = ['customer_support', 'risk_analyst', 'security_admin'] as const;
+type AdminRoleValue = (typeof ADMIN_ROLES)[number];
+
+function roleOfAuth(auth: { key: ApiKeyRecord } | null): AdminRoleValue {
+  return auth?.key.role ?? 'security_admin';
+}
+
+function maskIp(ip?: string): string | undefined {
+  if (!ip) return undefined;
+  const parts = ip.split('.');
+  if (parts.length !== 4) return ip;
+  return `${parts[0]}.${parts[1]}.${parts[2]}.*`;
+}
+
+/** 依角色遮罩：非 security_admin 看不到完整 IP 與 Raw JSON。 */
+function maskStoredReport(report: StoredReport, role: AdminRoleValue): StoredReport {
+  const copy: StoredReport = { ...report };
+  if (role !== 'security_admin') {
+    copy.clientIp = maskIp(report.clientIp);
+    copy.raw = undefined;
+  }
+  return copy;
 }
 
 function validationReply(
@@ -293,12 +318,17 @@ app.get('/v1/tenant/me', async (request, reply) => {
 app.post('/v1/tenant/keys', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-  const body = request.body as { label?: string };
+  const body = request.body as { label?: string; role?: AdminRoleValue };
+  const role = body.role ?? 'security_admin';
+  if (!ADMIN_ROLES.includes(role)) {
+    return reply.code(400).send({ error: 'invalid_role' });
+  }
   const issued = await tenantService.issueApiKey(
     auth.tenant.tenantId,
     body.label ?? 'additional',
+    role,
   );
-  return reply.code(201).send({ ...issued, note: '明文僅此一次顯示。' });
+  return reply.code(201).send({ ...issued, role, note: '明文僅此一次顯示。' });
 });
 
 /** 本月用量與發票（需 API Key）。 */
@@ -637,19 +667,23 @@ app.post('/v1/reports', async (request, reply) => {
 app.get('/v1/reports', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const role = roleOfAuth(auth);
   const query = request.query as { limit?: string };
   const limit = query.limit ? Math.max(1, Math.min(200, Number(query.limit))) : 50;
-  const reports = await repository.listReportsByTenant(auth.tenant.tenantId, limit);
+  const reports = (await repository.listReportsByTenant(auth.tenant.tenantId, limit)).map(
+    (report) => maskStoredReport(report, role),
+  );
   return { tenantId: auth.tenant.tenantId, reports };
 });
 
 app.get('/v1/reports/:id', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const role = roleOfAuth(auth);
   const { id } = request.params as { id: string };
   const stored = await repository.getReport(id);
   if (!stored) return reply.code(404).send({ error: 'report_not_found' });
-  return stored;
+  return maskStoredReport(stored, role);
 });
 
 /** DELETE /v1/reports/:id：刪除單筆報告（GDPR/個資刪除請求，需 API Key）。 */

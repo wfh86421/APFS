@@ -1,6 +1,7 @@
 export type Plan = 'free' | 'developer' | 'business' | 'enterprise';
 export type TenantStatus = 'active' | 'suspended';
 export type InvoiceStatus = 'draft' | 'issued' | 'paid';
+export type AdminRole = 'customer_support' | 'risk_analyst' | 'security_admin';
 
 export interface Tenant {
   tenantId: string;
@@ -16,6 +17,7 @@ export interface ApiKeyRecord {
   tenantId: string;
   label: string;
   keyHash: string;
+  role?: AdminRole;
   createdAt: string;
   lastUsedAt?: string;
   revokedAt?: string;

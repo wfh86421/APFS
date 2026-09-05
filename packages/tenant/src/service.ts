@@ -6,6 +6,7 @@ import {
   PLAN_PRICES,
   Tenant,
   UsageRecord,
+  type AdminRole,
 } from './types.js';
 import type { TenantStore } from './store/types.js';
 
@@ -39,11 +40,15 @@ export class TenantService {
       createdAt: new Date().toISOString(),
     };
     await this.store.createTenant(tenant);
-    const issued = await this.issueApiKey(tenant.tenantId, 'default');
+    const issued = await this.issueApiKey(tenant.tenantId, 'default', 'security_admin');
     return { tenant, issued };
   }
 
-  async issueApiKey(tenantId: string, label: string): Promise<IssuedApiKey> {
+  async issueApiKey(
+    tenantId: string,
+    label: string,
+    role: AdminRole = 'security_admin',
+  ): Promise<IssuedApiKey> {
     const apiKey = `shd_live_${randomBytes(24).toString('base64url')}`;
     const keyId = randomUUID();
     await this.store.createApiKey({
@@ -51,6 +56,7 @@ export class TenantService {
       tenantId,
       label,
       keyHash: this.hashKey(apiKey),
+      role,
       createdAt: new Date().toISOString(),
     });
     return { apiKey, keyId, label };

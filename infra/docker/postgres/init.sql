@@ -120,10 +120,14 @@ CREATE TABLE IF NOT EXISTS api_keys (
     tenant_id    UUID NOT NULL REFERENCES tenants(tenant_id),
     label        VARCHAR(128) NOT NULL,
     key_hash     VARCHAR(64) UNIQUE NOT NULL,
+    role         VARCHAR(32) NOT NULL DEFAULT 'security_admin'
+                 CHECK (role IN ('customer_support','risk_analyst','security_admin')),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_used_at TIMESTAMPTZ,
     revoked_at   TIMESTAMPTZ
 );
+
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS role VARCHAR(32) NOT NULL DEFAULT 'security_admin';
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id);
 

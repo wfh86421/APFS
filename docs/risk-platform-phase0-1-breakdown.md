@@ -160,3 +160,14 @@ Phase 3 完成定義：
 
 - RBAC 角色與欄位遮罩（IP／經緯度／Raw JSON）。
 - 事件查詢、指紋聚類與趨勢圖表。
+
+已完成（2026-09-06，RBAC 第一版）：
+
+- `api_keys` 新增 `role`（customer_support／risk_analyst／security_admin），預設 security_admin。
+- `POST /v1/tenant/keys` 可指定角色簽發。
+- `GET /v1/reports` 與 `GET /v1/reports/:id` 依角色遮罩：非 security_admin 看不到完整 IP（末段改 `*`）與 Raw JSON。
+
+待補（Phase 4 收尾）：
+
+- 事件查詢（risk-events 列表 UI）、指紋聚類與趨勢圖表。
+- 客服/分析師 UI 層角色切換。
