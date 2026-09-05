@@ -7,6 +7,80 @@
 
 ---
 
+## 核心定位與原則（總綱）
+
+> 本節為 2026-09-05 定版的原則總綱。所有階段決策與功能取捨都以此為指導；與本節衝突的規劃，以本節為準。
+
+1. **Everything-is-a-Plugin（一切皆插件）**：借鏡 DeepSeek Harness 範式，微內核保持極簡，功能全靠插件擴展。
+2. **WebUI 為啟動入口**：透過現代化 WebUI 進行視覺化操作、外掛裝卸與檢測管線觸發。
+3. **24/7 守護**：常駐背景守護行程，具備跨平台 SDK 協同能力（Web / Bot / API）。
+4. **記憶與自進化**：管理後臺具備跨會話記憶，並在系統閒置時透過背景反思達成能力自進化。
+5. **交付標準**：全面容器化（Docker Compose 一鍵啟動），嚴格型別註解（TypeScript + Python typing）。
+
+**落地對照（現況 → 待辦）**
+
+| 原則 | 現況 | 待辦 |
+|---|---|---|
+| 1 一切皆插件 | `packages/plugin-runtime`（Kernel / Event Bus / 五類插件介面）+ `PluginManifest` 契約 | 插件 Registry、熱插拔、版本化 |
+| 2 WebUI 入口 | Web-Scanner 網站已上線 | 管理者控制台 `/admin`（插件/區塊啟停、顯示、排序、管線觸發） |
+| 3 24/7 守護 | `services/` 規劃 + Docker Compose 常駐服務 | Bot 通道、後台任務排程、跨平台 SDK 協同 |
+| 4 記憶與自進化 | 報告資料庫（PostgreSQL）+ 同意機制 | 跨會話記憶層、閒置反思與模型自進化 |
+| 5 交付標準 | Docker Compose 一鍵啟動、Monorepo TypeScript 全型別 | Python typing 規範套用到服務端擴充模組 |
+
+### 管理後臺：模組自訂（KPanel 式）
+
+> 對應原則 2（WebUI 入口）與原則 4（記憶與自進化）。管理者可視覺化地組裝「檢測工作台」，不需要改程式碼。
+
+**畫面結構（仿 KPanel「檢測」頁）**
+
+- 左側：分類清單（例如 綜合評分 / 網路資訊 / 硬體性能 / 效能測試 / 綜合評測 / 安全），每個群組可收合／展開。
+- 群組內：一個個模組項目，每項右側有「啟用／停用（開關）」與「顯示／隱藏」控制。
+- 右側：內容區依「啟用且可見」的模組動態渲染相應得分卡（效能、網路、延遲等）。
+- 排序：模組與群組皆可上移／下移（拖曳或按鈕皆可）。
+
+**每個模組的控制維度**
+
+| 維度 | 含義 | 影響 |
+|---|---|---|
+| 啟用（enabled） | 功能是否參與掃描／分析 | 關閉＝該模組不採集、不計算 |
+| 顯示（visible） | 介面是否出現 | 隱藏＝仍可參與，但 UI 不顯示 |
+| 排序（order） | 群組內與群組間順序 | 決定工作台陳列順序 |
+| 收合（collapsed） | 群組是否折疊 | 影響左側欄空間 |
+| 名稱/圖示編輯 | 管理者自訂顯示文案 | 品牌化／本地化 |
+
+**資料模型（草案）**
+
+```ts
+interface ModuleCategory {
+  id: string;            // 例如 "network"
+  label: string;
+  icon?: string;
+  order: number;
+  visible: boolean;
+  collapsed: boolean;
+}
+
+interface ModuleItem {
+  id: string;            // 例如 "builtin.net.tcp-detection"
+  categoryId: string;
+  label: string;
+  icon?: string;
+  kind: 'detection' | 'analysis' | 'scoring' | 'policy' | 'output'; // 對應五類插件
+  enabled: boolean;      // 功能是否參與
+  visible: boolean;      // UI 是否顯示
+  order: number;
+}
+```
+
+**落地方式**
+
+- 首波以硬編碼目錄 + 後端資料表（或 JSON 設定）實作，管理者入口為 `/admin`。
+- 中期將 `ModuleItem` 對應到 `packages/plugin-runtime` 的 `PluginManifest`，由 Plugin Registry 動態列出，熱插拔增減。
+- 設定存後端資料庫（PostgreSQL），跨裝置一致；管理登入先以「管理 PIN」，後續接入套件化會員／RBAC。
+- 掃描類模組另提供「掃描技術模組」啟用清單（Canvas / WebGL / WebGPU / WebRTC / UA / Client Hints / Audio / 螢幕 / 語言 / 時區），與 SDK 註冊清單同步。
+
+---
+
 ## 一、商業飛輪（一切規劃的核心）
 
 ```text
