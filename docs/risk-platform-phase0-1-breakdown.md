@@ -64,3 +64,16 @@
 2. 三組新契約通過 zod 驗證（正例與反例）。
 3. 既有 `EnvironmentReport` 不需要修改即可通過驗證。
 
+## Phase 1 資料層進度（2026-09-06）
+
+已完成：
+
+- `init.sql` 新增 `risk_events`（含 session/severity/event_type/report 索引）與 `field_definitions`。
+- `packages/repository` 新增 `RiskRepository` 介面、`InMemoryRiskRepository`、`PostgresRiskRepository` 與 `createRiskRepository()`。
+- 新增測試 `packages/repository/test/risk.test.ts`：InMemory 正例（insert/list/filter/upsert）全數通過；PostgreSQL 整合測試在提供 `DATABASE_URL` 時執行。
+
+待補（下一輪）：
+
+- `device_fingerprints`（跨 session 聚類）。
+- `network_signals`（open_ports/dns_leak 結構化查詢）。
+- API 路由（`/v1/risk-events`、`/v1/fields`）與 `/admin` 6＋1 模組目錄。

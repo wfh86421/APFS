@@ -1,5 +1,16 @@
-import type { EnvironmentReport } from '@shieldscan/core-schema';
-import type { ReportMeta, ReportRepository, StoredReport, VisitorProfile } from './types.js';
+import type {
+  EnvironmentReport,
+  FieldDefinition,
+  RiskEvent,
+} from '@shieldscan/core-schema';
+import type {
+  ReportMeta,
+  ReportRepository,
+  RiskEventFilter,
+  RiskRepository,
+  StoredReport,
+  VisitorProfile,
+} from './types.js';
 
 /**
  * 記憶體實作：開發、測試與沒有資料庫的環境使用。
@@ -74,5 +85,40 @@ export class InMemoryReportRepository implements ReportRepository {
       }
     }
     return existed;
+  }
+}
+
+/** Phase 1：InMemory 風險事件／欄位定義（與 Postgres 行為一致）。 */
+export class InMemoryRiskRepository implements RiskRepository {
+  private readonly events = new Map<string, RiskEvent>();
+  private readonly definitions = new Map<string, FieldDefinition>();
+
+  async insertRiskEvent(event: RiskEvent): Promise<void> {
+    this.events.set(event.eventId, event);
+  }
+
+  async insertRiskEvents(events: RiskEvent[]): Promise<void> {
+    for (const event of events) await this.insertRiskEvent(event);
+  }
+
+  async listRiskEvents(filter: RiskEventFilter = {}): Promise<RiskEvent[]> {
+    const limit = filter.limit ?? 100;
+    return [...this.events.values()]
+      .filter(
+        (event) =>
+          (!filter.sessionId || event.sessionId === filter.sessionId) &&
+          (!filter.severity || event.severity === filter.severity) &&
+          (!filter.eventType || event.eventType === filter.eventType),
+      )
+      .sort((a, b) => b.detectedAt.localeCompare(a.detectedAt))
+      .slice(0, limit);
+  }
+
+  async upsertFieldDefinition(definition: FieldDefinition): Promise<void> {
+    this.definitions.set(definition.fieldPath, definition);
+  }
+
+  async listFieldDefinitions(limit = 500): Promise<FieldDefinition[]> {
+    return [...this.definitions.values()].slice(0, limit);
   }
 }

@@ -159,3 +159,53 @@ CREATE TABLE IF NOT EXISTS webhooks (
     is_enabled  BOOLEAN NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- =====================================================================
+-- Phase 1（風險偵測管理平台）：風險事件 / 欄位定義（Schema Registry）
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS risk_events (
+    event_id           UUID PRIMARY KEY,
+    tenant_id          UUID,
+    session_id         VARCHAR(64) NOT NULL,
+    report_id          UUID,
+    event_type         VARCHAR(48) NOT NULL,
+    severity           VARCHAR(16) NOT NULL CHECK (severity IN ('info','low','medium','high','critical')),
+    confidence         VARCHAR(8) NOT NULL CHECK (confidence IN ('low','medium','high')),
+    evidence_json      JSONB NOT NULL DEFAULT '{}',
+    rule_id            VARCHAR(128) NOT NULL,
+    rule_version       VARCHAR(16) NOT NULL,
+    score_impact       SMALLINT,
+    auto_action        VARCHAR(16),
+    review_required    BOOLEAN NOT NULL DEFAULT true,
+    detected_at        TIMESTAMPTZ NOT NULL,
+    review_status      VARCHAR(16) CHECK (review_status IN ('pending','in_review','reviewed','closed')),
+    reviewer_id        VARCHAR(64),
+    false_positive_flag BOOLEAN,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_risk_events_session    ON risk_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_risk_events_detected   ON risk_events(detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_events_severity   ON risk_events(severity);
+CREATE INDEX IF NOT EXISTS idx_risk_events_type       ON risk_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_risk_events_report     ON risk_events(report_id);
+
+CREATE TABLE IF NOT EXISTS field_definitions (
+    field_path        TEXT PRIMARY KEY,
+    display_name      VARCHAR(256) NOT NULL,
+    category          VARCHAR(32) NOT NULL,
+    sensitivity       VARCHAR(16) NOT NULL CHECK (sensitivity IN ('low','medium','high','critical')),
+    default_confidence VARCHAR(8) NOT NULL CHECK (default_confidence IN ('low','medium','high')),
+    stability         VARCHAR(16) NOT NULL CHECK (stability IN ('stable','volatile','unknown')),
+    purpose           TEXT NOT NULL,
+    retention_class   VARCHAR(16) NOT NULL CHECK (retention_class IN ('short','medium','long','policy')),
+    access_roles      TEXT[] NOT NULL DEFAULT '{}',
+    ui_module         VARCHAR(64) NOT NULL,
+    status            VARCHAR(16) NOT NULL CHECK (status IN ('active','experimental','deprecated','removed')),
+    version           VARCHAR(16) NOT NULL,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_field_defs_status    ON field_definitions(status);
+CREATE INDEX IF NOT EXISTS idx_field_defs_category  ON field_definitions(category);
