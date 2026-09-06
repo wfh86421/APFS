@@ -318,3 +318,9 @@ CREATE TABLE IF NOT EXISTS appeal_cases (
 
 CREATE INDEX IF NOT EXISTS idx_appeal_case   ON appeal_cases(case_id);
 CREATE INDEX IF NOT EXISTS idx_appeal_status ON appeal_cases(status);
+
+CREATE TABLE IF NOT EXISTS site_configs (
+    config_key   VARCHAR(128) PRIMARY KEY,
+    payload      JSONB NOT NULL,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

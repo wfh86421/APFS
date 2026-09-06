@@ -13,7 +13,8 @@ import ReportView from '../components/report-view';
 import ScanPanel from '../components/scan-panel';
 import { analyzeSignals } from '../lib/analyze';
 import type { HomeConfig } from '../modules/homepage';
-import { loadHomeConfig } from '../modules/homepage';
+import { isHomeConfigLike, loadHomeConfig } from '../modules/homepage';
+import { getPublicSiteConfig } from '../lib/config-api';
 
 interface ScanResult {
   report: EnvironmentReport;
@@ -35,7 +36,10 @@ export default function Home() {
 
   useEffect(() => {
     setConsent(loadConsent());
-    setHome(loadHomeConfig());
+    (async () => {
+      const remote = await getPublicSiteConfig('homepage');
+      setHome(isHomeConfigLike(remote) ? remote : loadHomeConfig());
+    })();
   }, []);
 
   useEffect(() => {

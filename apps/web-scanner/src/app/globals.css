@@ -726,6 +726,28 @@ a {
   gap: 10px;
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.admin-tab {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.admin-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .admin-summary {
   display: flex;
   gap: 14px;

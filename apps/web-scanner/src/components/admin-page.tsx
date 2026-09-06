@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ModuleItem, ModuleKind, WorkspaceConfig } from '../modules/catalog';
 import { KIND_LABEL } from '../modules/catalog';
 import {
+  isWorkspaceConfigLike,
   loadWorkspaceConfig,
   moveCategory,
   moveModule,
@@ -12,6 +13,8 @@ import {
   toggleCategoryFlag,
   toggleModuleFlag,
 } from '../modules/store';
+import { getAdminSiteConfig, putAdminSiteConfig } from '../lib/config-api';
+import HomepageConfig from './admin/homepage-config';
 
 function sortCategories(config: WorkspaceConfig) {
   return [...config.categories].sort((a, b) => a.order - b.order);
@@ -29,18 +32,50 @@ function kindBadge(kind: ModuleKind) {
 
 export default function AdminPage() {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
+  const [tab, setTab] = useState<'modules' | 'home'>('modules');
+  const [apiKey, setApiKey] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem('shieldscan.admin.apiKey') ?? '';
+  });
+  const [dbStatus, setDbStatus] = useState('');
 
   useEffect(() => {
-    setConfig(loadWorkspaceConfig());
+    (async () => {
+      const local = loadWorkspaceConfig();
+      setConfig(local);
+      const key = window.localStorage.getItem('shieldscan.admin.apiKey') ?? '';
+      if (!key) return;
+      try {
+        const remote = await getAdminSiteConfig('workbench', key);
+        if (isWorkspaceConfigLike(remote)) setConfig(remote);
+      } catch {
+        // 遠端失敗時沿用本機
+      }
+    })();
   }, []);
 
   if (!config) {
     return <div className="admin-page">載入中…</div>;
   }
 
-  const commit = (next: WorkspaceConfig) => {
+  const commit = async (next: WorkspaceConfig) => {
     setConfig(next);
     saveWorkspaceConfig(next);
+    if (apiKey) {
+      try {
+        await putAdminSiteConfig('workbench', next, apiKey);
+        setDbStatus('已同步到資料庫 ✅');
+      } catch (err) {
+        setDbStatus(err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      setDbStatus('未填 API Key：僅本機記憶');
+    }
+  };
+
+  const saveApiKey = (value: string) => {
+    setApiKey(value);
+    window.localStorage.setItem('shieldscan.admin.apiKey', value);
   };
 
   const categories = sortCategories(config);
@@ -73,6 +108,36 @@ export default function AdminPage() {
         </div>
       </header>
 
+      <div className="decision-config">
+        <label>
+          管理 API Key（同步到資料庫）
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(event) => saveApiKey(event.target.value)}
+            placeholder="shd_live_..."
+          />
+        </label>
+      </div>
+      {dbStatus && <p className="decision-status">{dbStatus}</p>}
+
+      <div className="admin-tabs">
+        <button
+          className={tab === 'modules' ? 'admin-tab active' : 'admin-tab'}
+          onClick={() => setTab('modules')}
+        >
+          後台模組（6＋1）
+        </button>
+        <button
+          className={tab === 'home' ? 'admin-tab active' : 'admin-tab'}
+          onClick={() => setTab('home')}
+        >
+          首頁區塊
+        </button>
+      </div>
+
+      {tab === 'modules' && (
+        <>
       <div className="admin-summary">
         <span>分類 {categories.filter((c) => c.visible).length}/{categories.length}</span>
         <span>顯示模組 {shownModules}/{config.modules.length}</span>
@@ -230,6 +295,10 @@ export default function AdminPage() {
           )}
         </section>
       </div>
+        </>
+      )}
+
+      {tab === 'home' && <HomepageConfig embedded />}
     </div>
   );
 }

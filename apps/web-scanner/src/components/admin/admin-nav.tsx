@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 
 const NAV: Array<{ href: string; label: string; icon: string; ready: boolean }> = [
   { href: '/admin', label: '管理者工作台', icon: '🛠️', ready: true },
-  { href: '/admin/homepage', label: '首頁設定', icon: '🏠', ready: true },
   { href: '/admin/reports', label: '報告列表', icon: '🗂️', ready: true },
   { href: '/admin/events', label: '事件查詢', icon: '🚨', ready: true },
   { href: '/admin/devices', label: '設備指紋', icon: '🧬', ready: true },

@@ -11,7 +11,7 @@ import { cloneDefaultConfig } from './catalog';
 
 const STORAGE_KEY = 'shieldscan.admin.workspace.v1';
 
-function isWorkspaceConfig(value: unknown): value is WorkspaceConfig {
+export function isWorkspaceConfigLike(value: unknown): value is WorkspaceConfig {
   if (!value || typeof value !== 'object') return false;
   const v = value as WorkspaceConfig;
   return v.version === 2 && Array.isArray(v.categories) && Array.isArray(v.modules);
@@ -23,7 +23,7 @@ export function loadWorkspaceConfig(): WorkspaceConfig {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return cloneDefaultConfig();
     const parsed: unknown = JSON.parse(raw);
-    if (!isWorkspaceConfig(parsed)) return cloneDefaultConfig();
+    if (!isWorkspaceConfigLike(parsed)) return cloneDefaultConfig();
     return parsed;
   } catch {
     return cloneDefaultConfig();

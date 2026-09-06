@@ -425,6 +425,35 @@ app.post('/v1/risk-events', async (request, reply) => {
   return reply.code(201).send({ inserted: events.length });
 });
 
+/** 公開站台設定（僅讀，無敏感資料；供首頁依管理者配置渲染）。 */
+app.get('/v1/public/config/:key', async (request, reply) => {
+  const { key } = request.params as { key: string };
+  const config = await riskRepository.getSiteConfig(key);
+  return { config };
+});
+
+app.get('/v1/admin/configs/:key', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { key } = request.params as { key: string };
+  const config = await riskRepository.getSiteConfig(key);
+  return { config };
+});
+
+app.put('/v1/admin/configs/:key', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { key } = request.params as { key: string };
+  const body = request.body as { config?: unknown };
+  if (body.config === undefined) return reply.code(400).send({ error: 'config_required' });
+  await riskRepository.setSiteConfig(key, body.config);
+  await riskRepository.appendAuditLog({
+    action: 'site-config-update',
+    metadata: { key },
+  });
+  return { ok: true };
+});
+
 app.get('/v1/risk-events', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });

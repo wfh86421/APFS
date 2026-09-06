@@ -172,4 +172,6 @@ export interface RiskRepository {
   listAuditLogs(limit?: number): Promise<AuditLogEntry[]>;
   getIpReputation(ip: string): Promise<IpReputation | null>;
   upsertIpReputation(reputation: IpReputation): Promise<void>;
+  getSiteConfig(key: string): Promise<unknown | null>;
+  setSiteConfig(key: string, payload: unknown): Promise<void>;
 }

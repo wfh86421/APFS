@@ -587,6 +587,23 @@ export class PostgresRiskRepository implements RiskRepository {
     );
   }
 
+  async getSiteConfig(key: string): Promise<unknown | null> {
+    const { rows } = await this.pool.query<{ payload: unknown }>(
+      `SELECT payload FROM site_configs WHERE config_key = $1`,
+      [key],
+    );
+    return rows[0]?.payload ?? null;
+  }
+
+  async setSiteConfig(key: string, payload: unknown): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO site_configs (config_key, payload, updated_at)
+       VALUES ($1,$2,NOW())
+       ON CONFLICT (config_key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+      [key, JSON.stringify(payload)],
+    );
+  }
+
   private toRiskEvent(row: RiskEventRow): RiskEvent {
     return {
       eventId: row.event_id,

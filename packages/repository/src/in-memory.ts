@@ -118,6 +118,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly appeals = new Map<string, AppealCase>();
   private readonly auditLogs: AuditLogEntry[] = [];
   private readonly ipReputations = new Map<string, IpReputation>();
+  private readonly siteConfigs = new Map<string, unknown>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -231,5 +232,13 @@ export class InMemoryRiskRepository implements RiskRepository {
       ...reputation,
       lastSeen: reputation.lastSeen ?? new Date().toISOString(),
     });
+  }
+
+  async getSiteConfig(key: string): Promise<unknown | null> {
+    return this.siteConfigs.get(key) ?? null;
+  }
+
+  async setSiteConfig(key: string, payload: unknown): Promise<void> {
+    this.siteConfigs.set(key, payload);
   }
 }

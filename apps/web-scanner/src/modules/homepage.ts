@@ -35,7 +35,7 @@ export const DEFAULT_HOME_CONFIG: HomeConfig = {
 
 const STORAGE_KEY = 'shieldscan.homepage.v1';
 
-function isHomeConfig(value: unknown): value is HomeConfig {
+export function isHomeConfigLike(value: unknown): value is HomeConfig {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as HomeConfig;
   return candidate.version === 1 && Array.isArray(candidate.blocks);
@@ -47,7 +47,7 @@ export function loadHomeConfig(): HomeConfig {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_HOME_CONFIG;
     const parsed: unknown = JSON.parse(raw);
-    if (!isHomeConfig(parsed)) return DEFAULT_HOME_CONFIG;
+    if (!isHomeConfigLike(parsed)) return DEFAULT_HOME_CONFIG;
     // 合併預設：新區塊自動出現、舊區塊保留設定
     const byId = new Map(parsed.blocks.map((block) => [block.id, block]));
     return {
