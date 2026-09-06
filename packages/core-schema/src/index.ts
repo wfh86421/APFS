@@ -75,6 +75,27 @@ export const zPolicyDecision = z.enum([
 ]);
 export type PolicyDecision = z.infer<typeof zPolicyDecision>;
 
+export const zRiskLevel = z.enum(['low', 'medium', 'high', 'critical']);
+export type RiskLevel = z.infer<typeof zRiskLevel>;
+
+/**
+ * 風險等級 → 政策決策 的唯一對應。
+ * 伺服器（apps/api scoreToPolicy）與前端 demo 共用此函式，避免兩處決策表漂移。
+ * 語意：medium→review（人工複核）、high→challenge（主動挑戰）、critical→block（封鎖）。
+ */
+export function policyDecisionForRiskLevel(riskLevel: RiskLevel | string): PolicyDecision {
+  switch (riskLevel) {
+    case 'critical':
+      return 'block';
+    case 'high':
+      return 'challenge';
+    case 'medium':
+      return 'review';
+    default:
+      return 'allow';
+  }
+}
+
 export const zReviewStatus = z.enum(['pending', 'in_review', 'reviewed', 'closed']);
 export type ReviewStatus = z.infer<typeof zReviewStatus>;
 

@@ -215,6 +215,14 @@ export class PostgresReportRepository implements ReportRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async deleteExpiredReports(before: string): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM fingerprint_scans WHERE expires_at IS NOT NULL AND expires_at < $1`,
+      [before],
+    );
+    return result.rowCount ?? 0;
+  }
+
   async deleteVisitor(tenantId: string, visitorId: string): Promise<boolean> {
     const scans = await this.pool.query(
       'DELETE FROM fingerprint_scans WHERE (visitor_id = $2 OR session_id = $2) AND tenant_id = $1',

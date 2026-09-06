@@ -28,6 +28,26 @@ export class InMemoryTenantStore implements TenantStore {
     return this.apiKeys.get(hash) ?? null;
   }
 
+  async getApiKeyById(tenantId: string, keyId: string): Promise<ApiKeyRecord | null> {
+    for (const record of this.apiKeys.values()) {
+      if (record.keyId === keyId && record.tenantId === tenantId) return record;
+    }
+    return null;
+  }
+
+  async listApiKeys(tenantId: string): Promise<ApiKeyRecord[]> {
+    return [...this.apiKeys.values()].filter((k) => k.tenantId === tenantId);
+  }
+
+  async revokeApiKey(tenantId: string, keyId: string, at: string): Promise<void> {
+    for (const record of this.apiKeys.values()) {
+      if (record.keyId === keyId && record.tenantId === tenantId && !record.revokedAt) {
+        record.revokedAt = at;
+        return;
+      }
+    }
+  }
+
   async touchApiKey(keyId: string, at: string): Promise<void> {
     for (const record of this.apiKeys.values()) {
       if (record.keyId === keyId) {

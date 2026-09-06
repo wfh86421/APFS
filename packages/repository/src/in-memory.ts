@@ -110,6 +110,20 @@ export class InMemoryReportRepository implements ReportRepository {
     return this.reports.delete(reportId);
   }
 
+  async deleteExpiredReports(before: string): Promise<number> {
+    let removed = 0;
+    for (const [id, report] of this.reports) {
+      const days = report.consent?.retentionDays;
+      if (!days || days <= 0) continue;
+      const expiresAt = new Date(new Date(report.createdAt).getTime() + days * 86_400_000);
+      if (expiresAt.toISOString() < before) {
+        this.reports.delete(id);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
   async deleteVisitor(tenantId: string, visitorId: string): Promise<boolean> {
     let removed = false;
     for (const [id, report] of this.reports) {

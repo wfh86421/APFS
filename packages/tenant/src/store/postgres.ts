@@ -60,6 +60,19 @@ export class PostgresTenantStore implements TenantStore {
     this.pool = new Pool({ connectionString });
   }
 
+  private mapApiKeyRow(row: ApiKeyRow): ApiKeyRecord {
+    return {
+      keyId: row.key_id,
+      tenantId: row.tenant_id,
+      label: row.label,
+      keyHash: row.key_hash,
+      role: (row.role as ApiKeyRecord['role']) ?? 'security_admin',
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at ?? undefined,
+      revokedAt: row.revoked_at ?? undefined,
+    };
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
@@ -111,16 +124,33 @@ export class PostgresTenantStore implements TenantStore {
     );
     const row = rows[0];
     if (!row) return null;
-    return {
-      keyId: row.key_id,
-      tenantId: row.tenant_id,
-      label: row.label,
-      keyHash: row.key_hash,
-      role: (row.role as ApiKeyRecord['role']) ?? 'security_admin',
-      createdAt: row.created_at,
-      lastUsedAt: row.last_used_at ?? undefined,
-      revokedAt: row.revoked_at ?? undefined,
-    };
+    return this.mapApiKeyRow(row);
+  }
+
+  async getApiKeyById(tenantId: string, keyId: string): Promise<ApiKeyRecord | null> {
+    const { rows } = await this.pool.query<ApiKeyRow>(
+      `SELECT * FROM api_keys WHERE key_id = $1 AND tenant_id = $2`,
+      [keyId, tenantId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return this.mapApiKeyRow(row);
+  }
+
+  async listApiKeys(tenantId: string): Promise<ApiKeyRecord[]> {
+    const { rows } = await this.pool.query<ApiKeyRow>(
+      `SELECT * FROM api_keys WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      [tenantId],
+    );
+    return rows.map((row) => this.mapApiKeyRow(row));
+  }
+
+  async revokeApiKey(tenantId: string, keyId: string, at: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE api_keys SET revoked_at = $1
+       WHERE key_id = $2 AND tenant_id = $3 AND revoked_at IS NULL`,
+      [at, keyId, tenantId],
+    );
   }
 
   async touchApiKey(keyId: string, at: string): Promise<void> {

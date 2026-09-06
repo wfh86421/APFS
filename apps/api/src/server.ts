@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import {
@@ -7,6 +8,7 @@ import {
   type ReviewStatus,
   type RiskEvent,
   type RiskEventType,
+  policyDecisionForRiskLevel,
   validateFieldDefinition,
   validateEnvironmentReport,
   validateRiskEvent,
@@ -24,6 +26,8 @@ import { scanPorts } from '@shieldscan/port-scanner';
 import {
   createRepository,
   createRiskRepository,
+  type DeviceFingerprint,
+  type NetworkSignal,
   type ReportRepository,
   type RiskRepository,
   type StoredReport,
@@ -51,6 +55,17 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
   .filter(Boolean);
 void app.register(cors, {
   origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+});
+
+/* 安全 headers：全端點套用（防 clickjacking / MIME sniffing / 協議降級）。 */
+app.addHook('onRequest', async (_request, reply) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('Referrer-Policy', 'no-referrer');
+  reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // API 只回傳 JSON：default-src 'none' 不影響功能，並封鎖 frame 嵌入與 base URI 劫持。
+  reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
 });
 
 const port = Number(process.env.PORT ?? 3001);
@@ -100,16 +115,8 @@ function buildScoringEngine(): ScoringEngine {
 }
 
 function scoreToPolicy(score: ScoreResult): PolicyDecision {
-  switch (score.riskLevel) {
-    case 'critical':
-      return 'block';
-    case 'high':
-      return 'challenge';
-    case 'medium':
-      return 'review';
-    default:
-      return 'allow';
-  }
+  // 與前端 demo 共用同一對應（core-schema policyDecisionForRiskLevel），避免決策表漂移。
+  return policyDecisionForRiskLevel(score.riskLevel);
 }
 
 function requestIp(request: {
@@ -142,6 +149,12 @@ function roleOfRequest(
   return typeof header === 'string' && (ADMIN_ROLES as readonly string[]).includes(header)
     ? (header as AdminRoleValue)
     : base;
+}
+
+/** 金鑰管理授權：security_admin 可管任何金鑰；其餘角色只能管「同角色」金鑰（與簽發規則對稱）。 */
+function canAdminKey(caller: AdminRoleValue, target?: string): boolean {
+  if (caller === 'security_admin') return true;
+  return (target ?? 'security_admin') === caller;
 }
 
 function maskIp(ip?: string): string | undefined {
@@ -277,6 +290,75 @@ function extractVisitorProfile(report: EnvironmentReport): VisitorProfile {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* /v1/devices 資料接線：收案時把設備指紋/網路訊號寫入 risk 表          */
+/* ------------------------------------------------------------------ */
+
+/** 取報告中穩定訊號的雜湊（canvas/webgl/webgpu/audio/fonts/ua）。 */
+function stableSignalHashes(report: EnvironmentReport): { key: string; hash: string }[] {
+  const keys = ['canvas', 'webgl', 'webgpu', 'audio', 'fonts', 'ua'] as const;
+  const out: { key: string; hash: string }[] = [];
+  for (const key of keys) {
+    const hash = report.signals.find((s) => s.key === key)?.hash;
+    if (typeof hash === 'string' && hash.length > 0) out.push({ key, hash });
+  }
+  return out;
+}
+
+/**
+ * 從報告萃取設備指紋紀錄。fingerprintHash 以 tenantId + 穩定訊號雜湊計算，
+ * 避免跨租戶共用同一 PK 造成租戶間覆寫；無穩定特徵時回傳 null（不寫入）。
+ */
+function buildDeviceFingerprint(
+  report: EnvironmentReport,
+  tenantId: string,
+): DeviceFingerprint | null {
+  const stable = stableSignalHashes(report);
+  if (stable.length === 0) return null;
+  const find = (key: string) => stable.find((s) => s.key === key)?.hash;
+  const material = `${tenantId}|${stable.map((s) => `${s.key}:${s.hash}`).join('|')}`;
+  const days = report.consent.retentionDays ?? 0;
+  return {
+    fingerprintHash: createHash('sha256').update(material).digest('hex'),
+    tenantId,
+    canvasHash: find('canvas'),
+    webglHash: find('webgl'),
+    webgpuHash: find('webgpu'),
+    audioHash: find('audio'),
+    firstSeen: report.createdAt,
+    lastSeen: report.createdAt,
+    sessionCount: 1,
+    ipCount: 1,
+    retentionUntil:
+      days > 0 ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : undefined,
+  };
+}
+
+/** 從報告/伺服器網路分析萃取結構化網路訊號。 */
+function buildNetworkSignal(
+  report: EnvironmentReport,
+  tenantId: string,
+  clientIp: string,
+  network: NetworkAnalysis,
+): NetworkSignal {
+  return {
+    sessionId: report.sessionId,
+    reportId: report.reportId,
+    tenantId,
+    ipAddress: clientIp,
+    isp: network.geo?.isp,
+    asn: network.geo?.asn,
+    country: network.geo?.country,
+    proxyDetected: network.proxy,
+    vpnDetected: network.vpn,
+    torDetected: network.tor,
+    webrtcIp: network.webrtc.publicIp,
+    webrtcMismatch: network.webrtc.consistency === 'leak' || undefined,
+    dnsLeakStatus: network.dnsLeak ? (network.dnsLeak.detected ? 'detected' : 'clean') : undefined,
+    dnsLeakList: network.dnsLeak?.dnsServers,
+  };
+}
+
 async function analyzeRequestNetwork(
   ip: string,
   report?: EnvironmentReport,
@@ -388,7 +470,86 @@ app.post('/v1/tenant/keys', async (request, reply) => {
     body.label ?? 'additional',
     requested,
   );
+  await riskRepository.appendAuditLog({
+    action: 'api-key-issued',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: { keyId: issued.keyId, label: body.label ?? 'additional', role: requested, actorKeyId: auth.key.keyId },
+  });
   return reply.code(201).send({ ...issued, role: requested, note: '明文僅此一次顯示。' });
+});
+
+/** 列出目前租戶的 API Key（不含明文與 hash）。 */
+app.get('/v1/tenant/keys', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const keys = await tenantService.listApiKeys(auth.tenant.tenantId);
+  return { keys };
+});
+
+/** 撤銷 API Key：撤銷後立即失效（冪等，重複撤銷回 200 與既有 revokedAt）。 */
+app.post('/v1/tenant/keys/:keyId/revoke', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { keyId } = request.params as { keyId: string };
+  const target = await tenantService.getApiKey(auth.tenant.tenantId, keyId);
+  if (!target) {
+    return reply.code(404).send({ error: 'not_found', message: '查無此 API Key' });
+  }
+  if (!canAdminKey(roleOfRequest(request, auth), target.role)) {
+    return reply
+      .code(403)
+      .send({ error: 'forbidden', message: '只能撤銷不高於自身角色的金鑰' });
+  }
+  const result = await tenantService.revokeApiKey(auth.tenant.tenantId, keyId);
+  if (!result.found) {
+    return reply.code(404).send({ error: 'not_found', message: '查無此 API Key' });
+  }
+  await riskRepository.appendAuditLog({
+    action: 'api-key-revoked',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: { keyId, label: target.label, role: target.role, actorKeyId: auth.key.keyId },
+  });
+  return { key: { keyId, label: target.label, revokedAt: result.revokedAt } };
+});
+
+/** 輪換 API Key：撤銷舊金鑰並簽發同角色新金鑰（明文僅回傳一次）。 */
+app.post('/v1/tenant/keys/:keyId/rotate', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { keyId } = request.params as { keyId: string };
+  const target = await tenantService.getApiKey(auth.tenant.tenantId, keyId);
+  if (!target) {
+    return reply.code(404).send({ error: 'not_found', message: '查無此 API Key' });
+  }
+  if (target.revokedAt) {
+    return reply.code(400).send({ error: 'key_revoked', message: '已撤銷的金鑰無法輪換，請直接簽發新金鑰' });
+  }
+  if (!canAdminKey(roleOfRequest(request, auth), target.role)) {
+    return reply
+      .code(403)
+      .send({ error: 'forbidden', message: '只能輪換不高於自身角色的金鑰' });
+  }
+  const result = await tenantService.rotateApiKey(auth.tenant.tenantId, keyId);
+  if (!result.found) {
+    return reply.code(404).send({ error: 'not_found', message: '查無此 API Key' });
+  }
+  await riskRepository.appendAuditLog({
+    action: 'api-key-rotated',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: {
+      oldKeyId: keyId,
+      newKeyId: result.issued?.keyId,
+      label: target.label,
+      role: target.role,
+      actorKeyId: auth.key.keyId,
+    },
+  });
+  return reply
+    .code(201)
+    .send({ ...result.issued, role: result.role, revokedOldKeyId: keyId, note: '舊金鑰已撤銷；新金鑰明文僅此一次顯示。' });
 });
 
 app.get('/v1/billing/current', async (request, reply) => {
@@ -780,6 +941,16 @@ app.post('/v1/reports', async (request, reply) => {
     });
   }
 
+  // /v1/devices 資料接線：僅具身分租戶的收案寫入設備指紋與網路訊號。
+  // 匿名（tenant NULL）不寫入，維持「租戶資料 vs 公開資料」的 owner 邊界。
+  if (auth) {
+    const device = buildDeviceFingerprint(report, auth.tenant.tenantId);
+    if (device) {
+      await riskRepository.upsertDeviceFingerprint(device);
+    }
+    await riskRepository.upsertNetworkSignal(buildNetworkSignal(report, auth.tenant.tenantId, ip, network));
+  }
+
   if (auth) {
     await tenantService.recordUsage(auth.tenant.tenantId, 1, 'report');
   }
@@ -965,6 +1136,37 @@ app.get('/v1/audit-logs', async (request, reply) => {
 app.get('/v1/plugin-profile', async (_request, reply) => {
   reply.code(501).send({ error: 'not_implemented', message: 'Plugin Registry 尚未接入' });
 });
+
+/* ------------------------------------------------------------------ */
+/* 保留期清理 job（code review P1）：定時刪除已過期報告                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 啟動保留期清理：僅在接 Postgres（DATABASE_URL）時生效；in-memory（測試/無 URL）不啟動。
+ * 可用 ENABLE_EXPIRY_CLEANUP=0 停用、EXPIRY_CLEANUP_INTERVAL_MS 調整間隔（預設 6 小時）。
+ * timer.unref()：不阻擋 process 結束（與現行無 graceful shutdown 的結構相容）。
+ */
+function startExpiryCleanup(): void {
+  if ((process.env.ENABLE_EXPIRY_CLEANUP ?? '1') === '0') return;
+  if (!databaseUrl) return; // in-memory 儲存無 expires_at 語意，跳過
+  const intervalMs = Math.max(
+    60_000,
+    Number(process.env.EXPIRY_CLEANUP_INTERVAL_MS ?? 6 * 60 * 60 * 1000),
+  );
+  const run = async () => {
+    try {
+      const deleted = await repository.deleteExpiredReports(new Date().toISOString());
+      if (deleted > 0) app.log.info({ deleted }, 'expired reports purged');
+    } catch (err) {
+      app.log.error({ err }, 'expiry cleanup job failed');
+    }
+  };
+  void run();
+  const timer = setInterval(() => void run(), intervalMs);
+  timer.unref();
+}
+
+startExpiryCleanup();
 
 app.listen({ port, host: '0.0.0.0' }, (err) => {
   if (err) {

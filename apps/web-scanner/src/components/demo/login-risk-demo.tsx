@@ -14,7 +14,7 @@ import {
   webgpuModule,
   webrtcModule,
 } from '@shieldscan/browser-sdk';
-import type { EnvironmentReport } from '@shieldscan/core-schema';
+import { policyDecisionForRiskLevel, type EnvironmentReport, type PolicyDecision } from '@shieldscan/core-schema';
 import type { ScoreResult } from '@shieldscan/scoring-engine';
 import { analyzeSignals } from '../../lib/analyze';
 import { apiBaseUrl } from '../../lib/api';
@@ -32,11 +32,19 @@ const MODULES = [
   webrtcModule,
 ];
 
+const POLICY_LABELS: Record<PolicyDecision, string> = {
+  allow: '允許登入',
+  review: '人工複核',
+  challenge: '要求二次驗證',
+  limit: '限制存取',
+  block: '拒絕登入',
+  log_only: '僅記錄',
+};
+
+/** 與伺服器共用同一決策表（core-schema policyDecisionForRiskLevel），避免 medium/high 交錯漂移。 */
 function decisionFor(riskLevel: ScoreResult['riskLevel']) {
-  if (riskLevel === 'low') return { label: '允許登入', policy: 'allow' };
-  if (riskLevel === 'medium') return { label: '要求二次驗證', policy: 'challenge' };
-  if (riskLevel === 'high') return { label: '人工複核', policy: 'review' };
-  return { label: '拒絕登入', policy: 'block' };
+  const policy = policyDecisionForRiskLevel(riskLevel);
+  return { label: POLICY_LABELS[policy] ?? policy, policy };
 }
 
 export default function LoginRiskDemo() {

@@ -54,6 +54,8 @@ export interface ReportRepository {
   deleteReport(tenantId: string, reportId: string): Promise<boolean>;
   /** 刪除訪客及其全部報告（被遺忘權）。回傳是否真的刪除了資料。 */
   deleteVisitor(tenantId: string, visitorId: string): Promise<boolean>;
+  /** 保留期清理：刪除 expires_at 早於 before 的報告（平台層 job 用）。回傳刪除筆數。 */
+  deleteExpiredReports(before: string): Promise<number>;
 }
 
 export interface RiskEventFilter {

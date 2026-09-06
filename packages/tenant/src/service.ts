@@ -22,6 +22,20 @@ export interface IssuedApiKey {
   label: string;
 }
 
+/** 金鑰清單 DTO：不含 keyHash，避免外洩比對值。 */
+export interface ApiKeySummary {
+  keyId: string;
+  label: string;
+  role: AdminRole;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
+export type KeyOpResult =
+  | { found: true; revokedAt?: string; issued?: IssuedApiKey; role?: AdminRole }
+  | { found: false };
+
 export interface VerifiedApiKey {
   tenant: Tenant;
   key: Awaited<ReturnType<TenantStore['getApiKeyByHash']>>;
@@ -60,6 +74,38 @@ export class TenantService {
       createdAt: new Date().toISOString(),
     });
     return { apiKey, keyId, label };
+  }
+
+  async listApiKeys(tenantId: string): Promise<ApiKeySummary[]> {
+    const keys = await this.store.listApiKeys(tenantId);
+    return keys.map((record) => this.toSummary(record));
+  }
+
+  async getApiKey(tenantId: string, keyId: string): Promise<ApiKeySummary | null> {
+    const record = await this.store.getApiKeyById(tenantId, keyId);
+    return record ? this.toSummary(record) : null;
+  }
+
+  /** 撤銷金鑰：不存在回 found:false；已撤銷則冪等回傳既有 revokedAt。 */
+  async revokeApiKey(tenantId: string, keyId: string): Promise<KeyOpResult> {
+    const key = await this.store.getApiKeyById(tenantId, keyId);
+    if (!key) return { found: false };
+    if (key.revokedAt) return { found: true, revokedAt: key.revokedAt };
+    const at = new Date().toISOString();
+    await this.store.revokeApiKey(tenantId, keyId, at);
+    return { found: true, revokedAt: at };
+  }
+
+  /** 輪換金鑰：撤銷舊金鑰並簽發同角色新金鑰（舊金鑰立即失效）。 */
+  async rotateApiKey(tenantId: string, keyId: string): Promise<KeyOpResult> {
+    const key = await this.store.getApiKeyById(tenantId, keyId);
+    if (!key) return { found: false };
+    if (key.revokedAt) return { found: true, revokedAt: key.revokedAt };
+    const at = new Date().toISOString();
+    await this.store.revokeApiKey(tenantId, keyId, at);
+    const role = (key.role ?? 'security_admin') as AdminRole;
+    const issued = await this.issueApiKey(tenantId, key.label ?? 'additional', role);
+    return { found: true, revokedAt: at, issued, role };
   }
 
   async verifyApiKey(apiKey: string): Promise<VerifiedApiKey | null> {
@@ -134,5 +180,23 @@ export class TenantService {
 
   private hashKey(apiKey: string): string {
     return createHash('sha256').update(apiKey).digest('hex');
+  }
+
+  private toSummary(record: {
+    keyId: string;
+    label: string;
+    role?: AdminRole;
+    createdAt: string;
+    lastUsedAt?: string;
+    revokedAt?: string;
+  }): ApiKeySummary {
+    return {
+      keyId: record.keyId,
+      label: record.label,
+      role: (record.role ?? 'security_admin') as AdminRole,
+      createdAt: record.createdAt,
+      lastUsedAt: record.lastUsedAt,
+      revokedAt: record.revokedAt,
+    };
   }
 }
