@@ -8,9 +8,11 @@ const nextConfig = {
   // 全站安全 headers（code review P1：CSP/防嵌/防 sniffing）。
   // CSP 採漸進式：保留 Next 所需 unsafe-inline（script/style）；非ce 化嚴格 CSP 列為後續。
   async headers() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    const connect = ["'self'"];
-    if (apiUrl) connect.push(apiUrl);
+    // 與 src/lib/api.ts 的 apiBaseUrl() fallback 保持一致：config 評估時讀不到
+    // NEXT_PUBLIC_API_URL 時，CSP connect-src 仍須放行預設的本機 API，否則
+    // standard/stored 模式的上送會被 CSP 擋下（E2E/真實瀏覽器皆然）。
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+    const connect = ["'self'", apiUrl];
     return [
       {
         source: '/:path*',
