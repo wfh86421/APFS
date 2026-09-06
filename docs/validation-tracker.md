@@ -78,3 +78,4 @@
 - 首頁完整化：掃描結果顯示隱私軌/欺詐軌分數、風險因素解釋與「下一步」CTA（註冊／登入風控 Demo／定價）；首頁頂部加入產品入口。
 - 首頁區塊管理（2026-09-06）：`/admin/homepage` 可對首頁 10 個區塊開啟/關閉、顯示/隱藏、排序；設定存 localStorage，下次開啟一致。
 - 管理入口合併＋DB 持久化（2026-09-06）：`/admin` 管理者工作台改頁籤（後台模組／首頁區塊）；新增 `site_configs` 表與 `/v1/admin/configs/:key`、`/v1/public/config/:key`；workbench/homepage 設定填 API Key 後同步資料庫，公開首頁從資料庫讀取。
+- 後台模組資料化（2026-09-06）：新增 `module-data.ts` 資料字典，6＋1 每個模組對應 API 與欄位清單，可在模組列展開檢視；後續可由 field_definitions/Plugin Registry 動態供應。

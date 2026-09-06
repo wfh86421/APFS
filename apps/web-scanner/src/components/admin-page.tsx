@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ModuleItem, ModuleKind, WorkspaceConfig } from '../modules/catalog';
 import { KIND_LABEL } from '../modules/catalog';
+import { moduleDataRef } from '../modules/module-data';
 import {
   isWorkspaceConfigLike,
   loadWorkspaceConfig,
@@ -28,6 +29,24 @@ function modulesOf(config: WorkspaceConfig, categoryId: string): ModuleItem[] {
 
 function kindBadge(kind: ModuleKind) {
   return <span className="admin-kind">{KIND_LABEL[kind]}</span>;
+}
+
+function ModuleDataDetails({ module }: { module: ModuleItem }) {
+  const ref = moduleDataRef(module.id);
+  if (!ref) return null;
+  return (
+    <details className="admin-module-data">
+      <summary>資料欄位＋API（{ref.fields.length}）</summary>
+      <p className="admin-module-api">API：{ref.api}</p>
+      <ul>
+        {ref.fields.map((field) => (
+          <li key={field.fieldPath}>
+            <code>{field.fieldPath}</code> — {field.label}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export default function AdminPage() {
@@ -192,6 +211,7 @@ export default function AdminPage() {
                 {!category.collapsed && (
                   <div className="admin-modules">
                     {categoryModules.map((module, moduleIndex) => (
+                      <div key={module.id} className="admin-module-wrap">
                       <div
                         key={module.id}
                         className={`admin-module${module.visible ? '' : ' is-hidden'}${
@@ -238,6 +258,8 @@ export default function AdminPage() {
                         >
                           ↓
                         </button>
+                      </div>
+                      <ModuleDataDetails module={module} />
                       </div>
                     ))}
                   </div>
