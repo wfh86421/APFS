@@ -329,7 +329,10 @@ ALTER TABLE audit_logs  ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_review_tenant ON review_cases(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_tenant  ON audit_logs(tenant_id);
 
--- =====================================================================CREATE TABLE IF NOT EXISTS site_configs (
+-- =====================================================================
+-- 公開站台設定（單一全域列）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS site_configs (
     config_key   VARCHAR(128) PRIMARY KEY,
     payload      JSONB NOT NULL,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
