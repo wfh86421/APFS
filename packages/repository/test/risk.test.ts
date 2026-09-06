@@ -16,7 +16,7 @@ const databaseUrl = process.env.DATABASE_URL;
 function makeRiskEvent(overrides: Partial<RiskEvent> = {}): RiskEvent {
   return {
     eventId: crypto.randomUUID(),
-    tenantId: 'tenant_x',
+    tenantId: crypto.randomUUID(),
     sessionId: 'session_risk',
     reportId: crypto.randomUUID(),
     eventType: 'open_ports',
