@@ -13,10 +13,16 @@ import {
 
 const databaseUrl = process.env.DATABASE_URL;
 
+/**
+ * risk 表 tenant_id 皆為 UUID 型別：測試 tenant 一律用合法 UUID，
+ * 否則真實 Postgres（CI/本機 docker）會回 22P02 invalid input syntax for type uuid。
+ */
+const RISK_TENANT_ID = '40000000-0000-4000-8000-000000000001';
+
 function makeRiskEvent(overrides: Partial<RiskEvent> = {}): RiskEvent {
   return {
     eventId: crypto.randomUUID(),
-    tenantId: 'tenant-risk',
+    tenantId: RISK_TENANT_ID,
     sessionId: 'session_risk',
     reportId: crypto.randomUUID(),
     eventType: 'open_ports',
@@ -54,7 +60,7 @@ function makeFieldDefinition(): FieldDefinition {
 function makeReviewCase(): ReviewCase {
   return {
     caseId: crypto.randomUUID(),
-    tenantId: 'tenant-risk',
+    tenantId: RISK_TENANT_ID,
     sessionId: 'session_review',
     reportId: crypto.randomUUID(),
     riskEventIds: [crypto.randomUUID()],
@@ -89,13 +95,13 @@ test('InMemory 風險事件：插入/依 session 查詢/依 severity 過濾', as
     makeRiskEvent({ eventId: crypto.randomUUID(), sessionId: 's2', severity: 'low' }),
   ]);
 
-  const bySession = await repo.listRiskEvents('tenant-risk', { sessionId: 's1' });
+  const bySession = await repo.listRiskEvents(RISK_TENANT_ID, { sessionId: 's1' });
   assert.equal(bySession.length, 2);
 
-  const highOnly = await repo.listRiskEvents('tenant-risk', { severity: 'high' });
+  const highOnly = await repo.listRiskEvents(RISK_TENANT_ID, { severity: 'high' });
   assert.equal(highOnly.length, 1);
 
-  const osOnly = await repo.listRiskEvents('tenant-risk', { eventType: 'os_mismatch' });
+  const osOnly = await repo.listRiskEvents(RISK_TENANT_ID, { eventType: 'os_mismatch' });
   assert.equal(osOnly.length, 1);
   assert.equal(osOnly[0]?.confidence, 'medium');
 });
@@ -117,7 +123,7 @@ test('InMemory 設備指紋：upsert 累計 session/ip 並可依 hash 查詢', a
   const hash = 'fp-sha256-abc';
   await repo.upsertDeviceFingerprint({
     fingerprintHash: hash,
-    tenantId: 'tenant-risk',
+    tenantId: RISK_TENANT_ID,
     canvasHash: 'canvas-1',
     webglHash: 'webgl-1',
     sessionCount: 1,
@@ -126,7 +132,7 @@ test('InMemory 設備指紋：upsert 累計 session/ip 並可依 hash 查詢', a
   });
   await repo.upsertDeviceFingerprint({
     fingerprintHash: hash,
-    tenantId: 'tenant-risk',
+    tenantId: RISK_TENANT_ID,
     sessionCount: 1,
     ipCount: 2,
     lastSeen: '2026-09-01T08:00:00+08:00',
@@ -138,7 +144,7 @@ test('InMemory 設備指紋：upsert 累計 session/ip 並可依 hash 查詢', a
   assert.equal(found.ipCount, 3);
   assert.equal(found.canvasHash, 'canvas-1');
 
-  const list = await repo.listDeviceFingerprints('tenant-risk');
+  const list = await repo.listDeviceFingerprints(RISK_TENANT_ID);
   assert.equal(list.length, 1);
   assert.equal(list[0]?.lastSeen, '2026-09-01T08:00:00+08:00');
 });
@@ -147,7 +153,7 @@ test('InMemory 網路訊號：upsert 後可取回結構化 open_ports/dns_leak',
   const repo = new InMemoryRiskRepository();
   await repo.upsertNetworkSignal({
     sessionId: 's-network',
-    tenantId: 'tenant-risk',
+    tenantId: RISK_TENANT_ID,
     ipAddress: '49.214.1.196',
     isp: 'Taiwan Fixed Network',
     openPorts: [22, 3389],
@@ -166,11 +172,11 @@ test('InMemory 審查流程：建立 case、更新 decision、建立 appeal', as
   const reviewCase = makeReviewCase();
   await repo.createReviewCase(reviewCase);
 
-  const list = await repo.listReviewCases('tenant-risk', { status: 'pending' });
+  const list = await repo.listReviewCases(RISK_TENANT_ID, { status: 'pending' });
   assert.equal(list.length, 1);
   assert.equal(list[0]?.caseId, reviewCase.caseId);
 
-  const updated = await repo.updateReviewCase('tenant-risk', reviewCase.caseId, {
+  const updated = await repo.updateReviewCase(RISK_TENANT_ID, reviewCase.caseId, {
     status: 'reviewed',
     decision: 'review',
     reviewerId: 'admin-sec',
@@ -182,15 +188,15 @@ test('InMemory 審查流程：建立 case、更新 decision、建立 appeal', as
   assert.equal(updated.decision, 'review');
 
   await repo.createAppeal(makeAppeal(reviewCase.caseId));
-  const afterAppeal = await repo.getReviewCase('tenant-risk', reviewCase.caseId);
+  const afterAppeal = await repo.getReviewCase(RISK_TENANT_ID, reviewCase.caseId);
   assert.equal(afterAppeal?.appealStatus, 'pending');
 });
 
 test('InMemory 審計日誌：append 後依時間倒序回傳', async () => {
   const repo = new InMemoryRiskRepository();
-  await repo.appendAuditLog({ action: 'report-delete', tenantId: 'tenant-risk', targetIp: '49.214.1.196', metadata: { reportId: 'r1' } });
-  await repo.appendAuditLog({ action: 'review-decision', tenantId: 'tenant-risk', metadata: { caseId: 'c1' } });
-  const logs = await repo.listAuditLogs('tenant-risk');
+  await repo.appendAuditLog({ action: 'report-delete', tenantId: RISK_TENANT_ID, targetIp: '49.214.1.196', metadata: { reportId: 'r1' } });
+  await repo.appendAuditLog({ action: 'review-decision', tenantId: RISK_TENANT_ID, metadata: { caseId: 'c1' } });
+  const logs = await repo.listAuditLogs(RISK_TENANT_ID);
   assert.equal(logs.length, 2);
   assert.equal(logs[0]?.action, 'review-decision');
 });
@@ -215,7 +221,7 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
   try {
     const event = makeRiskEvent();
     await repo.insertRiskEvent(event);
-    const list = await repo.listRiskEvents('tenant-risk', { sessionId: event.sessionId, severity: 'high' });
+    const list = await repo.listRiskEvents(RISK_TENANT_ID, { sessionId: event.sessionId, severity: 'high' });
     assert.ok(list.some((item) => item.eventId === event.eventId));
 
     const definition = makeFieldDefinition();
@@ -225,7 +231,7 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
 
     await repo.upsertDeviceFingerprint({
       fingerprintHash: 'fp-ci-001',
-      tenantId: 'tenant-risk',
+      tenantId: RISK_TENANT_ID,
       sessionCount: 1,
       ipCount: 1,
     });
@@ -233,7 +239,7 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
 
     await repo.upsertNetworkSignal({
       sessionId: 'session-network-ci',
-      tenantId: 'tenant-risk',
+      tenantId: RISK_TENANT_ID,
       openPorts: [22],
       dnsLeakList: ['175.96.61.48'],
     });
@@ -241,10 +247,10 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
 
     const reviewCase = makeReviewCase();
     await repo.createReviewCase(reviewCase);
-    assert.ok(await repo.getReviewCase('tenant-risk', reviewCase.caseId));
+    assert.ok(await repo.getReviewCase(RISK_TENANT_ID, reviewCase.caseId));
     await repo.createAppeal(makeAppeal(reviewCase.caseId));
-    await repo.appendAuditLog({ action: 'review-decision', tenantId: 'tenant-risk', metadata: { caseId: reviewCase.caseId } });
-    assert.ok((await repo.listAuditLogs('tenant-risk')).length >= 1);
+    await repo.appendAuditLog({ action: 'review-decision', tenantId: RISK_TENANT_ID, metadata: { caseId: reviewCase.caseId } });
+    assert.ok((await repo.listAuditLogs(RISK_TENANT_ID)).length >= 1);
   } finally {
     await repo.close();
   }

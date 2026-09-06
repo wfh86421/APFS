@@ -11,6 +11,12 @@ import { PostgresReportRepository } from '@shieldscan/repository';
  */
 const databaseUrl = process.env.DATABASE_URL;
 
+/**
+ * tenant_id 欄位為 UUID 型別：整合測試必須用合法 UUID，
+ * 否則真實 Postgres（CI/本機 docker）會回 22P02 invalid input syntax for type uuid。
+ */
+const TENANT_ID = '30000000-0000-4000-8000-000000000001';
+
 function makeReport(): EnvironmentReport {
   const now = new Date().toISOString();
   return {
@@ -18,7 +24,7 @@ function makeReport(): EnvironmentReport {
     schemaVersion: SCHEMA_VERSION,
     sessionId: crypto.randomUUID(),
     subjectId: 'ci-visitor',
-    tenantId: 'ci-tenant',
+    tenantId: TENANT_ID,
     source: 'web',
     createdAt: now,
     consent: { mode: 'stored', retentionDays: 90 },
@@ -65,13 +71,13 @@ test('PostgreSQL 儲存/查詢/歷史/訪客（執行期驗證）', { skip: !dat
       retentionDays: 90,
     });
 
-    const stored = await repo.getReport('ci-tenant', report.reportId);
+    const stored = await repo.getReport(TENANT_ID, report.reportId);
     assert.ok(stored);
     assert.equal(stored.privacyScore, 85);
     assert.equal(stored.clientIp, '49.214.1.196');
     assert.equal(stored.signals.length, 1);
 
-    const history = await repo.listReportsByVisitor('ci-tenant', 'ci-visitor');
+    const history = await repo.listReportsByVisitor(TENANT_ID, 'ci-visitor');
     assert.ok(history.length >= 1);
 
     await repo.upsertVisitor('ci-visitor', {
@@ -80,7 +86,7 @@ test('PostgreSQL 儲存/查詢/歷史/訪客（執行期驗證）', { skip: !dat
       scanCount: 1,
       ipHistory: ['49.214.1.196'],
     });
-    const visitor = await repo.getVisitor('ci-tenant', 'ci-visitor');
+    const visitor = await repo.getVisitor(TENANT_ID, 'ci-visitor');
     assert.ok(visitor);
     assert.equal(visitor.canvasHash, 'abc123');
 
