@@ -8,7 +8,11 @@ test.describe('ShieldScan 檢測網站（Phase 1 E2E）', () => {
     await expect(page.getByText('資料使用同意')).toBeVisible();
     await expect(page.getByLabel('僅本機（local-only）')).toBeChecked();
     await expect(page.getByRole('button', { name: '開始掃描' })).toBeVisible();
-    await expect(page.getByRole('link', { name: '隱私政策' })).toHaveAttribute('href', '/privacy');
+    // 首頁同時存在 consent-banner 與 footer 兩處「隱私政策」連結（同為 /privacy），
+    // 指定 footer 避免 strict mode violation。
+    await expect(
+      page.locator('footer').getByRole('link', { name: '隱私政策' }),
+    ).toHaveAttribute('href', '/privacy');
   });
 
   test('同意模式選擇會持久化（localStorage）', async ({ page }) => {
