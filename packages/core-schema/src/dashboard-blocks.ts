@@ -32,6 +32,7 @@ export interface AdminPageDef {
   /** 既有路由，例如 /admin/overview */
   route: string;
   title: string;
+  icon: string;
   description: string;
   /** restricted＝整頁僅 security_admin 可見（沿用現行），不可由租戶放寬。 */
   accessLevel: BlockAccessLevel;
@@ -215,6 +216,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'overview',
     route: '/admin/overview',
     title: '總覽',
+    icon: '📊',
     description: 'KPI 卡、趨勢、近期高風險。',
     accessLevel: 'normal',
   },
@@ -222,6 +224,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'reports',
     route: '/admin/reports',
     title: '報告',
+    icon: '📄',
     description: '篩選列、列表、快速處置；詳情頁整頁固定不拆。',
     accessLevel: 'normal',
   },
@@ -229,6 +232,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'events',
     route: '/admin/events',
     title: '風險事件',
+    icon: '🚨',
     description: '事件過濾、串流與統計。',
     accessLevel: 'normal',
   },
@@ -236,6 +240,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'devices',
     route: '/admin/devices',
     title: '設備指紋',
+    icon: '🧬',
     description: '設備統計與清單（清單預設停用）。',
     accessLevel: 'normal',
   },
@@ -243,6 +248,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'homepage',
     route: '/admin/homepage',
     title: '首頁內容',
+    icon: '📣',
     description: '公開首頁 hero 與區段啟停（全域語意；寫入限 security_admin）。',
     accessLevel: 'normal',
   },
@@ -250,6 +256,7 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     key: 'governance',
     route: '/admin/governance',
     title: '治理 / 稽核',
+    icon: '🛡️',
     description: '稽核串流與角色摘要；整頁 restricted，可見性不可由租戶放寬。',
     accessLevel: 'restricted',
   },
