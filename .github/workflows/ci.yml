@@ -47,17 +47,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm -r typecheck
-
+      # Build 先行：workspace 套件的 types 指向各自 dist/，
+      # 乾淨 checkout 在 Build 前執行 typecheck 會找不到 dist/*.d.ts（TS2307）。
       - name: Build
         run: pnpm -r build
 
-      - name: Unit tests
-        run: pnpm test
+      - name: Typecheck
+        run: pnpm -r typecheck
 
+      # schema 先套用：Unit tests 內含 repository 的 Postgres 整合測試，
+      # 需表已存在，避免在空 schema 上執行而失敗。
       - name: Apply schema（Postgres service）
         run: node scripts/init-db.mjs
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Postgres repository integration test
         run: pnpm test:postgres
