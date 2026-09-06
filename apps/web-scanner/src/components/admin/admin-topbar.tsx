@@ -38,7 +38,9 @@ export default function AdminTopbar({
   onToggleDesktop: () => void;
 }) {
   const pathname = usePathname();
-  const title = TITLES[pathname] ?? '管理者';
+  const title =
+    TITLES[pathname] ??
+    (pathname.startsWith('/admin/reports/') ? '報告詳情' : '管理者');
   return (
     <header className="admin-topbar">
       <div className="admin-topbar-left">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { apiBaseUrl } from '../../lib/api';
 
 interface ListReport {
@@ -86,7 +87,9 @@ export default function AdminReportsList() {
             <tbody>
               {reports.map((report) => (
                 <tr key={report.reportId}>
-                  <td>{report.reportId}</td>
+                  <td>
+                    <Link href={`/admin/reports/${report.reportId}`}>{report.reportId}</Link>
+                  </td>
                   <td>{report.sessionId}</td>
                   <td>{report.clientIp ?? '-'}</td>
                   <td>{report.privacyScore ?? '-'}</td>
