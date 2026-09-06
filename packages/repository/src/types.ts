@@ -43,16 +43,17 @@ export interface StoredReport extends EnvironmentReport {
 
 export interface ReportRepository {
   saveReport(report: EnvironmentReport, meta?: ReportMeta): Promise<void>;
-  getReport(reportId: string): Promise<StoredReport | null>;
+  /** 讀取單筆報告（限 tenantId 所屬；匿名 NULL 資料不可見）。 */
+  getReport(tenantId: string, reportId: string): Promise<StoredReport | null>;
   countReports(tenantId?: string): Promise<number>;
   listReportsByTenant(tenantId: string, limit?: number): Promise<StoredReport[]>;
-  listReportsByVisitor(visitorId: string, limit?: number): Promise<StoredReport[]>;
+  listReportsByVisitor(tenantId: string, visitorId: string, limit?: number): Promise<StoredReport[]>;
   upsertVisitor(visitorId: string, profile: VisitorProfile): Promise<void>;
-  getVisitor(visitorId: string): Promise<VisitorProfile | null>;
+  getVisitor(tenantId: string, visitorId: string): Promise<VisitorProfile | null>;
   /** 刪除單筆報告（GDPR/個資刪除請求）。回傳是否真的刪除了資料。 */
-  deleteReport(reportId: string): Promise<boolean>;
+  deleteReport(tenantId: string, reportId: string): Promise<boolean>;
   /** 刪除訪客及其全部報告（被遺忘權）。回傳是否真的刪除了資料。 */
-  deleteVisitor(visitorId: string): Promise<boolean>;
+  deleteVisitor(tenantId: string, visitorId: string): Promise<boolean>;
 }
 
 export interface RiskEventFilter {
@@ -134,6 +135,7 @@ export interface ReviewCasePatch {
 
 export interface AuditLogEntry {
   action: string;
+  tenantId?: string;
   targetIp?: string;
   actorIp?: string;
   metadata?: Record<string, unknown>;
@@ -155,21 +157,22 @@ export interface IpReputation {
 export interface RiskRepository {
   insertRiskEvent(event: RiskEvent): Promise<void>;
   insertRiskEvents(events: RiskEvent[]): Promise<void>;
-  listRiskEvents(filter?: RiskEventFilter): Promise<RiskEvent[]>;
+  /** 風險事件列表：一律以 tenantId 過濾（租戶只能看自己的事件）。 */
+  listRiskEvents(tenantId: string, filter?: RiskEventFilter): Promise<RiskEvent[]>;
   upsertFieldDefinition(definition: FieldDefinition): Promise<void>;
   listFieldDefinitions(limit?: number): Promise<FieldDefinition[]>;
   upsertDeviceFingerprint(device: DeviceFingerprint): Promise<void>;
   getDeviceFingerprint(fingerprintHash: string): Promise<DeviceFingerprint | null>;
-  listDeviceFingerprints(limit?: number): Promise<DeviceFingerprint[]>;
+  listDeviceFingerprints(tenantId: string, limit?: number): Promise<DeviceFingerprint[]>;
   upsertNetworkSignal(signal: NetworkSignal): Promise<void>;
   getNetworkSignal(sessionId: string): Promise<NetworkSignal | null>;
   createReviewCase(caseData: ReviewCase): Promise<void>;
-  listReviewCases(filter?: ReviewCaseFilter): Promise<ReviewCase[]>;
-  getReviewCase(caseId: string): Promise<ReviewCase | null>;
-  updateReviewCase(caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null>;
+  listReviewCases(tenantId: string, filter?: ReviewCaseFilter): Promise<ReviewCase[]>;
+  getReviewCase(tenantId: string, caseId: string): Promise<ReviewCase | null>;
+  updateReviewCase(tenantId: string, caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null>;
   createAppeal(appeal: AppealCase): Promise<void>;
   appendAuditLog(entry: AuditLogEntry): Promise<void>;
-  listAuditLogs(limit?: number): Promise<AuditLogEntry[]>;
+  listAuditLogs(tenantId: string, limit?: number): Promise<AuditLogEntry[]>;
   getIpReputation(ip: string): Promise<IpReputation | null>;
   upsertIpReputation(reputation: IpReputation): Promise<void>;
   getSiteConfig(key: string): Promise<unknown | null>;

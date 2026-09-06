@@ -18,6 +18,7 @@ function makeReport(): EnvironmentReport {
     schemaVersion: SCHEMA_VERSION,
     sessionId: crypto.randomUUID(),
     subjectId: 'ci-visitor',
+    tenantId: 'ci-tenant',
     source: 'web',
     createdAt: now,
     consent: { mode: 'stored', retentionDays: 90 },
@@ -64,13 +65,13 @@ test('PostgreSQL 儲存/查詢/歷史/訪客（執行期驗證）', { skip: !dat
       retentionDays: 90,
     });
 
-    const stored = await repo.getReport(report.reportId);
+    const stored = await repo.getReport('ci-tenant', report.reportId);
     assert.ok(stored);
     assert.equal(stored.privacyScore, 85);
     assert.equal(stored.clientIp, '49.214.1.196');
     assert.equal(stored.signals.length, 1);
 
-    const history = await repo.listReportsByVisitor('ci-visitor');
+    const history = await repo.listReportsByVisitor('ci-tenant', 'ci-visitor');
     assert.ok(history.length >= 1);
 
     await repo.upsertVisitor('ci-visitor', {
@@ -79,7 +80,7 @@ test('PostgreSQL 儲存/查詢/歷史/訪客（執行期驗證）', { skip: !dat
       scanCount: 1,
       ipHistory: ['49.214.1.196'],
     });
-    const visitor = await repo.getVisitor('ci-visitor');
+    const visitor = await repo.getVisitor('ci-tenant', 'ci-visitor');
     assert.ok(visitor);
     assert.equal(visitor.canvasHash, 'abc123');
 

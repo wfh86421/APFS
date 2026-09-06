@@ -9,6 +9,7 @@ function makeReport(overrides: Partial<EnvironmentReport> = {}): EnvironmentRepo
     schemaVersion: SCHEMA_VERSION,
     sessionId: crypto.randomUUID(),
     subjectId: 'visitor-a',
+    tenantId: 'tenant-a',
     source: 'web',
     createdAt: new Date().toISOString(),
     consent: { mode: 'standard', retentionDays: 90 },
@@ -38,18 +39,18 @@ test('save / get / list by visitor', async () => {
 
   await repo.saveReport(report, { clientIp: '49.214.1.196', privacyScore: 85, grade: 'A' });
 
-  const stored = await repo.getReport(report.reportId);
+  const stored = await repo.getReport('tenant-a', report.reportId);
   assert.ok(stored);
   assert.equal(stored.privacyScore, 85);
   assert.equal(stored.clientIp, '49.214.1.196');
 
-  const history = await repo.listReportsByVisitor('visitor-a');
+  const history = await repo.listReportsByVisitor('tenant-a', 'visitor-a');
   assert.equal(history.length, 1);
   const first = history[0];
   assert.ok(first);
   assert.equal(first.reportId, report.reportId);
 
-  const missing = await repo.getReport('nope');
+  const missing = await repo.getReport('tenant-a', 'nope');
   assert.equal(missing, null);
 });
 
@@ -60,7 +61,7 @@ test('visitor upsert 累積 IP 歷史', async () => {
   const report2 = makeReport();
   await repo.saveReport(report2, { clientIp: '203.0.113.5' });
 
-  const history = await repo.listReportsByVisitor('visitor-a');
+  const history = await repo.listReportsByVisitor('tenant-a', 'visitor-a');
   assert.equal(history.length, 2);
 
   await repo.upsertVisitor('visitor-a', {
@@ -77,7 +78,7 @@ test('visitor upsert 累積 IP 歷史', async () => {
     firstSeen: report1.createdAt,
     lastSeen: report2.createdAt,
   });
-  const visitor = await repo.getVisitor('visitor-a');
+  const visitor = await repo.getVisitor('tenant-a', 'visitor-a');
   assert.ok(visitor);
   assert.deepEqual(visitor.ipHistory.sort(), ['203.0.113.5', '49.214.1.196']);
   assert.equal(visitor.scanCount, 2);
@@ -90,7 +91,7 @@ test('list 依時間倒序', async () => {
   await repo.saveReport(older);
   await repo.saveReport(newer);
 
-  const history = await repo.listReportsByVisitor('visitor-a');
+  const history = await repo.listReportsByVisitor('tenant-a', 'visitor-a');
   const first = history[0];
   assert.ok(first);
   assert.equal(first.reportId, newer.reportId);
@@ -108,15 +109,15 @@ test('deleteReport / deleteVisitor（可刪除驗收）', async () => {
     lastSeen: report.createdAt,
   });
 
-  assert.equal(await repo.deleteReport(report.reportId), true);
-  assert.equal(await repo.getReport(report.reportId), null);
-  assert.equal(await repo.deleteReport(report.reportId), false);
+  assert.equal(await repo.deleteReport('tenant-a', report.reportId), true);
+  assert.equal(await repo.getReport('tenant-a', report.reportId), null);
+  assert.equal(await repo.deleteReport('tenant-a', report.reportId), false);
 
   const report2 = makeReport();
   await repo.saveReport(report2);
-  assert.equal(await repo.deleteVisitor('visitor-a'), true);
-  assert.equal(await repo.getVisitor('visitor-a'), null);
-  assert.equal((await repo.listReportsByVisitor('visitor-a')).length, 0);
+  assert.equal(await repo.deleteVisitor('tenant-a', 'visitor-a'), true);
+  assert.equal(await repo.getVisitor('tenant-a', 'visitor-a'), null);
+  assert.equal((await repo.listReportsByVisitor('tenant-a', 'visitor-a')).length, 0);
 });
 
 test('租戶隔離：listReportsByTenant 只看得到自己的報告', async () => {

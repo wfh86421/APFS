@@ -294,6 +294,51 @@ async function analyzeRequestNetwork(
   });
 }
 
+/** 規則→RiskEventType 對照（與 scoring-engine defaultRules id 對應）。 */
+const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
+  canvas_tamper: 'canvas_tampering',
+  os_mismatch: 'os_mismatch',
+  dns_leak: 'dns_leak',
+  webrtc_leak: 'webrtc_mismatch',
+  open_ports_ssh_rdp: 'open_ports',
+  bot_detected: 'bot_suspected',
+};
+
+/** 依評分引擎觸發的規則自動產生 RiskEvent（收案證據鏈的第一環）。 */
+function eventsFromScore(report: EnvironmentReport, score: ScoreResult): RiskEvent[] {
+  const now = new Date().toISOString();
+  return score.explanations.map((explanation) => {
+    const severity =
+      explanation.severity === 'critical'
+        ? 'high'
+        : explanation.severity === 'warning'
+          ? 'medium'
+          : 'info';
+    return {
+      eventId: crypto.randomUUID(),
+      tenantId: report.tenantId,
+      sessionId: report.sessionId,
+      reportId: report.reportId,
+      eventType: RULE_EVENT_TYPE[explanation.ruleId] ?? 'fingerprint_instability',
+      severity,
+      confidence: 'medium',
+      evidenceJson: {
+        rule: explanation.ruleId,
+        track: explanation.track,
+        reason: explanation.reason,
+        points: explanation.points,
+        riskLevel: score.riskLevel,
+        finalScore: score.finalScore,
+      },
+      ruleId: explanation.ruleId,
+      ruleVersion: '1.0.0',
+      scoreImpact: -explanation.points,
+      reviewRequired: explanation.severity !== 'info',
+      detectedAt: now,
+    };
+  });
+}
+
 app.get('/health', async () => ({ status: 'ok', service: 'shieldscan-api' }));
 
 /* ------------------------------------------------------------------ */
@@ -332,19 +377,20 @@ app.post('/v1/tenant/keys', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const body = request.body as { label?: string; role?: AdminRoleValue };
-  const role = body.role ?? 'security_admin';
-  if (!ADMIN_ROLES.includes(role)) {
-    return reply.code(400).send({ error: 'invalid_role' });
+  const callerRole = roleOfAuth(auth);
+  const requested = body.role && ADMIN_ROLES.includes(body.role) ? body.role : callerRole;
+  // 防止低權限金鑰自行升等：只能簽發不高於呼叫者角色的金鑰。
+  if (requested !== callerRole && callerRole !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '只能簽發不高於自身角色的金鑰' });
   }
   const issued = await tenantService.issueApiKey(
     auth.tenant.tenantId,
     body.label ?? 'additional',
-    role,
+    requested,
   );
-  return reply.code(201).send({ ...issued, role, note: '明文僅此一次顯示。' });
+  return reply.code(201).send({ ...issued, role: requested, note: '明文僅此一次顯示。' });
 });
 
-/** 本月用量與發票（需 API Key）。 */
 app.get('/v1/billing/current', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
@@ -401,33 +447,42 @@ app.get('/v1/webhooks', async (request, reply) => {
 app.post('/v1/risk-events', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-
+  // 手動建立風險事件限 security_admin：避免租戶偽造證據鏈。
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '手動建立風險事件限 security_admin' });
+  }
   const body = request.body as unknown;
   const items = Array.isArray(body) ? body : [body];
   if (items.length === 0 || items.length > 200) {
     return reply.code(400).send({ error: 'invalid_payload' });
   }
-
   const events: RiskEvent[] = [];
   for (const item of items) {
     const result = validateRiskEvent(item);
     if (!result.ok) {
-      return reply
-        .code(400)
-        .send({ error: 'invalid_risk_event', issues: result.errors });
+      return reply.code(400).send({ error: 'invalid_risk_event', issues: result.errors });
     }
     events.push({
       ...result.data,
-      tenantId: result.data.tenantId ?? auth.tenant.tenantId,
+      // tenantId 一律以服務端認證身分覆寫，不接受 client 自填（防偽造/跨租戶污染）。
+      tenantId: auth.tenant.tenantId,
     });
   }
   await riskRepository.insertRiskEvents(events);
+  await riskRepository.appendAuditLog({
+    action: 'risk-events-manual',
+    tenantId: auth.tenant.tenantId,
+    metadata: { inserted: events.length },
+  });
   return reply.code(201).send({ inserted: events.length });
 });
 
-/** 公開站台設定（僅讀，無敏感資料；供首頁依管理者配置渲染）。 */
 app.get('/v1/public/config/:key', async (request, reply) => {
   const { key } = request.params as { key: string };
+  // 未授權端點只能讀白名單內的公開 key。
+  if (key !== 'homepage') {
+    return reply.code(404).send({ error: 'config_not_found' });
+  }
   const config = await riskRepository.getSiteConfig(key);
   return { config };
 });
@@ -443,12 +498,16 @@ app.get('/v1/admin/configs/:key', async (request, reply) => {
 app.put('/v1/admin/configs/:key', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '寫入站台設定限 security_admin' });
+  }
   const { key } = request.params as { key: string };
   const body = request.body as { config?: unknown };
   if (body.config === undefined) return reply.code(400).send({ error: 'config_required' });
   await riskRepository.setSiteConfig(key, body.config);
   await riskRepository.appendAuditLog({
     action: 'site-config-update',
+    tenantId: auth.tenant.tenantId,
     metadata: { key },
   });
   return { ok: true };
@@ -457,14 +516,13 @@ app.put('/v1/admin/configs/:key', async (request, reply) => {
 app.get('/v1/risk-events', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-
   const query = request.query as {
     sessionId?: string;
     severity?: 'info' | 'low' | 'medium' | 'high' | 'critical';
     eventType?: string;
     limit?: string;
   };
-  const events = await riskRepository.listRiskEvents({
+  const events = await riskRepository.listRiskEvents(auth.tenant.tenantId, {
     sessionId: query.sessionId,
     severity: query.severity,
     eventType: query.eventType as RiskEventType,
@@ -478,7 +536,7 @@ app.get('/v1/devices', async (request, reply) => {
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const query = request.query as { limit?: string };
   const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
-  const devices = await riskRepository.listDeviceFingerprints(limit);
+  const devices = await riskRepository.listDeviceFingerprints(auth.tenant.tenantId, limit);
   return { devices };
 });
 
@@ -494,6 +552,9 @@ app.get('/v1/network/ip-reputation', async (request, reply) => {
 app.post('/v1/network/ip-reputation', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '寫入 IP 信譽限 security_admin' });
+  }
   const body = request.body as {
     ipRange?: string;
     reputationScore?: number;
@@ -513,6 +574,7 @@ app.post('/v1/network/ip-reputation', async (request, reply) => {
   await riskRepository.upsertIpReputation(reputation);
   await riskRepository.appendAuditLog({
     action: 'ip-reputation-upsert',
+    tenantId: auth.tenant.tenantId,
     targetIp: body.ipRange,
     metadata: { reputationScore: score },
   });
@@ -532,7 +594,9 @@ app.get('/v1/fields', async (request, reply) => {
 app.put('/v1/fields', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '寫入欄位定義限 security_admin' });
+  }
   const result = validateFieldDefinition(request.body);
   if (!result.ok) {
     return reply.code(400).send({ error: 'invalid_field_definition', issues: result.errors });
@@ -541,10 +605,6 @@ app.put('/v1/fields', async (request, reply) => {
   return { ok: true, definition: result.data };
 });
 
-/* ------------------------------------------------------------------ */
-/* 審查流程（Phase 3：review_cases / appeals）                           */
-/* ------------------------------------------------------------------ */
-
 const POLICY_VALUES = ['allow', 'review', 'challenge', 'limit', 'block', 'log_only'];
 const REVIEW_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 type ReviewPriorityValue = (typeof REVIEW_PRIORITIES)[number];
@@ -552,11 +612,9 @@ type ReviewPriorityValue = (typeof REVIEW_PRIORITIES)[number];
 app.post('/v1/reports/:id/review', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
-
   const { id } = request.params as { id: string };
-  const report = await repository.getReport(id);
+  const report = await repository.getReport(auth.tenant.tenantId, id);
   if (!report) return reply.code(404).send({ error: 'report_not_found' });
-
   const body = request.body as {
     reason?: string;
     decision?: string;
@@ -575,9 +633,9 @@ app.post('/v1/reports/:id/review', async (request, reply) => {
   )
     ? (body.priority as ReviewPriorityValue)
     : 'medium';
-
   const reviewCase = {
     caseId: crypto.randomUUID(),
+    tenantId: auth.tenant.tenantId,
     sessionId: report.sessionId,
     reportId: report.reportId,
     riskEventIds: [],
@@ -592,6 +650,7 @@ app.post('/v1/reports/:id/review', async (request, reply) => {
   await riskRepository.createReviewCase(reviewCase);
   await riskRepository.appendAuditLog({
     action: 'review-open',
+    tenantId: auth.tenant.tenantId,
     actorIp: requestIp(request),
     metadata: { reportId: report.reportId, caseId: reviewCase.caseId, reason },
   });
@@ -602,7 +661,7 @@ app.get('/v1/review-cases', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const query = request.query as { status?: string; limit?: string };
-  const cases = await riskRepository.listReviewCases({
+  const cases = await riskRepository.listReviewCases(auth.tenant.tenantId, {
     status: query.status as ReviewStatus | undefined,
     limit: query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : undefined,
   });
@@ -619,7 +678,7 @@ app.put('/v1/review-cases/:caseId', async (request, reply) => {
     reason?: string;
     falsePositiveFlag?: boolean;
   };
-  const updated = await riskRepository.updateReviewCase(caseId, {
+  const updated = await riskRepository.updateReviewCase(auth.tenant.tenantId, caseId, {
     status: body.status as ReviewStatus | undefined,
     decision: body.decision as PolicyDecision | undefined,
     reason: body.reason,
@@ -630,6 +689,7 @@ app.put('/v1/review-cases/:caseId', async (request, reply) => {
   if (!updated) return reply.code(404).send({ error: 'review_case_not_found' });
   await riskRepository.appendAuditLog({
     action: 'review-decision',
+    tenantId: auth.tenant.tenantId,
     actorIp: requestIp(request),
     metadata: { caseId, decision: updated.decision, status: updated.status },
   });
@@ -640,12 +700,11 @@ app.post('/v1/review-cases/:caseId/appeal', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { caseId } = request.params as { caseId: string };
-  const existing = await riskRepository.getReviewCase(caseId);
+  const existing = await riskRepository.getReviewCase(auth.tenant.tenantId, caseId);
   if (!existing) return reply.code(404).send({ error: 'review_case_not_found' });
   const body = request.body as { reason?: string };
   const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
   if (!reason) return reply.code(400).send({ error: 'reason_required' });
-
   const appeal = {
     appealId: crypto.randomUUID(),
     caseId,
@@ -657,10 +716,6 @@ app.post('/v1/review-cases/:caseId/appeal', async (request, reply) => {
   return reply.code(201).send({ appeal });
 });
 
-/* ------------------------------------------------------------------ */
-/* 報告 / 網路 / 掃描                                                   */
-/* ------------------------------------------------------------------ */
-
 app.post('/v1/reports', async (request, reply) => {
   const validation = validateEnvironmentReport(request.body);
   if (!validation.ok) return validationReply(reply, validation);
@@ -668,9 +723,9 @@ app.post('/v1/reports', async (request, reply) => {
   const ip = requestIp(request);
   const report: EnvironmentReport = validation.data;
   const auth = await resolveAuth(request);
-  if (auth && !report.tenantId) report.tenantId = auth.tenant.tenantId;
+  // 服務端永遠以認證身分覆寫 tenantId；匿名上送即平台公共資料（NULL）。
+  report.tenantId = auth?.tenant.tenantId;
 
-  // Phase 3 正式簽章驗證：租戶（SDK 客戶）必須簽章，匿名掃描不強制。
   const integrity = await verifyReportSignature(report, auth?.tenant ?? null);
   if (integrity.required && integrity.verified === false) {
     return reply.code(401).send({
@@ -690,7 +745,6 @@ app.post('/v1/reports', async (request, reply) => {
   const score = await buildScoringEngine().calculate(report, report.issues, DEFAULT_PROFILE);
   const policy = scoreToPolicy(score);
 
-  // 把伺服器端網路分析一併持久化，歷史報告可回溯當時判決。
   const reportToStore: EnvironmentReport = {
     ...report,
     raw: { ...(report.raw as object | undefined), network },
@@ -706,17 +760,22 @@ app.post('/v1/reports', async (request, reply) => {
   visitor.ipHistory = [ip];
   await repository.upsertVisitor(visitor.visitorId, visitor);
 
-  // Phase 3：高風險報告自動進入人工複核（不高風險不自動封鎖）。
+  // 規則命中 → 自動 RiskEvent（證據鏈）；高風險自動開人工複核 case 並回填事件。
+  const events = eventsFromScore(report, score);
+  if (events.length > 0) {
+    await riskRepository.insertRiskEvents(events);
+  }
   if (score.riskLevel === 'high' || score.riskLevel === 'critical') {
     await riskRepository.createReviewCase({
       caseId: crypto.randomUUID(),
+      tenantId: report.tenantId,
       sessionId: report.sessionId,
       reportId: report.reportId,
-      riskEventIds: [],
+      riskEventIds: events.map((event) => event.eventId),
       status: 'pending',
       priority: score.riskLevel === 'critical' ? 'urgent' : 'high',
       openedAt: new Date().toISOString(),
-      reason: `自動開啟審查：risk_level=${score.riskLevel}，需人工複核後再決定是否封鎖`,
+      reason: `自動開啟審查：risk_level=${score.riskLevel}（規則命中 ${events.length} 項），需人工複核後再決定是否封鎖`,
       appealStatus: 'none',
     });
   }
@@ -725,7 +784,6 @@ app.post('/v1/reports', async (request, reply) => {
     await tenantService.recordUsage(auth.tenant.tenantId, 1, 'report');
   }
 
-  // 高風險事件 → Webhook 通知。
   if (score.riskLevel === 'high' || score.riskLevel === 'critical') {
     await fireRiskWebhooks({
       tenantId: auth?.tenant.tenantId,
@@ -777,28 +835,20 @@ app.get('/v1/reports/:id', async (request, reply) => {
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const role = roleOfRequest(request, auth);
   const { id } = request.params as { id: string };
-  const stored = await repository.getReport(id);
+  const stored = await repository.getReport(auth.tenant.tenantId, id);
   if (!stored) return reply.code(404).send({ error: 'report_not_found' });
   return maskStoredReport(stored, role);
 });
 
-/** DELETE /v1/reports/:id：刪除單筆報告（GDPR/個資刪除請求，需 API Key）。 */
 app.delete('/v1/reports/:id', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { id } = request.params as { id: string };
-  const deleted = await repository.deleteReport(id);
+  const deleted = await repository.deleteReport(auth.tenant.tenantId, id);
   if (!deleted) return reply.code(404).send({ error: 'report_not_found' });
-  auditLog.unshift({
-    id: auditLog.length + 1,
-    action: 'report-delete',
-    targetIp: requestIp(request),
-    actorIp: requestIp(request),
-    metadata: { reportId: id },
-    createdAt: new Date().toISOString(),
-  });
   await riskRepository.appendAuditLog({
     action: 'report-delete',
+    tenantId: auth.tenant.tenantId,
     targetIp: requestIp(request),
     actorIp: requestIp(request),
     metadata: { reportId: id },
@@ -810,28 +860,20 @@ app.get('/v1/visitors/:visitorId/reports', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { visitorId } = request.params as { visitorId: string };
-  const reports = await repository.listReportsByVisitor(visitorId);
-  const visitor = await repository.getVisitor(visitorId);
+  const reports = await repository.listReportsByVisitor(auth.tenant.tenantId, visitorId);
+  const visitor = await repository.getVisitor(auth.tenant.tenantId, visitorId);
   return { visitorId, visitor, reports };
 });
 
-/** DELETE /v1/visitors/:visitorId：刪除訪客及其全部報告（被遺忘權，需 API Key）。 */
 app.delete('/v1/visitors/:visitorId', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const { visitorId } = request.params as { visitorId: string };
-  const deleted = await repository.deleteVisitor(visitorId);
+  const deleted = await repository.deleteVisitor(auth.tenant.tenantId, visitorId);
   if (!deleted) return reply.code(404).send({ error: 'visitor_not_found' });
-  auditLog.unshift({
-    id: auditLog.length + 1,
-    action: 'visitor-delete',
-    targetIp: requestIp(request),
-    actorIp: requestIp(request),
-    metadata: { visitorId },
-    createdAt: new Date().toISOString(),
-  });
   await riskRepository.appendAuditLog({
     action: 'visitor-delete',
+    tenantId: auth.tenant.tenantId,
     targetIp: requestIp(request),
     actorIp: requestIp(request),
     metadata: { visitorId },
@@ -916,7 +958,7 @@ app.get('/v1/audit-logs', async (request, reply) => {
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const query = request.query as { limit?: string };
   const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
-  const logs = await riskRepository.listAuditLogs(limit);
+  const logs = await riskRepository.listAuditLogs(auth.tenant.tenantId, limit);
   return { logs };
 });
 

@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS geoip_cache (
 -- 審計日誌（端口掃描等敏感操作）
 CREATE TABLE IF NOT EXISTS audit_logs (
     id            BIGSERIAL PRIMARY KEY,
+    tenant_id     UUID,
     action        VARCHAR(64) NOT NULL,
     target_ip     INET,
     actor_ip      INET,
@@ -283,6 +284,7 @@ CREATE INDEX IF NOT EXISTS idx_network_open_ports ON network_signals USING GIN(o
 
 CREATE TABLE IF NOT EXISTS review_cases (
     case_id           UUID PRIMARY KEY,
+    tenant_id         UUID,
     session_id        VARCHAR(64) NOT NULL,
     report_id         UUID,
     risk_event_ids    UUID[] NOT NULL DEFAULT '{}',
@@ -319,7 +321,15 @@ CREATE TABLE IF NOT EXISTS appeal_cases (
 CREATE INDEX IF NOT EXISTS idx_appeal_case   ON appeal_cases(case_id);
 CREATE INDEX IF NOT EXISTS idx_appeal_status ON appeal_cases(status);
 
-CREATE TABLE IF NOT EXISTS site_configs (
+-- =====================================================================
+-- 租戶隔離遷移（2026-09-06 code review 三刀）：review_cases / audit_logs 補 tenant
+-- =====================================================================
+ALTER TABLE review_cases ADD COLUMN IF NOT EXISTS tenant_id UUID;
+ALTER TABLE audit_logs  ADD COLUMN IF NOT EXISTS tenant_id UUID;
+CREATE INDEX IF NOT EXISTS idx_review_tenant ON review_cases(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant  ON audit_logs(tenant_id);
+
+-- =====================================================================CREATE TABLE IF NOT EXISTS site_configs (
     config_key   VARCHAR(128) PRIMARY KEY,
     payload      JSONB NOT NULL,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -103,10 +103,10 @@ export class PostgresReportRepository implements ReportRepository {
     );
   }
 
-  async getReport(reportId: string): Promise<StoredReport | null> {
+  async getReport(tenantId: string, reportId: string): Promise<StoredReport | null> {
     const { rows } = await this.pool.query<ScanRow>(
-      `SELECT *, subject_id FROM fingerprint_scans WHERE report_id = $1`,
-      [reportId],
+      `SELECT *, subject_id FROM fingerprint_scans WHERE report_id = $2 AND tenant_id = $1`,
+      [tenantId, reportId],
     );
     const row = rows[0];
     if (!row) return null;
@@ -135,12 +135,16 @@ export class PostgresReportRepository implements ReportRepository {
     return rows.map((row) => this.toStoredReport(row));
   }
 
-  async listReportsByVisitor(visitorId: string, limit = 20): Promise<StoredReport[]> {
+  async listReportsByVisitor(
+    tenantId: string,
+    visitorId: string,
+    limit = 20,
+  ): Promise<StoredReport[]> {
     const { rows } = await this.pool.query<ScanRow>(
       `SELECT *, subject_id FROM fingerprint_scans
-       WHERE visitor_id = $1 OR session_id = $1
-       ORDER BY created_at DESC LIMIT $2`,
-      [visitorId, limit],
+       WHERE (visitor_id = $2 OR session_id = $2) AND tenant_id = $1
+       ORDER BY created_at DESC LIMIT $3`,
+      [tenantId, visitorId, limit],
     );
     return rows.map((row) => this.toStoredReport(row));
   }
@@ -175,10 +179,14 @@ export class PostgresReportRepository implements ReportRepository {
     );
   }
 
-  async getVisitor(visitorId: string): Promise<VisitorProfile | null> {
+  async getVisitor(tenantId: string, visitorId: string): Promise<VisitorProfile | null> {
     const { rows } = await this.pool.query<VisitorRow>(
-      `SELECT * FROM visitor_profiles WHERE visitor_id = $1`,
-      [visitorId],
+      `SELECT vp.* FROM visitor_profiles vp
+       WHERE vp.visitor_id = $2 AND EXISTS (
+         SELECT 1 FROM fingerprint_scans fs
+         WHERE (fs.visitor_id = $2 OR fs.session_id = $2) AND fs.tenant_id = $1
+       )`,
+      [tenantId, visitorId],
     );
     const row = rows[0];
     if (!row) return null;
@@ -199,21 +207,29 @@ export class PostgresReportRepository implements ReportRepository {
     };
   }
 
-  async deleteReport(reportId: string): Promise<boolean> {
-    const result = await this.pool.query('DELETE FROM fingerprint_scans WHERE report_id = $1', [
-      reportId,
-    ]);
+  async deleteReport(tenantId: string, reportId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'DELETE FROM fingerprint_scans WHERE report_id = $2 AND tenant_id = $1',
+      [tenantId, reportId],
+    );
     return (result.rowCount ?? 0) > 0;
   }
 
-  async deleteVisitor(visitorId: string): Promise<boolean> {
-    await this.pool.query('DELETE FROM fingerprint_scans WHERE visitor_id = $1 OR session_id = $1', [
-      visitorId,
-    ]);
-    const result = await this.pool.query('DELETE FROM visitor_profiles WHERE visitor_id = $1', [
-      visitorId,
-    ]);
-    return (result.rowCount ?? 0) > 0;
+  async deleteVisitor(tenantId: string, visitorId: string): Promise<boolean> {
+    const scans = await this.pool.query(
+      'DELETE FROM fingerprint_scans WHERE (visitor_id = $2 OR session_id = $2) AND tenant_id = $1',
+      [tenantId, visitorId],
+    );
+    // 僅在沒有任何租戶的報告仍參照該訪客時才刪 profile（避免跨租戶誤刪聚合檔案）。
+    const profile = await this.pool.query(
+      `DELETE FROM visitor_profiles
+       WHERE visitor_id = $1 AND NOT EXISTS (
+         SELECT 1 FROM fingerprint_scans
+         WHERE visitor_id = $1 OR session_id = $1
+       )`,
+      [visitorId],
+    );
+    return ((scans.rowCount ?? 0) + (profile.rowCount ?? 0)) > 0;
   }
 
   private toStoredReport(row: ScanRow): StoredReport {

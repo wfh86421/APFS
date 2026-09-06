@@ -110,8 +110,8 @@ interface NetworkSignalRow {
 
 interface ReviewCaseRow {
   case_id: string;
-  session_id: string;
-  report_id: string | null;
+  tenant_id: string | null;
+  session_id: string;  report_id: string | null;
   risk_event_ids: string[];
   status: ReviewCase['status'];
   priority: ReviewCase['priority'];
@@ -200,9 +200,9 @@ export class PostgresRiskRepository implements RiskRepository {
     for (const event of events) await this.insertRiskEvent(event);
   }
 
-  async listRiskEvents(filter: RiskEventFilter = {}): Promise<RiskEvent[]> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+  async listRiskEvents(tenantId: string, filter: RiskEventFilter = {}): Promise<RiskEvent[]> {
+    const conditions: string[] = ['tenant_id = $1'];
+    const params: unknown[] = [tenantId];
     if (filter.sessionId) {
       params.push(filter.sessionId);
       conditions.push(`session_id = $${params.length}`);
@@ -217,7 +217,7 @@ export class PostgresRiskRepository implements RiskRepository {
     }
     const limit = filter.limit ?? 100;
     params.push(limit);
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
     const { rows } = await this.pool.query<RiskEventRow>(
       `SELECT * FROM risk_events ${where} ORDER BY detected_at DESC LIMIT $${params.length}`,
       params,
@@ -328,10 +328,10 @@ export class PostgresRiskRepository implements RiskRepository {
     return row ? this.toDeviceFingerprint(row) : null;
   }
 
-  async listDeviceFingerprints(limit = 100): Promise<DeviceFingerprint[]> {
+  async listDeviceFingerprints(tenantId: string, limit = 100): Promise<DeviceFingerprint[]> {
     const { rows } = await this.pool.query<DeviceFingerprintRow>(
-      `SELECT * FROM device_fingerprints ORDER BY last_seen DESC LIMIT $1`,
-      [limit],
+      `SELECT * FROM device_fingerprints WHERE tenant_id = $1 ORDER BY last_seen DESC LIMIT $2`,
+      [tenantId, limit],
     );
     return rows.map(this.toDeviceFingerprint);
   }
@@ -421,10 +421,10 @@ export class PostgresRiskRepository implements RiskRepository {
   async createReviewCase(caseData: ReviewCase): Promise<void> {
     await this.pool.query(
       `INSERT INTO review_cases (
-        case_id, session_id, report_id, risk_event_ids, status, priority,
+        case_id, tenant_id, session_id, report_id, risk_event_ids, status, priority,
         assigned_to, reviewer_id, opened_at, closed_at, decision,
         reason, false_positive_flag, appeal_status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       ON CONFLICT (case_id) DO UPDATE SET
         status = EXCLUDED.status,
         decision = EXCLUDED.decision,
@@ -433,6 +433,7 @@ export class PostgresRiskRepository implements RiskRepository {
         appeal_status = EXCLUDED.appeal_status`,
       [
         caseData.caseId,
+        caseData.tenantId ?? null,
         caseData.sessionId,
         caseData.reportId ?? null,
         caseData.riskEventIds ?? [],
@@ -450,15 +451,15 @@ export class PostgresRiskRepository implements RiskRepository {
     );
   }
 
-  async listReviewCases(filter: {
+  async listReviewCases(tenantId: string, filter: {
     status?: ReviewCase['status'];
     limit?: number;
   } = {}): Promise<ReviewCase[]> {
-    const params: unknown[] = [];
-    let where = '';
+    const params: unknown[] = [tenantId];
+    let where = 'WHERE tenant_id = $1';
     if (filter.status) {
       params.push(filter.status);
-      where = `WHERE status = $1`;
+      where += ` AND status = $${params.length}`;
     }
     params.push(filter.limit ?? 100);
     const { rows } = await this.pool.query<ReviewCaseRow>(
@@ -468,29 +469,31 @@ export class PostgresRiskRepository implements RiskRepository {
     return rows.map(this.toReviewCase);
   }
 
-  async getReviewCase(caseId: string): Promise<ReviewCase | null> {
+  async getReviewCase(tenantId: string, caseId: string): Promise<ReviewCase | null> {
     const { rows } = await this.pool.query<ReviewCaseRow>(
-      `SELECT * FROM review_cases WHERE case_id = $1`,
-      [caseId],
+      `SELECT * FROM review_cases WHERE case_id = $2 AND tenant_id = $1`,
+      [tenantId, caseId],
     );
     const row = rows[0];
     return row ? this.toReviewCase(row) : null;
   }
 
   async updateReviewCase(
+    tenantId: string,
     caseId: string,
     patch: ReviewCasePatch,
   ): Promise<ReviewCase | null> {
     await this.pool.query(
       `UPDATE review_cases SET
-        status = COALESCE($2, status),
-        decision = COALESCE($3, decision),
-        reason = COALESCE($4, reason),
-        reviewer_id = COALESCE($5, reviewer_id),
-        false_positive_flag = COALESCE($6, false_positive_flag),
-        closed_at = COALESCE($7, closed_at)
-      WHERE case_id = $1`,
+        status = COALESCE($3, status),
+        decision = COALESCE($4, decision),
+        reason = COALESCE($5, reason),
+        reviewer_id = COALESCE($6, reviewer_id),
+        false_positive_flag = COALESCE($7, false_positive_flag),
+        closed_at = COALESCE($8, closed_at)
+      WHERE case_id = $2 AND tenant_id = $1`,
       [
+        tenantId,
         caseId,
         patch.status ?? null,
         patch.decision ?? null,
@@ -500,7 +503,7 @@ export class PostgresRiskRepository implements RiskRepository {
         patch.closedAt ?? null,
       ],
     );
-    return this.getReviewCase(caseId);
+    return this.getReviewCase(tenantId, caseId);
   }
 
   async createAppeal(appeal: AppealCase): Promise<void> {
@@ -526,10 +529,11 @@ export class PostgresRiskRepository implements RiskRepository {
 
   async appendAuditLog(entry: AuditLogEntry): Promise<void> {
     await this.pool.query(
-      `INSERT INTO audit_logs (action, target_ip, actor_ip, metadata)
-       VALUES ($1,$2,$3,$4)`,
+      `INSERT INTO audit_logs (action, tenant_id, target_ip, actor_ip, metadata)
+       VALUES ($1,$2,$3,$4,$5)`,
       [
         entry.action,
+        entry.tenantId ?? null,
         entry.targetIp ?? null,
         entry.actorIp ?? null,
         JSON.stringify(entry.metadata ?? {}),
@@ -537,14 +541,15 @@ export class PostgresRiskRepository implements RiskRepository {
     );
   }
 
-  async listAuditLogs(limit = 100): Promise<AuditLogEntry[]> {
+  async listAuditLogs(tenantId: string, limit = 100): Promise<AuditLogEntry[]> {
     const { rows } = await this.pool.query<AuditLogRow>(
       `SELECT action, target_ip, actor_ip, metadata, created_at
-       FROM audit_logs ORDER BY created_at DESC LIMIT $1`,
-      [limit],
+       FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [tenantId, limit],
     );
     return rows.map((row) => ({
       action: row.action,
+      tenantId,
       targetIp: row.target_ip ?? undefined,
       actorIp: row.actor_ip ?? undefined,
       metadata: (row.metadata as Record<string, unknown>) ?? undefined,
@@ -705,9 +710,8 @@ export class PostgresRiskRepository implements RiskRepository {
   private toReviewCase(row: ReviewCaseRow): ReviewCase {
     return {
       caseId: row.case_id,
-      sessionId: row.session_id,
-      reportId: row.report_id ?? undefined,
-      riskEventIds: row.risk_event_ids,
+      tenantId: row.tenant_id ?? undefined,
+      sessionId: row.session_id,      riskEventIds: row.risk_event_ids,
       status: row.status,
       priority: row.priority,
       assignedTo: row.assigned_to ?? undefined,

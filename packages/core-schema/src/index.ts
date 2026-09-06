@@ -253,6 +253,7 @@ export const zReviewCase = z
     caseId: z.string().min(1),
     sessionId: z.string().min(1),
     reportId: z.string().optional(),
+    tenantId: z.string().optional(),
     riskEventIds: z.array(z.string()).optional(),
     status: zReviewStatus,
     priority: zReviewPriority,

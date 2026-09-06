@@ -46,8 +46,9 @@ export class InMemoryReportRepository implements ReportRepository {
     }
   }
 
-  async getReport(reportId: string): Promise<StoredReport | null> {
-    return this.reports.get(reportId) ?? null;
+  async getReport(tenantId: string, reportId: string): Promise<StoredReport | null> {
+    const report = this.reports.get(reportId);
+    return report && report.tenantId === tenantId ? report : null;
   }
 
   async countReports(tenantId?: string): Promise<number> {
@@ -63,9 +64,15 @@ export class InMemoryReportRepository implements ReportRepository {
       .slice(0, limit);
   }
 
-  async listReportsByVisitor(visitorId: string, limit = 20): Promise<StoredReport[]> {
+  async listReportsByVisitor(
+    tenantId: string,
+    visitorId: string,
+    limit = 20,
+  ): Promise<StoredReport[]> {
     return [...this.reports.values()]
-      .filter((r) => r.subjectId === visitorId || r.sessionId === visitorId)
+      .filter(
+        (r) => r.tenantId === tenantId && (r.subjectId === visitorId || r.sessionId === visitorId),
+      )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
   }
@@ -89,22 +96,39 @@ export class InMemoryReportRepository implements ReportRepository {
     existing.audioHash = profile.audioHash ?? existing.audioHash;
   }
 
-  async getVisitor(visitorId: string): Promise<VisitorProfile | null> {
+  async getVisitor(tenantId: string, visitorId: string): Promise<VisitorProfile | null> {
+    const hasReport = [...this.reports.values()].some(
+      (r) => r.tenantId === tenantId && (r.subjectId === visitorId || r.sessionId === visitorId),
+    );
+    if (!hasReport) return null;
     return this.visitors.get(visitorId) ?? null;
   }
 
-  async deleteReport(reportId: string): Promise<boolean> {
+  async deleteReport(tenantId: string, reportId: string): Promise<boolean> {
+    const report = this.reports.get(reportId);
+    if (!report || report.tenantId !== tenantId) return false;
     return this.reports.delete(reportId);
   }
 
-  async deleteVisitor(visitorId: string): Promise<boolean> {
-    const existed = this.visitors.delete(visitorId);
+  async deleteVisitor(tenantId: string, visitorId: string): Promise<boolean> {
+    let removed = false;
     for (const [id, report] of this.reports) {
-      if (report.subjectId === visitorId || report.sessionId === visitorId) {
+      if (
+        report.tenantId === tenantId &&
+        (report.subjectId === visitorId || report.sessionId === visitorId)
+      ) {
         this.reports.delete(id);
+        removed = true;
       }
     }
-    return existed;
+    const stillReferenced = [...this.reports.values()].some(
+      (r) => r.subjectId === visitorId || r.sessionId === visitorId,
+    );
+    if (!stillReferenced) {
+      const existed = this.visitors.delete(visitorId);
+      removed = removed || existed;
+    }
+    return removed;
   }
 }
 
@@ -128,11 +152,12 @@ export class InMemoryRiskRepository implements RiskRepository {
     for (const event of events) await this.insertRiskEvent(event);
   }
 
-  async listRiskEvents(filter: RiskEventFilter = {}): Promise<RiskEvent[]> {
+  async listRiskEvents(tenantId: string, filter: RiskEventFilter = {}): Promise<RiskEvent[]> {
     const limit = filter.limit ?? 100;
     return [...this.events.values()]
       .filter(
         (event) =>
+          event.tenantId === tenantId &&
           (!filter.sessionId || event.sessionId === filter.sessionId) &&
           (!filter.severity || event.severity === filter.severity) &&
           (!filter.eventType || event.eventType === filter.eventType),
@@ -168,8 +193,9 @@ export class InMemoryRiskRepository implements RiskRepository {
     return this.devices.get(fingerprintHash) ?? null;
   }
 
-  async listDeviceFingerprints(limit = 100): Promise<DeviceFingerprint[]> {
+  async listDeviceFingerprints(tenantId: string, limit = 100): Promise<DeviceFingerprint[]> {
     return [...this.devices.values()]
+      .filter((device) => device.tenantId === tenantId)
       .sort((a, b) => (b.lastSeen ?? '').localeCompare(a.lastSeen ?? ''))
       .slice(0, limit);
   }
@@ -187,21 +213,29 @@ export class InMemoryRiskRepository implements RiskRepository {
     this.reviewCases.set(caseData.caseId, caseData);
   }
 
-  async listReviewCases(filter = {}): Promise<ReviewCase[]> {
-    const { status, limit } = filter as { status?: string; limit?: number };
+  async listReviewCases(
+    tenantId: string,
+    filter: { status?: string; limit?: number } = {},
+  ): Promise<ReviewCase[]> {
+    const { status, limit } = filter;
     return [...this.reviewCases.values()]
-      .filter((item) => !status || item.status === status)
+      .filter((item) => item.tenantId === tenantId && (!status || item.status === status))
       .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
       .slice(0, limit ?? 100);
   }
 
-  async getReviewCase(caseId: string): Promise<ReviewCase | null> {
-    return this.reviewCases.get(caseId) ?? null;
+  async getReviewCase(tenantId: string, caseId: string): Promise<ReviewCase | null> {
+    const reviewCase = this.reviewCases.get(caseId);
+    return reviewCase && reviewCase.tenantId === tenantId ? reviewCase : null;
   }
 
-  async updateReviewCase(caseId: string, patch: ReviewCasePatch): Promise<ReviewCase | null> {
+  async updateReviewCase(
+    tenantId: string,
+    caseId: string,
+    patch: ReviewCasePatch,
+  ): Promise<ReviewCase | null> {
     const current = this.reviewCases.get(caseId);
-    if (!current) return null;
+    if (!current || current.tenantId !== tenantId) return null;
     const next: ReviewCase = { ...current, ...patch };
     this.reviewCases.set(caseId, next);
     return next;
@@ -219,8 +253,8 @@ export class InMemoryRiskRepository implements RiskRepository {
     this.auditLogs.unshift({ ...entry, createdAt: entry.createdAt ?? new Date().toISOString() });
   }
 
-  async listAuditLogs(limit = 100): Promise<AuditLogEntry[]> {
-    return this.auditLogs.slice(0, limit);
+  async listAuditLogs(tenantId: string, limit = 100): Promise<AuditLogEntry[]> {
+    return this.auditLogs.filter((entry) => entry.tenantId === tenantId).slice(0, limit);
   }
 
   async getIpReputation(ip: string): Promise<IpReputation | null> {

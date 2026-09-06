@@ -54,7 +54,7 @@ function redisPing(host = REDIS_HOST, port = REDIS_PORT) {
   });
 }
 
-async function postReport(ip) {
+async function postReport(ip, token) {
   const raw = await readFile('docs/examples/report.example.json', 'utf8');
   const report = JSON.parse(raw);
   report.reportId = randomUUID();
@@ -67,7 +67,11 @@ async function postReport(ip) {
   report.integrity.signature = '';
   const res = await fetch(`${API_URL}/v1/reports`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Forwarded-For': ip,
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(report),
   });
   return { status: res.status, report };
@@ -155,8 +159,8 @@ try {
       headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` },
     });
 
-  const a = await postReport('49.214.1.196');
-  const b = await postReport('203.0.113.10');
+  const a = await postReport('49.214.1.196', apiKey);
+  const b = await postReport('203.0.113.10', apiKey);
   record('POST /v1/reports 201 × 2', a.status === 201 && b.status === 201);
 
   const storedA = await (await authFetch(`${API_URL}/v1/reports/${a.report.reportId}`)).json();
