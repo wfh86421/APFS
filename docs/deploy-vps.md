@@ -84,19 +84,22 @@ sudo systemctl reload caddy
 
 Caddy 自動簽發/續期 Let's Encrypt 憑證。
 
-## 6. 只允許本機存取資料庫（VPS 安全）
+## 6. 資料庫／Redis 僅綁本機（安全）
 
-正式環境不要讓 Postgres/Redis 對外。建立 `docker-compose.override.yml`：
+正式環境不要讓 Postgres/Redis 對外。基底 `docker-compose.yml` 已直接將 5432/6379
+綁定到 `127.0.0.1`（`127.0.0.1:5432:5432` / `127.0.0.1:6379:6379`），
+**不需要 override**；compose 內部網路中 api/web 仍以服務名 `postgres`/`redis` 連線，不受影響。
+
+本機開發若需從容器外連 DB（例如跑 `init-db.mjs`、psql），同樣連 `127.0.0.1:5432` 即可。
+只有在非常特殊的情境才需對外暴露，且不建議在正式環境使用：
 
 ```yaml
 services:
   postgres:
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["0.0.0.0:5432:5432"]
   redis:
-    ports: ["127.0.0.1:6379:6379"]
+    ports: ["0.0.0.0:6379:6379"]
 ```
-
-（docker compose 會自動合併 override。）
 
 ## 7. 備份（pg_dump + cron）
 

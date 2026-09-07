@@ -28,6 +28,5 @@
 - VPS 部署 `ab838c8` 版本並通過實測驗收（key 清單/撤銷/輪換/審計、安全 headers、頁面 200）。
 
 ## 待辦/開放
-- port 硬化：compose 5432/6379 由 0.0.0.0 改綁 127.0.0.1。
 - 公開站台（tenant_id=NULL）與租戶資料的 owner 邊界決策（舊 review_cases/audit_logs 8/12 筆為 NULL）。
 - 增量審查其餘 Medium：XFF 信任、限流 429、audit 身分欄、webhook SSRF 面。
