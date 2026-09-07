@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import {
   SCHEMA_VERSION,
+  type AnalysisIssue,
   type EnvironmentReport,
   type PolicyDecision,
   type ReviewStatus,
@@ -384,6 +385,10 @@ const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
   webrtc_leak: 'webrtc_mismatch',
   open_ports_ssh_rdp: 'open_ports',
   bot_detected: 'bot_suspected',
+  server_datacenter_ip: 'datacenter_ip',
+  server_tor_ip: 'tor_detected',
+  server_vpn_detected: 'vpn_detected',
+  server_proxy_detected: 'proxy_detected',
 };
 
 /** 依評分引擎觸發的規則自動產生 RiskEvent（收案證據鏈的第一環）。 */
@@ -419,6 +424,47 @@ function eventsFromScore(report: EnvironmentReport, score: ScoreResult): RiskEve
       detectedAt: now,
     };
   });
+}
+
+/**
+ * 伺服器事實 → AnalysisIssue（喂給評分引擎的規則，讓規則以伺服器判定為準，
+ * 不依賴客戶端自報）：資料中心/Tor/VPN/Proxy 連線、DNS 洩漏、WebRTC 不一致。
+ */
+function serverNetworkIssues(network: NetworkAnalysis): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+  const push = (
+    type: string,
+    severity: AnalysisIssue['severity'],
+    description: string,
+    evidence: Record<string, unknown>,
+  ): void => {
+    issues.push({ id: crypto.randomUUID(), type, severity, description, evidence });
+  };
+  if (network.datacenter) {
+    push('server_datacenter_ip', 'medium', '伺服器判定連線來源為資料中心 IP 區段', {
+      ip: network.ip,
+    });
+  }
+  if (network.tor) {
+    push('server_tor_ip', 'high', '伺服器判定連線經 Tor 匿名網路', { ip: network.ip });
+  } else if (network.vpn) {
+    push('server_vpn_detected', 'medium', '伺服器判定連線經 VPN', { ip: network.ip });
+  } else if (network.proxy) {
+    push('server_proxy_detected', 'medium', '伺服器判定連線經 Proxy', { ip: network.ip });
+  }
+  if (network.dnsLeak?.detected) {
+    push('server_dns_leak', 'medium', 'DNS 伺服器與預期 ISP 不一致', {
+      dnsServers: network.dnsLeak.dnsServers,
+      expectedIsp: network.dnsLeak.expectedIsp,
+    });
+  }
+  if (network.webrtc.consistency === 'leak') {
+    push('server_webrtc_leak', 'medium', 'WebRTC 公網 IP 與伺服器判定不一致', {
+      publicIp: network.webrtc.publicIp,
+      localIps: network.webrtc.localIps,
+    });
+  }
+  return issues;
 }
 
 app.get('/health', async () => ({ status: 'ok', service: 'shieldscan-api' }));
@@ -903,7 +949,11 @@ app.post('/v1/reports', async (request, reply) => {
   report.signals = [...report.signals, ...serverSignals];
 
   const network = await analyzeRequestNetwork(ip, report);
-  const score = await buildScoringEngine().calculate(report, report.issues, DEFAULT_PROFILE);
+  // 伺服器事實一併進入評分與證據鏈（不信任客戶端自報為唯一規則來源）。
+  const serverIssues = serverNetworkIssues(network);
+  const allIssues = [...(report.issues ?? []), ...serverIssues];
+  report.issues = allIssues;
+  const score = await buildScoringEngine().calculate(report, allIssues, DEFAULT_PROFILE);
   const policy = scoreToPolicy(score);
 
   const reportToStore: EnvironmentReport = {

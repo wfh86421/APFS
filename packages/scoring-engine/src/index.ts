@@ -136,8 +136,15 @@ export function defaultRules(): ScoringRule[] {
       deduction: 5,
       description: '瀏覽器對 Canvas API 進行了修改，可能是 Brave 等隱私瀏覽器的保護機制',
       evaluate: (r, issues) =>
-        r.signals.some((s) => s.key === 'canvas.isTampered' && s.value === true) ||
-        issues.some((i) => i.type === 'canvas_tampered'),
+        r.signals.some(
+          (s) =>
+            (s.key === 'canvas.isTampered' && s.value === true) ||
+            (s.key === 'canvas' &&
+              typeof s.value === 'object' &&
+              s.value !== null &&
+              (s.value as { isTampered?: unknown }).isTampered === true),
+        ) ||
+        issues.some((i) => i.type === 'canvas_tampered' || i.type === 'canvas_tampering'),
     },
     {
       id: 'os_mismatch',
@@ -147,7 +154,9 @@ export function defaultRules(): ScoringRule[] {
       track: 'fraud',
       deduction: 5,
       description: 'User-Agent 宣稱的 OS 與實際檢測到的 Platform 不匹配',
-      evaluate: (r) => r.issues.some((i) => i.type === 'os_mismatch'),
+      evaluate: (r, issues) =>
+        r.issues.some((i) => i.type === 'os_mismatch') ||
+        issues.some((i) => i.type === 'os_mismatch'),
     },
     {
       id: 'dns_leak',
@@ -157,7 +166,9 @@ export function defaultRules(): ScoringRule[] {
       track: 'privacy',
       deduction: 10,
       description: '檢測到 DNS 洩漏，真實 ISP 的 DNS 伺服器被暴露',
-      evaluate: (r) => r.issues.some((i) => i.type === 'dns_leak'),
+      evaluate: (r, issues) =>
+        r.issues.some((i) => i.type === 'dns_leak') ||
+        issues.some((i) => i.type === 'dns_leak' || i.type === 'server_dns_leak'),
     },
     {
       id: 'webrtc_leak',
@@ -166,8 +177,15 @@ export function defaultRules(): ScoringRule[] {
       severity: 'warning',
       track: 'privacy',
       deduction: 8,
-      description: 'WebRTC 洩漏了本地 IP 地址',
-      evaluate: (r) => r.issues.some((i) => i.type === 'webrtc_leak'),
+      description: 'WebRTC 洩漏了本地/公網 IP，或與伺服器判定不一致',
+      evaluate: (r, issues) =>
+        r.issues.some((i) => i.type === 'webrtc_leak') ||
+        issues.some(
+          (i) =>
+            i.type === 'webrtc_leak' ||
+            i.type === 'webrtc_local_ip' ||
+            i.type === 'server_webrtc_leak',
+        ),
     },
     {
       id: 'open_ports_ssh_rdp',
@@ -177,7 +195,9 @@ export function defaultRules(): ScoringRule[] {
       track: 'fraud',
       deduction: 15,
       description: '檢測到 SSH(22) 或 RDP(3389) 端口開放，手機網路極不尋常',
-      evaluate: (r) => r.issues.some((i) => i.type === 'unusual_open_ports'),
+      evaluate: (r, issues) =>
+        r.issues.some((i) => i.type === 'unusual_open_ports') ||
+        issues.some((i) => i.type === 'unusual_open_ports'),
     },
     {
       id: 'bot_detected',
@@ -187,7 +207,50 @@ export function defaultRules(): ScoringRule[] {
       track: 'fraud',
       deduction: 20,
       description: '檢測到自動化工具或機器人特徵',
-      evaluate: (r) => r.issues.some((i) => i.type === 'bot_detected'),
+      evaluate: (r, issues) =>
+        r.issues.some((i) => i.type === 'bot_detected') ||
+        issues.some((i) => i.type === 'bot_detected' || i.type === 'server_bot_suspected'),
+    },
+    /* ---------- 伺服器事實規則（由 server 依 network/request 事實注入 issues） ---------- */
+    {
+      id: 'server_datacenter_ip',
+      name: '資料中心 IP 連線',
+      category: 'network_security',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 8,
+      description: '伺服器判定連線來源為資料中心 IP 區段（雲手機/伺服器農場高風險）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_datacenter_ip'),
+    },
+    {
+      id: 'server_tor_ip',
+      name: 'Tor 出口連線',
+      category: 'network_security',
+      severity: 'critical',
+      track: 'fraud',
+      deduction: 15,
+      description: '伺服器判定連線經 Tor 匿名網路',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_tor_ip'),
+    },
+    {
+      id: 'server_vpn_detected',
+      name: 'VPN 連線',
+      category: 'network_security',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 5,
+      description: '伺服器判定連線經 VPN',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_vpn_detected'),
+    },
+    {
+      id: 'server_proxy_detected',
+      name: 'Proxy 連線',
+      category: 'network_security',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 5,
+      description: '伺服器判定連線經 Proxy',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_proxy_detected'),
     },
   ];
 }
