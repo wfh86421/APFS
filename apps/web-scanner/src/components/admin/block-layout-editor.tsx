@@ -12,7 +12,7 @@ import {
   type BlockFieldDef,
 } from '@shieldscan/core-schema';
 import { apiBaseUrl } from '../../lib/api';
-import WorkbenchPreview from './workbench-live';
+import WorkbenchPreview, { moduleDictFor } from './workbench-live';
 
 /**
  * Phase A UI 雛形（TRIAL 評判用）：版面設定
@@ -284,6 +284,21 @@ function BlockSettingsDrawer({
         欄位由區塊定義自動產生（僅純資料，不存 HTML/程式碼）；儲存即寫入後端 dashboard_blocks
         （security_admin 限定）並記入審計。
       </p>
+      {moduleDictFor(block.key) && (
+        <details className="pab-dict">
+          <summary>
+            資料欄位＋API（{moduleDictFor(block.key)!.fields.length}）
+          </summary>
+          <p className="pab-dict-api">API：{moduleDictFor(block.key)!.api}</p>
+          <ul>
+            {moduleDictFor(block.key)!.fields.map((f) => (
+              <li key={f.fieldPath}>
+                <code>{f.fieldPath}</code> — {f.label}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="pab-fields">
         {block.fields.map((field) => (
           <div className="pab-field" key={field.key}>
@@ -473,6 +488,12 @@ export default function BlockLayoutEditor() {
         .pab .pill{font-size:10.5px;border-radius:999px;padding:1px 8px;border:1px solid #2c3a52;color:#8fa2ba}
         .pab .pill.g{color:#34d399;border-color:#1d6a50}
         .pab .pill.r{color:#f87171;border-color:#7a1f2e}
+        .pab .pill.api{color:#8fc2ff;border-color:#2c5f9e;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pab-dict{border:1px solid #22344f;border-radius:9px;padding:7px 11px;font-size:11.5px;background:#0f1826}
+        .pab-dict summary{cursor:pointer;color:#8fc2ff}
+        .pab-dict-api{color:#8fa2ba;margin:6px 0 4px;font-size:11px}
+        .pab-dict ul{margin:0;padding-left:16px;color:#bcd3ec;display:flex;flex-direction:column;gap:2px}
+        .pab-dict code{color:#cfe3ff}
         .pab .pab-preview{border:1px dashed #2f5d8f;background:#0d1626;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
         .pab .pab-preview h3{margin:0;font-size:13px;color:#8fc2ff}
         .pab .pv-card{background:#15233c;border:1px solid #22344f;border-radius:9px;padding:10px 12px;font-size:13px}
@@ -565,6 +586,11 @@ export default function BlockLayoutEditor() {
                   <small>{d.description}</small>
                 </div>
                 <span className={`pill ${off ? 'r' : 'g'}`}>{off ? '已停用' : '啟用'}</span>
+                {moduleDictFor(d.key) && (
+                  <span className="pill api" title={moduleDictFor(d.key)?.api}>
+                    API {moduleDictFor(d.key)?.api}
+                  </span>
+                )}
                 <button className="ctrl" onClick={() => move(index, -1)} title="上移">⬆</button>
                 <button className="ctrl" onClick={() => move(index, 1)} title="下移">⬇</button>
                 <button className="ctrl on" onClick={() => setEditing(d.key)} title="設定">⚙</button>

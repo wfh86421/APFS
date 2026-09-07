@@ -2,7 +2,24 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { listPageBlocks } from '@shieldscan/core-schema';
+import { moduleDataRef } from '../../modules/module-data';
 import { apiBaseUrl } from '../../lib/api';
+
+/** 版面區塊 ↔ 原有 6+1 模組資料字典的對應（decision.verdict 等）。 */
+export const WORKBENCH_MODULE_ID: Record<string, string> = {
+  'workbench.decision': 'decision.verdict',
+  'workbench.risk': 'risk.conflicts',
+  'workbench.network': 'network.geo',
+  'workbench.hardware': 'hardware.fp',
+  'workbench.browser': 'browser.env',
+  'workbench.raw': 'raw.payload',
+  'workbench.governance': 'governance.audit',
+};
+
+export function moduleDictFor(blockKey: string) {
+  const mid = WORKBENCH_MODULE_ID[blockKey];
+  return mid ? moduleDataRef(mid) : undefined;
+}
 
 /**
  * 工作台（6+1）即時預覽：以真實 API 資料渲染每張分類卡。
@@ -246,6 +263,19 @@ export default function WorkbenchPreview({
           <div className="wb-body">
             {snap.loading ? <em className="wb-empty">載入中…</em> : (c.body ?? <em className="wb-empty">已停用即時摘要。</em>)}
           </div>
+          {moduleDictFor(c.key) && (
+            <details className="wb-dict">
+              <summary>資料欄位＋API（{moduleDictFor(c.key)!.fields.length}）</summary>
+              <p className="wb-dict-api">API：{moduleDictFor(c.key)!.api}</p>
+              <ul>
+                {moduleDictFor(c.key)!.fields.map((f) => (
+                  <li key={f.fieldPath}>
+                    <code>{f.fieldPath}</code> — {f.label}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       ))}
       <style>{`
@@ -258,6 +288,11 @@ export default function WorkbenchPreview({
         .wb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;color:#cfe3ff}
         .wb-list li{line-height:1.5}
         .wb-empty{color:#47618a;font-size:12px;line-height:1.6}
+        .wb-dict{border-top:1px solid #22344f;padding:8px 12px;font-size:11.5px}
+        .wb-dict summary{cursor:pointer;color:#8fc2ff;font-size:11.5px}
+        .wb-dict-api{color:#8fa2ba;margin:6px 0 4px;font-size:11px}
+        .wb-dict ul{margin:0;padding-left:16px;color:#bcd3ec;display:flex;flex-direction:column;gap:2px}
+        .wb-dict code{color:#cfe3ff}
         .sev{display:inline-block;border-radius:999px;padding:0 6px;margin-right:6px;font-size:10.5px}
         .sev.critical{background:#40151d;color:#f87171}.sev.high{background:#3a1f10;color:#fbbf24}
         .sev.medium{background:#3a3117;color:#fde68a}.sev.low,.sev.info{background:#12314f;color:#9ecbff}
