@@ -256,6 +256,43 @@ test('InMemory 成效回饋：recordOutcome 後 listOutcomes 依租戶/時窗過
   assert.equal(empty.length, 0);
 });
 
+test('InMemory Phase A 版面：upsert 排序/讀取/還原，租戶隔離', async () => {
+  const repo = new InMemoryRiskRepository();
+  const otherTenant = '50000000-0000-4000-8000-000000000001';
+  await repo.upsertDashboardBlock(RISK_TENANT_ID, {
+    blockKey: 'overview.trend.week',
+    enabled: false,
+    position: 2,
+    settings: { title: '近 30 天趨勢', days: 30, metric: '掃描量' },
+  });
+  await repo.upsertDashboardBlock(RISK_TENANT_ID, {
+    blockKey: 'overview.kpi.summary',
+    enabled: true,
+    position: 0,
+    settings: { title: '營運總覽', showCards: ['評分'] },
+  });
+  // 其他租戶不受影響
+  await repo.upsertDashboardBlock(otherTenant, {
+    blockKey: 'overview.kpi.summary',
+    enabled: true,
+    position: 0,
+    settings: { title: 'X' },
+  });
+
+  const list = await repo.listDashboardBlocks(RISK_TENANT_ID);
+  assert.equal(list.length, 2);
+  assert.equal(list[0]?.blockKey, 'overview.kpi.summary');
+  assert.equal(list[1]?.blockKey, 'overview.trend.week');
+  assert.equal(list[1]?.enabled, false);
+
+  await repo.resetDashboardBlock(RISK_TENANT_ID, 'overview.trend.week');
+  const after = await repo.listDashboardBlocks(RISK_TENANT_ID);
+  assert.equal(after.length, 1);
+  assert.equal(after[0]?.blockKey, 'overview.kpi.summary');
+  // 其他租戶的覆寫仍在
+  assert.equal((await repo.listDashboardBlocks(otherTenant)).length, 1);
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);
@@ -306,6 +343,26 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
     });
     assert.ok(
       (await repo.listOutcomes(RISK_TENANT_ID)).some((o) => o.id === outcomeId && o.outcomeType === 'false_positive'),
+    );
+
+    // Phase A 版面：dashboard_blocks upsert / list / reset（PG 執行期）
+    await repo.upsertDashboardBlock(RISK_TENANT_ID, {
+      blockKey: 'devices.table.list',
+      enabled: true,
+      position: 3,
+      settings: { title: '設備（CI）', pageSize: 25, revealHash: true },
+      updatedBy: 'ci-run',
+    });
+    const dbs = await repo.listDashboardBlocks(RISK_TENANT_ID);
+    const block = dbs.find((b) => b.blockKey === 'devices.table.list');
+    assert.ok(block);
+    assert.equal(block?.enabled, true);
+    assert.equal(block?.position, 3);
+    assert.equal(block?.settings.title, '設備（CI）');
+    await repo.resetDashboardBlock(RISK_TENANT_ID, 'devices.table.list');
+    assert.equal(
+      (await repo.listDashboardBlocks(RISK_TENANT_ID)).some((b) => b.blockKey === 'devices.table.list'),
+      false,
     );
   } finally {
     await repo.close();

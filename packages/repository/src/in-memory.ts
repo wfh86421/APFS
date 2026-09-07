@@ -7,6 +7,7 @@ import type {
 } from '@shieldscan/core-schema';
 import type {
   AuditLogEntry,
+  DashboardBlockState,
   DeviceFingerprint,
   DeviceSessionRow,
   FingerprintByIpRow,
@@ -239,6 +240,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly outcomes: OutcomeEntry[] = [];
   private readonly ipReputations = new Map<string, IpReputation>();
   private readonly siteConfigs = new Map<string, unknown>();
+  private readonly dashboardBlocks = new Map<string, DashboardBlockState>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -391,5 +393,23 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async setSiteConfig(key: string, payload: unknown): Promise<void> {
     this.siteConfigs.set(key, payload);
+  }
+
+  async listDashboardBlocks(tenantId: string): Promise<DashboardBlockState[]> {
+    return [...this.dashboardBlocks.values()]
+      .filter((b) => b.tenantId === tenantId)
+      .sort((a, b) => a.position - b.position || a.blockKey.localeCompare(b.blockKey));
+  }
+
+  async upsertDashboardBlock(tenantId: string, state: DashboardBlockState): Promise<void> {
+    this.dashboardBlocks.set(`${tenantId}:${state.blockKey}`, {
+      ...state,
+      tenantId,
+      settings: { ...(state.settings ?? {}) },
+    });
+  }
+
+  async resetDashboardBlock(tenantId: string, blockKey: string): Promise<void> {
+    this.dashboardBlocks.delete(`${tenantId}:${blockKey}`);
   }
 }

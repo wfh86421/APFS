@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-09-08（PHASEA）
+- Phase A「版面設定（自訂區塊）」主線完成於 `feat/phase-a-blocks`（commit 前綴 df2c940..65d277d，rebase 於 main 76880f3）：M1 dashboard block registry（7 頁/22 區塊）、M2 `dashboard_blocks` 後端持久化、M3 版面 API（tenant 隔離＋audit）、M4 UI（/admin/layout）；並整合「工作台 6+1 即時卡＋原模組資料字典」與「公開首頁 10 區塊管理」。試用站（VPS :3080/:3081，獨立 DB）評判中；正式站部署由整合窗口接手。
+
 ## 2026-09-08（dsh）
 - M2 設備關聯圖譜 v1 上線並部署（commit 360b60b）
 - WP3 成效 ROI 管理頁上線（commit 966cd7c）

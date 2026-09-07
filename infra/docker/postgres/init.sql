@@ -369,3 +369,20 @@ CREATE TABLE IF NOT EXISTS decision_outcomes (
 );
 CREATE INDEX IF NOT EXISTS idx_outcomes_tenant_time ON decision_outcomes(tenant_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_outcomes_case       ON decision_outcomes(case_id);
+
+-- =====================================================================
+-- Phase A 版面設定（dashboard_blocks）：租戶每區塊啟用/順序/設定覆寫
+-- settings 僅存「純資料」（已於 API 層以 core-schema block schema 驗證）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS dashboard_blocks (
+    tenant_id   UUID NOT NULL,
+    block_key   VARCHAR(64) NOT NULL,
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    position    INTEGER NOT NULL DEFAULT 0,
+    settings    JSONB NOT NULL DEFAULT '{}',
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by  VARCHAR(64),
+    PRIMARY KEY (tenant_id, block_key)
+);
+CREATE INDEX IF NOT EXISTS idx_dashboard_blocks_tenant
+    ON dashboard_blocks(tenant_id, position);

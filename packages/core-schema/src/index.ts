@@ -438,3 +438,5 @@ export function validateAppealCase(input: unknown): Validation<AppealCase> {
   const result = zAppealCase.safeParse(input);
   return result.success ? { ok: true, data: result.data } : toFailure(result.error);
 }
+
+export * from './dashboard-blocks.js';
