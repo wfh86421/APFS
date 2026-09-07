@@ -28,6 +28,7 @@ import {
   createRepository,
   createRiskRepository,
   type DeviceFingerprint,
+  type FingerprintByIpRow,
   type NetworkSignal,
   type ReportRepository,
   type RiskRepository,
@@ -810,6 +811,70 @@ app.get('/v1/devices', async (request, reply) => {
   const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
   const devices = await riskRepository.listDeviceFingerprints(auth.tenant.tenantId, limit);
   return { devices };
+});
+
+/** M2 圖譜：某 IP 在時窗內出現過的裝置（ip → devices 邊）。 */
+app.get('/v1/devices/by-ip', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { ip?: string; days?: string };
+  if (!query.ip) return reply.code(400).send({ error: 'ip_required' });
+  const days = Math.max(1, Math.min(90, Number(query.days ?? 30)));
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const fingerprints = await repository.listFingerprintsByIp(
+    auth.tenant.tenantId,
+    query.ip,
+    since,
+  );
+  return { ip: query.ip, windowDays: days, fingerprints };
+});
+
+/** M2 圖譜：裝置關聯視圖（sessions / IP 使用 / 帳號 / 同 IP 其他裝置）。 */
+app.get('/v1/devices/:hash/relations', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const { hash } = request.params as { hash: string };
+  const query = request.query as { days?: string };
+  const days = Math.max(1, Math.min(90, Number(query.days ?? 30)));
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const sessions = await repository.listSessionsByFingerprint(
+    auth.tenant.tenantId,
+    hash,
+    since,
+  );
+
+  const ipUsage = new Map<string, number>();
+  const accountUsage = new Map<string, number>();
+  for (const session of sessions) {
+    if (session.clientIp) ipUsage.set(session.clientIp, (ipUsage.get(session.clientIp) ?? 0) + 1);
+    accountUsage.set(session.visitorId, (accountUsage.get(session.visitorId) ?? 0) + 1);
+  }
+  const ipCounts = [...ipUsage.entries()]
+    .map(([ip, count]) => ({ ip, count }))
+    .sort((a, b) => b.count - a.count);
+  const accounts = [...accountUsage.entries()]
+    .map(([visitorId, count]) => ({ visitorId, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // 同 IP 的其他裝置（圖譜邊，最多巡 8 個使用過的 IP）
+  const peersByIp: Array<{ ip: string; fingerprints: FingerprintByIpRow[] }> = [];
+  for (const { ip } of ipCounts.slice(0, 8)) {
+    const rows = await repository.listFingerprintsByIp(auth.tenant.tenantId, ip, since, 10);
+    const others = rows.filter((row) => row.fingerprintHash !== hash);
+    if (others.length > 0) peersByIp.push({ ip, fingerprints: others });
+  }
+
+  const deviceStats = await riskRepository.getDeviceFingerprint(hash);
+  return {
+    device: { fingerprintHash: hash, stats: deviceStats ?? null },
+    windowDays: days,
+    totals: { sessions: sessions.length, distinctIps: ipCounts.length, distinctAccounts: accounts.length },
+    sessions: sessions.slice(0, 50),
+    ipUsage: ipCounts,
+    accounts,
+    peersByIp,
+  };
 });
 
 app.get('/v1/network/ip-reputation', async (request, reply) => {

@@ -1,6 +1,13 @@
 import pg from 'pg';
 import type { EnvironmentReport } from '@shieldscan/core-schema';
-import type { ReportMeta, ReportRepository, StoredReport, VisitorProfile } from './types.js';
+import type {
+  DeviceSessionRow,
+  FingerprintByIpRow,
+  ReportMeta,
+  ReportRepository,
+  StoredReport,
+  VisitorProfile,
+} from './types.js';
 
 const { Pool } = pg;
 
@@ -121,6 +128,64 @@ export class PostgresReportRepository implements ReportRepository {
       [tenantId, fingerprintHash, since, limit],
     );
     return rows.map((row) => row.client_ip);
+  }
+
+  async listSessionsByFingerprint(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit = 200,
+  ): Promise<DeviceSessionRow[]> {
+    const { rows } = await this.pool.query<{
+      session_id: string;
+      report_id: string | null;
+      visitor_id: string;
+      client_ip: string | null;
+      created_at: string;
+    }>(
+      `SELECT session_id, report_id, visitor_id, client_ip::text AS client_ip, created_at
+       FROM fingerprint_scans
+       WHERE tenant_id = $1 AND fingerprint_hash = $2 AND created_at >= $3
+       ORDER BY created_at DESC
+       LIMIT $4`,
+      [tenantId, fingerprintHash, since, limit],
+    );
+    return rows.map((row) => ({
+      sessionId: row.session_id,
+      reportId: row.report_id ?? undefined,
+      visitorId: row.visitor_id,
+      clientIp: row.client_ip ?? undefined,
+      createdAt: new Date(row.created_at).toISOString(),
+    }));
+  }
+
+  async listFingerprintsByIp(
+    tenantId: string,
+    ip: string,
+    since: string,
+    limit = 50,
+  ): Promise<FingerprintByIpRow[]> {
+    const { rows } = await this.pool.query<{
+      fingerprint_hash: string;
+      session_count: string;
+      last_seen: string;
+    }>(
+      `SELECT fingerprint_hash,
+              COUNT(*)::int AS session_count,
+              MAX(created_at) AS last_seen
+       FROM fingerprint_scans
+       WHERE tenant_id = $1 AND client_ip = $2::inet
+         AND fingerprint_hash IS NOT NULL AND created_at >= $3
+       GROUP BY fingerprint_hash
+       ORDER BY session_count DESC, last_seen DESC
+       LIMIT $4`,
+      [tenantId, ip, since, limit],
+    );
+    return rows.map((row) => ({
+      fingerprintHash: row.fingerprint_hash,
+      sessionCount: Number(row.session_count),
+      lastSeen: new Date(row.last_seen).toISOString(),
+    }));
   }
 
   async getReport(tenantId: string, reportId: string): Promise<StoredReport | null> {

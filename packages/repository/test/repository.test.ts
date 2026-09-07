@@ -180,3 +180,52 @@ test('listRecentClientIps：同裝置時窗內不同 IP（IP 速度）、租戶/
   const recent = await repo.listRecentClientIps('tenant-a', fp, since7d);
   assert.deepEqual(recent, ['203.0.113.9', '49.214.1.196']);
 });
+
+test('圖譜：listSessionsByFingerprint 與 listFingerprintsByIp（租戶隔離＋時窗）', async () => {
+  const repo = new InMemoryReportRepository();
+  const fpA = 'fp-graph-a';
+  const fpB = 'fp-graph-b';
+  const now = new Date().toISOString();
+
+  // 裝置 A：兩個 IP、兩個帳號（多帳號偵測素材）
+  await repo.saveReport(
+    makeReport({ createdAt: now, sessionId: 'ga1', subjectId: 'acct-1', tenantId: 'tenant-a' }),
+    { clientIp: '49.214.1.196', fingerprintHash: fpA },
+  );
+  await repo.saveReport(
+    makeReport({ createdAt: now, sessionId: 'ga2', subjectId: 'acct-2', tenantId: 'tenant-a' }),
+    { clientIp: '203.0.113.9', fingerprintHash: fpA },
+  );
+  // 裝置 B 共用 IP 49.214.1.196（同 IP 他裝置素材）；另一租戶同 IP → 應被隔離
+  await repo.saveReport(
+    makeReport({ createdAt: now, sessionId: 'gb1', subjectId: 'acct-b', tenantId: 'tenant-a' }),
+    { clientIp: '49.214.1.196', fingerprintHash: fpB },
+  );
+  await repo.saveReport(
+    makeReport({ createdAt: now, sessionId: 'gx1', subjectId: 'acct-x', tenantId: 'tenant-b' }),
+    { clientIp: '49.214.1.196', fingerprintHash: fpA },
+  );
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const sessions = await repo.listSessionsByFingerprint('tenant-a', fpA, since);
+  assert.equal(sessions.length, 2);
+  assert.deepEqual(
+    sessions.map((s) => s.clientIp).sort(),
+    ['203.0.113.9', '49.214.1.196'],
+  );
+
+  const byIp = await repo.listFingerprintsByIp('tenant-a', '49.214.1.196', since);
+  assert.deepEqual(
+    byIp.map((row) => row.fingerprintHash).sort(),
+    [fpA, fpB],
+  );
+  assert.equal(byIp.find((row) => row.fingerprintHash === fpB)?.sessionCount, 1);
+
+  // 舊資料（超時窗）不計
+  const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+  await repo.saveReport(
+    makeReport({ createdAt: old, sessionId: 'ga-old', subjectId: 'acct-old', tenantId: 'tenant-a' }),
+    { clientIp: '198.51.100.7', fingerprintHash: fpA },
+  );
+  assert.equal((await repo.listSessionsByFingerprint('tenant-a', fpA, since)).length, 2);
+});

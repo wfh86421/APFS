@@ -8,6 +8,8 @@ import type {
 import type {
   AuditLogEntry,
   DeviceFingerprint,
+  DeviceSessionRow,
+  FingerprintByIpRow,
   IpReputation,
   NetworkSignal,
   OutcomeEntry,
@@ -133,6 +135,60 @@ export class InMemoryReportRepository implements ReportRepository {
       }
     }
     return [...ips].sort();
+  }
+
+  async listSessionsByFingerprint(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit = 200,
+  ): Promise<DeviceSessionRow[]> {
+    const rows: DeviceSessionRow[] = [];
+    for (const [reportId, report] of this.reports) {
+      if (
+        report.tenantId === tenantId &&
+        this.fingerprints.get(reportId) === fingerprintHash &&
+        report.createdAt >= since
+      ) {
+        rows.push({
+          sessionId: report.sessionId,
+          reportId,
+          visitorId: report.subjectId ?? report.sessionId,
+          clientIp: report.clientIp,
+          createdAt: report.createdAt,
+        });
+      }
+      if (rows.length >= limit) break;
+    }
+    return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listFingerprintsByIp(
+    tenantId: string,
+    ip: string,
+    since: string,
+    limit = 50,
+  ): Promise<FingerprintByIpRow[]> {
+    const count = new Map<string, { sessionCount: number; lastSeen: string }>();
+    for (const [reportId, report] of this.reports) {
+      if (report.tenantId !== tenantId || report.clientIp !== ip || report.createdAt < since) {
+        continue;
+      }
+      const fp = this.fingerprints.get(reportId);
+      if (!fp) continue;
+      const cur = count.get(fp) ?? { sessionCount: 0, lastSeen: '' };
+      cur.sessionCount += 1;
+      if (report.createdAt > cur.lastSeen) cur.lastSeen = report.createdAt;
+      count.set(fp, cur);
+    }
+    return [...count.entries()]
+      .sort((a, b) => b[1].sessionCount - a[1].sessionCount || b[1].lastSeen.localeCompare(a[1].lastSeen))
+      .slice(0, limit)
+      .map(([fingerprintHash, v]) => ({
+        fingerprintHash,
+        sessionCount: v.sessionCount,
+        lastSeen: v.lastSeen,
+      }));
   }
 
   async deleteExpiredReports(before: string): Promise<number> {

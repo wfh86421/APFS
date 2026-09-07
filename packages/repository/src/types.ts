@@ -65,6 +65,36 @@ export interface ReportRepository {
     since: string,
     limit?: number,
   ): Promise<string[]>;
+  /** M2 圖譜：某裝置指紋的 session 明細（session/IP/訪客/時間；限 tenant）。 */
+  listSessionsByFingerprint(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit?: number,
+  ): Promise<DeviceSessionRow[]>;
+  /** M2 圖譜：某 IP 在時窗內出現過的裝置指紋（含 session 數/最後時間；限 tenant）。 */
+  listFingerprintsByIp(
+    tenantId: string,
+    ip: string,
+    since: string,
+    limit?: number,
+  ): Promise<FingerprintByIpRow[]>;
+}
+
+/** M2 圖譜：單一 session 與裝置/IP 的邊。 */
+export interface DeviceSessionRow {
+  sessionId: string;
+  reportId?: string;
+  visitorId: string;
+  clientIp?: string;
+  createdAt: string;
+}
+
+/** M2 圖譜：裝置 ↔ IP 的邊（聚合）。 */
+export interface FingerprintByIpRow {
+  fingerprintHash: string;
+  sessionCount: number;
+  lastSeen: string;
 }
 
 export interface RiskEventFilter {
