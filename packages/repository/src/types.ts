@@ -177,6 +177,7 @@ export interface ReviewCasePatch {
 export interface AuditLogEntry {
   action: string;
   tenantId?: string;
+  actorKeyId?: string;
   targetIp?: string;
   actorIp?: string;
   metadata?: Record<string, unknown>;
