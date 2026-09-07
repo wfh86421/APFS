@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-08（dsh）
+- M2 設備關聯圖譜 v1 上線並部署（commit 360b60b）
+- WP3 成效 ROI 管理頁上線（commit 966cd7c）
+- M1「矛盾探測×成效閉環」合併 main（commit ee69a4e）
+- CI 修復集＋租戶隔離正式部署（commit ab838c8）
+
 > 版本與重大里程碑紀錄。格式：最新在上；里程碑級才新增。協作規則見 `AGENTS.md`、細目見 `docs/logs/`。
 
 ## Unreleased（2026-09-07）
