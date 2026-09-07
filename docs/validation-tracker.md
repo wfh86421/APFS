@@ -27,7 +27,7 @@
 | WebRTC/DNS 洩漏偵測率 | >99% | 🟡 | 已知洩漏樣本 |
 | 模型 AUC（異常偵測） | ≥0.85 | ⬜ | Phase4 ML 尚未開始 |
 | 必要欄位缺失率 | <1% | ⬜ | 對報告欄位做統計 job |
-| 高風險事件有證據鏈 | 100% | 🟡 | RiskEvent evidenceJson 已結構化；需計量覆蓋 |
+| 高風險事件有證據鏈 | 100% | 🟡 | 自動 RiskEvent＋高風險自動開 review case 並回填 riskEventIds 已落地（server.ts:504-536,1358-1376；2026-09-07 P1 抽查）；需計量覆蓋與端到端驗證 |
 | 敏感欄位存取有日誌 | 100% | 🟡 | audit_logs 已含 tenant_id 並逐「寫入/決策」端點記錄（init.sql:95；server.ts keys/report-delete/visitor-delete/review/site-config/risk-events/outcome）；讀取類（報告/訪客/設備/審計查詢）尚未逐筆寫審計 → 待補（2026-09-07 抽查，見 docs/reviews/2026-09-07-current-head-spotcheck.md） |
 | 未授權存取事件 | 0 | 🟡 | 角色防升等＋路由/資料層 tenantId 隔離已落地（server.ts:574-579/611-615/641-645；repository types.ts:49-58,227-241；risk-postgres 全數 `WHERE tenant_id=$1`）；仍：註冊預設 security_admin、治理端點權限未收斂 → 需安全測試（2026-09-07 抽查） |
 
@@ -81,3 +81,4 @@
 - 後台模組資料化（2026-09-06）：新增 `module-data.ts` 資料字典，6＋1 每個模組對應 API 與欄位清單，可在模組列展開檢視；後續可由 field_definitions/Plugin Registry 動態供應。
 - 真實報告詳情頁（2026-09-06）：`/admin/reports` 報告可點擊 → `/admin/reports/[reportId]`，依 6＋1 模組設定渲染真實報告、風險事件與快速處置。
 - P0 現況抽查（2026-09-07，基準 76880f3）：tenant 隔離路由、review_cases/audit_logs tenant_id、devices 寫入接線、CSP headers、key revoke/rotate 五項全 PASS；詳見 docs/reviews/2026-09-07-current-head-spotcheck.md（殘留：註冊預設 security_admin、讀取類審計未逐筆、site_configs 全域列、CSP 非ce 化）。
+- P1 第二波抽查（2026-09-07，基準 9695432）：證據鏈自動事件化、伺服器事實規則、expires_at 清理已 PASS；仍 FAIL：admin key localStorage＋無守衛、deleteVisitor GDPR 級聯、六層資料層、簽章信任模型、policy-engine 死碼、詳情頁 fraudScore 鏡像、local-only STUN；詳見 docs/reviews/2026-09-07-current-head-p1-spotcheck.md。
