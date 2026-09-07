@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { apiBaseUrl } from '../../lib/api';
 
 interface DeviceItem {
@@ -80,7 +81,11 @@ export default function AdminDevicesList() {
             <tbody>
               {devices.map((device) => (
                 <tr key={device.fingerprintHash}>
-                  <td>{device.fingerprintHash}</td>
+                  <td>
+                    <Link href={`/admin/devices/${encodeURIComponent(device.fingerprintHash)}`}>
+                      {device.fingerprintHash}
+                    </Link>
+                  </td>
                   <td>{device.canvasHash ?? '-'}</td>
                   <td>{device.webglHash ?? '-'}</td>
                   <td>
