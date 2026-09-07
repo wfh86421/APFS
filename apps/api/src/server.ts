@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import {
@@ -50,6 +51,20 @@ import {
 } from '@shieldscan/tenant';
 
 const app = Fastify({ logger: true });
+
+// 統一錯誤處理：限流逾限 → 429（其餘維持 5xx/原狀態碼語意）。
+app.setErrorHandler((err, request, reply) => {
+  const code = (err as Error & { code?: string }).code;
+  if (code === 'RATE_LIMITED') {
+    return reply
+      .code(429)
+      .header('Retry-After', '60')
+      .send({ error: 'rate_limited', message: 'API Key 限流：每分鐘 60 次，請稍後重試', retryAfterSeconds: 60 });
+  }
+  app.log.error({ err, url: request.url }, 'unhandled error');
+  const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
+  return reply.code(statusCode).send({ error: 'internal_error', message: '伺服器內部錯誤' });
+});
 
 const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
   .split(',')
@@ -121,16 +136,60 @@ function scoreToPolicy(score: ScoreResult): PolicyDecision {
   return policyDecisionForRiskLevel(score.riskLevel);
 }
 
+/** 是否為環回/私網/保留網段（或無法解析的位址）；供來源信任與 Webhook 目標防護共用。 */
+function isPrivateAddress(ip: string): boolean {
+  const v = (ip ?? '').trim().toLowerCase();
+  if (!v || v === 'unknown') return true;
+  if (v === '::1' || v === '::') return true;
+  if (v.startsWith('::ffff:')) return isPrivateAddress(v.slice(7));
+  if (v.includes(':')) {
+    // IPv6：fc00::/7 (ULA)、fe80::/10 (link-local)、::1/:: 已於上處理。
+    return /^f[cd]/.test(v) || /^fe[89ab]/.test(v);
+  }
+  const parts = v.split('.');
+  if (parts.length !== 4) return true;
+  const nums = parts.map(Number);
+  if (nums.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
+  const a = nums[0];
+  const b = nums[1];
+  if (a === undefined || b === undefined) return true;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true; // link-local / metadata(169.254.169.254)
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a >= 224) return true; // 多播/保留
+  return false;
+}
+
+/** 信任的 proxy 網段（可含 IPv4 清單，例如 Caddy 所在網段）。 */
+const TRUSTED_PROXY_IPS = (process.env.TRUSTED_PROXY_IPS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isTrustedPeer(remote: string): boolean {
+  const cleaned = (remote ?? '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+  if (TRUSTED_PROXY_IPS.includes(cleaned)) return true;
+  // 預設信任本機與內網來源（docker compose 內 reverse proxy 常見），
+  // 網際網路來源一律不採信其 X-Forwarded-For。
+  return cleaned === '127.0.0.1' || isPrivateAddress(cleaned) === true;
+}
+
 function requestIp(request: {
   headers: Record<string, unknown>;
   socket: { remoteAddress?: string };
 }): string {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]?.trim() ?? forwarded.trim();
-  }
   const remote = request.socket.remoteAddress ?? 'unknown';
-  return remote.replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+  const cleaned = remote.replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+  const forwarded = request.headers['x-forwarded-for'];
+  if (isTrustedPeer(cleaned) && typeof forwarded === 'string' && forwarded.trim()) {
+    const first = forwarded.split(',')[0]?.trim() ?? '';
+    // 僅採信「合法且非保留」的位址；其餘（畸形/私網偽造）一律退回 socket 來源。
+    if (first && !isPrivateAddress(first)) return first;
+  }
+  return cleaned;
 }
 
 const ADMIN_ROLES = ['customer_support', 'risk_analyst', 'security_admin'] as const;
@@ -197,7 +256,13 @@ async function resolveAuth(request: {
   const now = Date.now();
   const windowMs = 60 * 1000;
   const attempts = (keyRateLimits.get(verified.key.keyId) ?? []).filter((t) => now - t < windowMs);
-  if (attempts.length >= 60) return null;
+  if (attempts.length >= 60) {
+    // 限流 ≠ 未授權：由 setErrorHandler 回 429（含 Retry-After）。
+    const err = new Error('API Key rate limit exceeded') as Error & { code?: string; statusCode?: number };
+    err.code = 'RATE_LIMITED';
+    err.statusCode = 429;
+    throw err;
+  }
   keyRateLimits.set(verified.key.keyId, [...attempts, now]);
 
   return { tenant: verified.tenant, key: verified.key };
@@ -217,6 +282,46 @@ async function verifyReportSignature(
   return { required: true, verified: result.valid, reason: result.reason };
 }
 
+/** 單次投遞：解析目標主機防 DNS-rebinding/私網，禁 redirect，附 HMAC 簽章。 */
+async function deliverWebhook(
+  webhook: Webhook,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  const parsed = new URL(webhook.url);
+  const host = parsed.hostname;
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (!isLoopback) {
+    let addrs: Array<{ address: string }> = [];
+    try {
+      addrs = await lookup(host, { all: true });
+    } catch {
+      app.log.warn({ webhook: webhook.id, host }, 'webhook dns lookup failed');
+      return false;
+    }
+    if (addrs.length === 0 || addrs.some((a) => isPrivateAddress(a.address))) {
+      app.log.warn({ webhook: webhook.id, host, addrs }, 'webhook target resolved to private/reserved IP');
+      return false;
+    }
+  }
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'idempotency-key': crypto.randomUUID(),
+  };
+  if (signingSecret) {
+    headers['x-shieldscan-signature'] =
+      'sha256=' + createHmac('sha256', signingSecret).update(body).digest('hex');
+  }
+  const response = await fetch(webhook.url, {
+    method: 'POST',
+    headers,
+    body,
+    redirect: 'error', // 拒絕跟隨任何重導，避免 SSRF 跳板。
+    signal: AbortSignal.timeout(3000),
+  });
+  return response.ok;
+}
+
 async function fireRiskWebhooks(input: {
   tenantId?: string;
   reportId: string;
@@ -229,6 +334,7 @@ async function fireRiskWebhooks(input: {
     if (!webhook.isEnabled) continue;
     const payload = {
       type: 'risk_event',
+      eventId: crypto.randomUUID(),
       reportId: input.reportId,
       score: input.score.finalScore,
       grade: input.score.grade,
@@ -240,13 +346,7 @@ async function fireRiskWebhooks(input: {
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const response = await fetch(webhook.url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(3000),
-        });
-        if (response.ok) break;
+        if (await deliverWebhook(webhook, payload)) break;
       } catch (err) {
         app.log.warn({ webhook: webhook.id, attempt }, 'webhook delivery failed');
       }
@@ -585,6 +685,7 @@ app.post('/v1/tenant/keys', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'api-key-issued',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: { keyId: issued.keyId, label: body.label ?? 'additional', role: requested, actorKeyId: auth.key.keyId },
   });
@@ -620,6 +721,7 @@ app.post('/v1/tenant/keys/:keyId/revoke', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'api-key-revoked',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: { keyId, label: target.label, role: target.role, actorKeyId: auth.key.keyId },
   });
@@ -650,6 +752,7 @@ app.post('/v1/tenant/keys/:keyId/rotate', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'api-key-rotated',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: {
       oldKeyId: keyId,
@@ -685,18 +788,37 @@ app.post('/v1/webhooks', async (request, reply) => {
   const auth = await resolveAuth(request);
   if (!auth) return reply.code(401).send({ error: 'unauthorized' });
   const body = request.body as { url?: string; events?: string[] };
-  const isHttps = typeof body.url === 'string' && /^https:\/\//.test(body.url);
-  const isLocalHttp =
-    typeof body.url === 'string' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(body.url);
-  if (!body.url || !(isHttps || isLocalHttp)) {
+  const rawUrl = typeof body.url === 'string' ? body.url.trim() : '';
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    parsed = null;
+  }
+  const allowLocalHttp = process.env.WEBHOOK_ALLOW_LOCALHOST === '1';
+  const host = parsed?.hostname ?? '';
+  const isLoopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const schemeOk = parsed?.protocol === 'https:' || (allowLocalHttp && parsed?.protocol === 'http:' && isLoopbackHost);
+  if (!parsed || !schemeOk) {
     return reply
       .code(400)
-      .send({ error: 'invalid_url', message: 'Webhook 必須為 https URL（本地可用 http://localhost）' });
+      .send({ error: 'invalid_url', message: 'Webhook 必須為 https URL（本地測試需設 WEBHOOK_ALLOW_LOCALHOST=1）' });
+  }
+  if (!isLoopbackHost) {
+    let addrs: Array<{ address: string }> = [];
+    try {
+      addrs = await lookup(host, { all: true });
+    } catch {
+      return reply.code(400).send({ error: 'invalid_url', message: 'Webhook 主機無法解析' });
+    }
+    if (addrs.length === 0 || addrs.some((a) => isPrivateAddress(a.address))) {
+      return reply.code(400).send({ error: 'invalid_url', message: 'Webhook 主機不得指向內網/保留網段' });
+    }
   }
   const webhook: Webhook = {
     id: crypto.randomUUID(),
     tenantId: auth.tenant.tenantId,
-    url: body.url,
+    url: rawUrl,
     events: body.events ?? ['risk_event'],
     isEnabled: true,
     createdAt: new Date().toISOString(),
@@ -745,6 +867,7 @@ app.post('/v1/risk-events', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'risk-events-manual',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     metadata: { inserted: events.length },
   });
   return reply.code(201).send({ inserted: events.length });
@@ -781,6 +904,7 @@ app.put('/v1/admin/configs/:key', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'site-config-update',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     metadata: { key },
   });
   return { ok: true };
@@ -912,6 +1036,7 @@ app.post('/v1/network/ip-reputation', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'ip-reputation-upsert',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     targetIp: body.ipRange,
     metadata: { reputationScore: score },
   });
@@ -988,6 +1113,7 @@ app.post('/v1/reports/:id/review', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'review-open',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: { reportId: report.reportId, caseId: reviewCase.caseId, reason },
   });
@@ -1027,6 +1153,7 @@ app.put('/v1/review-cases/:caseId', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'review-decision',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: { caseId, decision: updated.decision, status: updated.status },
   });
@@ -1100,6 +1227,7 @@ app.post('/v1/outcomes', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'outcome-recorded',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     actorIp: requestIp(request),
     metadata: { outcomeType: outcome.outcomeType, shadow: outcome.shadow, amount },
   });
@@ -1336,6 +1464,7 @@ app.delete('/v1/reports/:id', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'report-delete',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     targetIp: requestIp(request),
     actorIp: requestIp(request),
     metadata: { reportId: id },
@@ -1361,6 +1490,7 @@ app.delete('/v1/visitors/:visitorId', async (request, reply) => {
   await riskRepository.appendAuditLog({
     action: 'visitor-delete',
     tenantId: auth.tenant.tenantId,
+    actorKeyId: auth.key.keyId,
     targetIp: requestIp(request),
     actorIp: requestIp(request),
     metadata: { visitorId },

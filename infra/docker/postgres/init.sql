@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS geoip_cache (
 CREATE TABLE IF NOT EXISTS audit_logs (
     id            BIGSERIAL PRIMARY KEY,
     tenant_id     UUID,
+    actor_key_id  UUID,
     action        VARCHAR(64) NOT NULL,
     target_ip     INET,
     actor_ip      INET,
@@ -326,6 +327,7 @@ CREATE INDEX IF NOT EXISTS idx_appeal_status ON appeal_cases(status);
 -- =====================================================================
 ALTER TABLE review_cases ADD COLUMN IF NOT EXISTS tenant_id UUID;
 ALTER TABLE audit_logs  ADD COLUMN IF NOT EXISTS tenant_id UUID;
+ALTER TABLE audit_logs  ADD COLUMN IF NOT EXISTS actor_key_id UUID;
 CREATE INDEX IF NOT EXISTS idx_review_tenant ON review_cases(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_tenant  ON audit_logs(tenant_id);
 

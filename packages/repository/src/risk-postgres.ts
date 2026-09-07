@@ -153,6 +153,8 @@ interface AppealRow {
 
 interface AuditLogRow {
   action: string;
+  tenant_id: string | null;
+  actor_key_id: string | null;
   target_ip: string | null;
   actor_ip: string | null;
   metadata: unknown;
@@ -546,11 +548,12 @@ export class PostgresRiskRepository implements RiskRepository {
 
   async appendAuditLog(entry: AuditLogEntry): Promise<void> {
     await this.pool.query(
-      `INSERT INTO audit_logs (action, tenant_id, target_ip, actor_ip, metadata)
-       VALUES ($1,$2,$3,$4,$5)`,
+      `INSERT INTO audit_logs (action, tenant_id, actor_key_id, target_ip, actor_ip, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
       [
         entry.action,
         entry.tenantId ?? null,
+        entry.actorKeyId ?? null,
         entry.targetIp ?? null,
         entry.actorIp ?? null,
         JSON.stringify(entry.metadata ?? {}),
@@ -560,13 +563,14 @@ export class PostgresRiskRepository implements RiskRepository {
 
   async listAuditLogs(tenantId: string, limit = 100): Promise<AuditLogEntry[]> {
     const { rows } = await this.pool.query<AuditLogRow>(
-      `SELECT action, target_ip, actor_ip, metadata, created_at
+      `SELECT action, tenant_id, actor_key_id, target_ip, actor_ip, metadata, created_at
        FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2`,
       [tenantId, limit],
     );
     return rows.map((row) => ({
       action: row.action,
-      tenantId,
+      tenantId: row.tenant_id ?? tenantId,
+      actorKeyId: row.actor_key_id ?? undefined,
       targetIp: row.target_ip ?? undefined,
       actorIp: row.actor_ip ?? undefined,
       metadata: (row.metadata as Record<string, unknown>) ?? undefined,
