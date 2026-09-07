@@ -10,6 +10,7 @@ import type {
 } from '@shieldscan/core-schema';
 import type {
   AuditLogEntry,
+  DashboardBlockState,
   DeviceFingerprint,
   IpReputation,
   NetworkSignal,
@@ -166,6 +167,15 @@ interface IpReputationRow {
   first_seen: string;
   last_seen: string;
   source: string | null;
+}
+
+interface DashboardBlockRow {
+  block_key: string;
+  enabled: boolean;
+  position: number;
+  settings: unknown;
+  updated_at: string;
+  updated_by: string | null;
 }
 
 /** Phase 1：PostgreSQL 風險事件／欄位定義（使用 init.sql 新增表）。 */
@@ -679,6 +689,53 @@ export class PostgresRiskRepository implements RiskRepository {
        VALUES ($1,$2,NOW())
        ON CONFLICT (config_key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
       [key, JSON.stringify(payload)],
+    );
+  }
+
+  /* ---------------- Phase A 版面（dashboard_blocks） ---------------- */
+
+  async listDashboardBlocks(tenantId: string): Promise<DashboardBlockState[]> {
+    const { rows } = await this.pool.query<DashboardBlockRow>(
+      `SELECT block_key, enabled, position, settings, updated_at, updated_by
+       FROM dashboard_blocks WHERE tenant_id = $1 ORDER BY position ASC, block_key ASC`,
+      [tenantId],
+    );
+    return rows.map((row) => ({
+      blockKey: row.block_key,
+      tenantId,
+      enabled: row.enabled,
+      position: row.position,
+      settings: (row.settings as Record<string, unknown>) ?? {},
+      updatedAt: new Date(row.updated_at).toISOString(),
+      updatedBy: row.updated_by ?? undefined,
+    }));
+  }
+
+  async upsertDashboardBlock(tenantId: string, state: DashboardBlockState): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO dashboard_blocks (tenant_id, block_key, enabled, position, settings, updated_at, updated_by)
+       VALUES ($1,$2,$3,$4,$5,NOW(),$6)
+       ON CONFLICT (tenant_id, block_key) DO UPDATE SET
+         enabled = EXCLUDED.enabled,
+         position = EXCLUDED.position,
+         settings = EXCLUDED.settings,
+         updated_at = NOW(),
+         updated_by = EXCLUDED.updated_by`,
+      [
+        tenantId,
+        state.blockKey,
+        state.enabled,
+        state.position,
+        JSON.stringify(state.settings ?? {}),
+        state.updatedBy ?? null,
+      ],
+    );
+  }
+
+  async resetDashboardBlock(tenantId: string, blockKey: string): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM dashboard_blocks WHERE tenant_id = $1 AND block_key = $2`,
+      [tenantId, blockKey],
     );
   }
 

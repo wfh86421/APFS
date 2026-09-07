@@ -216,6 +216,17 @@ export interface IpReputation {
   lastSeen?: string;
 }
 
+/** Phase A：租戶區塊狀態（dashboard_blocks）。settings 為已驗證純資料。 */
+export interface DashboardBlockState {
+  blockKey: string;
+  tenantId?: string;
+  enabled: boolean;
+  position: number;
+  settings: Record<string, unknown>;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -251,4 +262,10 @@ export interface RiskRepository {
   upsertIpReputation(reputation: IpReputation): Promise<void>;
   getSiteConfig(key: string): Promise<unknown | null>;
   setSiteConfig(key: string, payload: unknown): Promise<void>;
+  /** Phase A 版面：列出租戶所有區塊狀態（無覆寫列時由呼叫端以 registry 預設補）。 */
+  listDashboardBlocks(tenantId: string): Promise<DashboardBlockState[]>;
+  /** 覆寫單一區塊狀態（upsert）。 */
+  upsertDashboardBlock(tenantId: string, state: DashboardBlockState): Promise<void>;
+  /** 還原單一區塊為預設（刪除覆寫列）。 */
+  resetDashboardBlock(tenantId: string, blockKey: string): Promise<void>;
 }

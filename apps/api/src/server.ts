@@ -2,14 +2,20 @@ import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import {
+  ADMIN_PAGE_KEYS,
+  ADMIN_PAGES,
+  BLOCK_REGISTRY,
   SCHEMA_VERSION,
   type AnalysisIssue,
   type EnvironmentReport,
   type PolicyDecision,
+  defaultSettingsFor,
+  listPageBlocks,
+  policyDecisionForRiskLevel,
   type ReviewStatus,
   type RiskEvent,
   type RiskEventType,
-  policyDecisionForRiskLevel,
+  validateBlockSettings,
   validateFieldDefinition,
   validateEnvironmentReport,
   validateRiskEvent,
@@ -1447,6 +1453,177 @@ app.get('/v1/audit-logs', async (request, reply) => {
   const limit = query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100;
   const logs = await riskRepository.listAuditLogs(auth.tenant.tenantId, limit);
   return { logs };
+});
+
+/* ------------------------------------------------------------------ */
+/* Phase A 版面 API（dashboard_blocks；tenant 隔離；寫入限 security_admin）*/
+/* ------------------------------------------------------------------ */
+
+interface StoredBlockLite {
+  blockKey: string;
+  enabled: boolean;
+  position: number;
+  settings: Record<string, unknown>;
+  persisted: boolean;
+}
+
+function mergedBlocks(
+  defs: ReturnType<typeof listPageBlocks>,
+  stored: Map<string, StoredBlockLite>,
+): Array<{
+  blockKey: string;
+  icon: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  position: number;
+  settings: Record<string, unknown>;
+  defaultEnabled: boolean;
+  accessLevel: 'normal' | 'restricted';
+  persisted: boolean;
+}> {
+  return defs
+    .map((def) => {
+      const row = stored.get(def.key);
+      return {
+        blockKey: def.key,
+        icon: def.icon,
+        title: def.title,
+        description: def.description,
+        enabled: row ? row.enabled : def.defaultEnabled,
+        position: row ? row.position : def.defaultPosition,
+        settings: row ? row.settings : defaultSettingsFor(def),
+        defaultEnabled: def.defaultEnabled,
+        accessLevel: def.accessLevel,
+        persisted: Boolean(row),
+      };
+    })
+    .sort((a, b) => a.position - b.position || a.blockKey.localeCompare(b.blockKey));
+}
+
+async function loadStoredBlocks(tenantId: string): Promise<Map<string, StoredBlockLite>> {
+  const rows = await riskRepository.listDashboardBlocks(tenantId);
+  return new Map(rows.map((r) => [r.blockKey, { ...r, persisted: true }]));
+}
+
+/** 讀取版面：可帶 ?page=，否則回傳全部頁面（區塊未覆寫時以 registry 預設合併）。 */
+app.get('/v1/dashboard/blocks', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { page?: string };
+  const stored = await loadStoredBlocks(auth.tenant.tenantId);
+
+  if (query.page) {
+    if (!(ADMIN_PAGE_KEYS as readonly string[]).includes(query.page)) {
+      return reply.code(400).send({ error: 'invalid_page', message: '未知後台頁面' });
+    }
+    const page = query.page as (typeof ADMIN_PAGE_KEYS)[number];
+    return {
+      tenantId: auth.tenant.tenantId,
+      pages: [
+        {
+          key: page,
+          title: ADMIN_PAGES[page].title,
+          icon: ADMIN_PAGES[page].icon,
+          blocks: mergedBlocks(listPageBlocks(page), stored),
+        },
+      ],
+    };
+  }
+  const pages = ADMIN_PAGE_KEYS.map((page) => ({
+    key: page,
+    title: ADMIN_PAGES[page].title,
+    icon: ADMIN_PAGES[page].icon,
+    blocks: mergedBlocks(listPageBlocks(page), stored),
+  }));
+  return { tenantId: auth.tenant.tenantId, pages };
+});
+
+/** 覆寫單一區塊（啟停/順序/設定）。settings 依 registry schema 驗證。 */
+app.put('/v1/dashboard/blocks/:blockKey', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '版面寫入限 security_admin' });
+  }
+  const { blockKey } = request.params as { blockKey: string };
+  const def = BLOCK_REGISTRY[blockKey];
+  if (!def) {
+    return reply.code(404).send({ error: 'unknown_block', message: `未知區塊：${blockKey}` });
+  }
+  const body = (request.body ?? {}) as {
+    enabled?: unknown;
+    position?: unknown;
+    settings?: unknown;
+    changedKeys?: string[];
+  };
+
+  const stored = await loadStoredBlocks(auth.tenant.tenantId);
+  const row = stored.get(blockKey);
+  const defaults = defaultSettingsFor(def);
+  const merged = {
+    ...defaults,
+    ...(row?.settings ?? {}),
+    ...(body.settings && typeof body.settings === 'object' ? body.settings : {}),
+  };
+  const validated = validateBlockSettings(blockKey, merged);
+  if (!validated.ok) {
+    return reply.code(400).send({
+      error: 'invalid_settings',
+      issues: validated.issues,
+      message: '設定驗證失敗（僅接受純資料欄位）',
+    });
+  }
+
+  const enabled =
+    typeof body.enabled === 'boolean' ? body.enabled : (row?.enabled ?? def.defaultEnabled);
+  const positionRaw =
+    typeof body.position === 'number' && Number.isFinite(body.position)
+      ? Math.max(0, Math.min(500, Math.round(body.position)))
+      : (row?.position ?? def.defaultPosition);
+
+  await riskRepository.upsertDashboardBlock(auth.tenant.tenantId, {
+    blockKey,
+    enabled,
+    position: positionRaw,
+    settings: validated.data,
+    updatedBy: auth.key.keyId,
+  });
+  await riskRepository.appendAuditLog({
+    action: 'dashboard-block-update',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: {
+      blockKey,
+      changedKeys: Array.isArray(body.changedKeys) ? body.changedKeys.slice(0, 30) : [],
+      actorKeyId: auth.key.keyId,
+    },
+  });
+  return {
+    ok: true,
+    block: { blockKey, enabled, position: positionRaw, settings: validated.data },
+  };
+});
+
+/** 還原單一區塊為預設（刪除覆寫）。 */
+app.post('/v1/dashboard/blocks/:blockKey/reset', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  if (roleOfRequest(request, auth) !== 'security_admin') {
+    return reply.code(403).send({ error: 'forbidden', message: '版面寫入限 security_admin' });
+  }
+  const { blockKey } = request.params as { blockKey: string };
+  if (!BLOCK_REGISTRY[blockKey]) {
+    return reply.code(404).send({ error: 'unknown_block', message: `未知區塊：${blockKey}` });
+  }
+  await riskRepository.resetDashboardBlock(auth.tenant.tenantId, blockKey);
+  await riskRepository.appendAuditLog({
+    action: 'dashboard-block-reset',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: { blockKey, actorKeyId: auth.key.keyId },
+  });
+  return { ok: true, blockKey, reset: true };
 });
 
 app.get('/v1/plugin-profile', async (_request, reply) => {

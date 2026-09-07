@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ADMIN_PAGES,
   ADMIN_PAGE_KEYS,
@@ -11,6 +11,7 @@ import {
   type BlockDef,
   type BlockFieldDef,
 } from '@shieldscan/core-schema';
+import { apiBaseUrl } from '../../lib/api';
 
 /**
  * Phase A UI 雛形（TRIAL 評判用）：版面設定
@@ -70,6 +71,91 @@ function saveLayout(page: AdminPageKey, layout: PageLayout): void {
     window.localStorage.setItem(storageKey(page), JSON.stringify(layout));
   } catch {
     /* ignore quota */
+  }
+}
+
+/* ---------------- 後端同步（M3 API；401/離線時自動降級 localStorage） ---------------- */
+
+interface ServerBlock {
+  blockKey: string;
+  enabled: boolean;
+  position: number;
+  settings: Record<string, unknown>;
+}
+interface ServerPage {
+  key: AdminPageKey;
+  blocks: ServerBlock[];
+}
+
+function apiKeyFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('shieldscan.admin.apiKey');
+}
+
+function layoutFromServer(blocks: ServerBlock[]): PageLayout {
+  const sorted = [...blocks].sort((a, b) => a.position - b.position);
+  return {
+    order: sorted.map((b) => b.blockKey),
+    disabled: sorted.filter((b) => !b.enabled).map((b) => b.blockKey),
+    settings: Object.fromEntries(sorted.map((b) => [b.blockKey, b.settings])),
+  };
+}
+
+async function fetchServerPages(): Promise<ServerPage[] | null> {
+  const key = apiKeyFromStorage();
+  if (!key) return null;
+  try {
+    const res = await fetch(`${apiBaseUrl()}/v1/dashboard/blocks`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { pages: ServerPage[] };
+    return body.pages;
+  } catch {
+    return null;
+  }
+}
+
+async function pushBlockToServer(
+  page: AdminPageKey,
+  layout: PageLayout,
+  blockKey: string,
+): Promise<boolean> {
+  const key = apiKeyFromStorage();
+  if (!key) return false;
+  const position = Math.max(0, layout.order.indexOf(blockKey));
+  try {
+    const res = await fetch(`${apiBaseUrl()}/v1/dashboard/blocks/${encodeURIComponent(blockKey)}`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        enabled: !layout.disabled.includes(blockKey),
+        position,
+        settings: layout.settings[blockKey] ?? {},
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resetBlockOnServer(blockKey: string): Promise<boolean> {
+  const key = apiKeyFromStorage();
+  if (!key) return false;
+  try {
+    const res = await fetch(
+      `${apiBaseUrl()}/v1/dashboard/blocks/${encodeURIComponent(blockKey)}/reset`,
+      { method: 'POST', headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) },
+    );
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -194,7 +280,8 @@ function BlockSettingsDrawer({
         <button onClick={onClose} aria-label="關閉">✕</button>
       </div>
       <p className="pab-drawer-note">
-        欄位由區塊定義自動產生（僅純資料，不存 HTML/程式碼）；寫入將於 M3 串接正式 API 與審計。
+        欄位由區塊定義自動產生（僅純資料，不存 HTML/程式碼）；儲存即寫入後端 dashboard_blocks
+        （security_admin 限定）並記入審計。
       </p>
       <div className="pab-fields">
         {block.fields.map((field) => (
@@ -232,22 +319,77 @@ export default function BlockLayoutEditor() {
   const [editing, setEditing] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [toast, setToast] = useState('');
+  const [mode, setMode] = useState<'local' | 'server'>('local');
+  const [banner, setBanner] = useState('');
+  const [serverPages, setServerPages] = useState<Map<AdminPageKey, PageLayout>>(new Map());
+
+  // 啟動：有 API Key 時優先讀後端（M3）；否則以本機 localStorage 示範。
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const pages = await fetchServerPages();
+      if (!alive) return;
+      if (pages && pages.length > 0) {
+        const map = new Map<AdminPageKey, PageLayout>();
+        for (const p of pages) {
+          map.set(p.key, layoutFromServer(p.blocks));
+        }
+        setServerPages(map);
+        setMode('server');
+        setBanner('已連線後端：版面以正式 API 儲存（tenant 隔離）');
+        const current = map.get('overview');
+        if (current) {
+          setLayout(current);
+          saveLayout('overview', current);
+        }
+      } else {
+        setMode('local');
+        setBanner('未偵測到 API Key：以本機示範儲存（localStorage）；到 /register 註冊後即可用後端正式儲存');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const defs = useMemo(() => listPageBlocks(page), [page]);
   const byKey = useMemo(() => new Map(defs.map((d) => [d.key, d])), [defs]);
 
-  const commit = (next: PageLayout) => {
+  const commit = async (next: PageLayout) => {
     setLayout(next);
+    const current = mode;
+    if (current === 'server') {
+      const results = await Promise.all(
+        defs.map((d) => pushBlockToServer(page, next, d.key)),
+      );
+      if (results.every(Boolean)) {
+        setToast('已儲存到後端（dashboard_blocks）');
+        const map = new Map(serverPages);
+        map.set(page, next);
+        setServerPages(map);
+        saveLayout(page, next);
+      } else {
+        setToast('後端儲存失敗（可能 key 已失效），仍保留在本機');
+        setMode('local');
+      }
+      window.setTimeout(() => setToast(''), 2500);
+      return;
+    }
     saveLayout(page, next);
-    setToast('已儲存到本機（試用版 localStorage；M2/M3 將改為正式儲存）');
+    setToast('已儲存到本機（localStorage 示範版）');
     window.setTimeout(() => setToast(''), 2500);
   };
 
   const switchPage = (p: AdminPageKey) => {
     setPage(p);
-    setLayout(loadLayout(p));
     setEditing(null);
     setPreview(false);
+    const server = serverPages.get(p);
+    if (mode === 'server' && server) {
+      setLayout(server);
+    } else {
+      setLayout(loadLayout(p));
+    }
   };
 
   const move = (index: number, dir: -1 | 1) => {
@@ -259,22 +401,31 @@ export default function BlockLayoutEditor() {
     if (current === undefined || next === undefined) return;
     order[index] = next;
     order[target] = current;
-    commit({ ...layout, order });
+    void commit({ ...layout, order });
   };
 
   const toggleDisabled = (key: string) => {
     const disabled = layout.disabled.includes(key)
       ? layout.disabled.filter((k) => k !== key)
       : [...layout.disabled, key];
-    commit({ ...layout, disabled });
+    void commit({ ...layout, disabled });
   };
 
-  const resetPage = () => {
+  const resetPage = async () => {
     if (!window.confirm(`還原「${ADMIN_PAGES[page].title}」頁的版面為預設？`)) return;
     const def = defaultsFor(page);
+    if (mode === 'server') {
+      const persisted = [...def.order];
+      await Promise.all(persisted.map((key) => resetBlockOnServer(key)));
+      const map = new Map(serverPages);
+      map.set(page, def);
+      setServerPages(map);
+      setToast('已還原為預設並同步後端');
+    } else {
+      setToast('已還原為預設（本機）');
+    }
     setLayout(def);
     saveLayout(page, def);
-    setToast('已還原為預設版面');
     window.setTimeout(() => setToast(''), 2000);
   };
 
@@ -288,6 +439,7 @@ export default function BlockLayoutEditor() {
         .pab{display:flex;flex-direction:column;gap:14px;padding:18px;background:#0f1826;border:1px solid #22344f;border-radius:14px;color:#e8eef7;font-family:inherit}
         .pab h2{margin:0 0 4px;font-size:17px}
         .pab .pab-sub{color:#8fa2ba;font-size:12.5px;margin:0 0 10px;line-height:1.6}
+        .pab .pab-banner{background:#10233c;border:1px solid #2f5d8f;border-radius:9px;color:#bcd3ec;font-size:12px;padding:7px 11px;margin:0 0 10px}
         .pab .pab-pages{display:flex;gap:6px;flex-wrap:wrap}
         .pab .pab-pages button{background:#15233c;border:1px solid #22344f;color:#bcd3ec;border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer}
         .pab .pab-pages button.on{background:#1c3a63;border-color:#4da3ff;color:#fff}
@@ -331,9 +483,10 @@ export default function BlockLayoutEditor() {
       <div>
         <h2>🧱 版面設定（自訂區塊）</h2>
         <p className="pab-sub">
-          Phase A 試用雛形：每頁由區塊組成，可啟停 / 排序（⬆⬇）/ 編輯參數（⚙）。目前以本機儲存（localStorage）示範；
-          正式版將由 dashboard_blocks 資料表＋API 取代（M2/M3）。
+          Phase A：每頁由區塊組成，可啟停 / 排序（⬆⬇）/ 編輯參數（⚙）。已接後端 dashboard_blocks
+          （tenant 隔離＋security_admin＋審計）；未登入時自動以本機 localStorage 示範。
         </p>
+        {banner && <div className="pab-banner">{banner}</div>}
       </div>
 
       <div className="pab-pages">
