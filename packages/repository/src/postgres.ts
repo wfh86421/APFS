@@ -66,15 +66,16 @@ export class PostgresReportRepository implements ReportRepository {
         report_id, tenant_id, schema_version, visitor_id, session_id, source,
         consent_mode, retention_days, sdk_name, sdk_version, client_ip,
         privacy_score, grade, risk_level, signals, issues, scores, integrity, raw,
-        created_at, expires_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        created_at, expires_at, fingerprint_hash
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
       ON CONFLICT (visitor_id, session_id) DO UPDATE SET
         signals = EXCLUDED.signals,
         issues = EXCLUDED.issues,
         scores = EXCLUDED.scores,
         privacy_score = EXCLUDED.privacy_score,
         grade = EXCLUDED.grade,
-        risk_level = EXCLUDED.risk_level`,
+        risk_level = EXCLUDED.risk_level,
+        fingerprint_hash = COALESCE(fingerprint_scans.fingerprint_hash, EXCLUDED.fingerprint_hash)`,
       [
         report.reportId,
         report.tenantId ?? null,
@@ -99,8 +100,27 @@ export class PostgresReportRepository implements ReportRepository {
         meta?.retentionDays
           ? new Date(Date.now() + meta.retentionDays * 24 * 60 * 60 * 1000).toISOString()
           : null,
+        meta?.fingerprintHash ?? null,
       ],
     );
+  }
+
+  async listRecentClientIps(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit = 100,
+  ): Promise<string[]> {
+    const { rows } = await this.pool.query<{ client_ip: string }>(
+      `SELECT DISTINCT client_ip::text AS client_ip
+       FROM fingerprint_scans
+       WHERE tenant_id = $1 AND fingerprint_hash = $2
+         AND client_ip IS NOT NULL AND created_at >= $3
+       ORDER BY client_ip
+       LIMIT $4`,
+      [tenantId, fingerprintHash, since, limit],
+    );
+    return rows.map((row) => row.client_ip);
   }
 
   async getReport(tenantId: string, reportId: string): Promise<StoredReport | null> {

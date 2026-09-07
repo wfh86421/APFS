@@ -252,5 +252,15 @@ export function defaultRules(): ScoringRule[] {
       description: '伺服器判定連線經 Proxy',
       evaluate: (_r, issues) => issues.some((i) => i.type === 'server_proxy_detected'),
     },
+    {
+      id: 'server_ip_velocity',
+      name: '同裝置 IP 速度異常',
+      category: 'network_security',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 8,
+      description: '同裝置短時間內由多個不同 IP 連線（疑似共享裝置/帳號農場/代理輪換）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_ip_velocity_anomaly'),
+    },
   ];
 }

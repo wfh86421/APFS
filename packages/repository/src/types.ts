@@ -32,6 +32,8 @@ export interface ReportMeta {
   grade?: string;
   riskLevel?: string;
   retentionDays?: number;
+  /** 伺服器計算的設備指紋 hash（同裝置跨 session 聚合/IP 速度用）。 */
+  fingerprintHash?: string;
 }
 
 export interface StoredReport extends EnvironmentReport {
@@ -56,6 +58,13 @@ export interface ReportRepository {
   deleteVisitor(tenantId: string, visitorId: string): Promise<boolean>;
   /** 保留期清理：刪除 expires_at 早於 before 的報告（平台層 job 用）。回傳刪除筆數。 */
   deleteExpiredReports(before: string): Promise<number>;
+  /** 某裝置指紋在時窗內使用過的不同 client IP（IP 速度偵測用；限 tenant）。 */
+  listRecentClientIps(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit?: number,
+  ): Promise<string[]>;
 }
 
 export interface RiskEventFilter {

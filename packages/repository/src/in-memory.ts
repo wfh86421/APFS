@@ -26,6 +26,7 @@ import type {
 export class InMemoryReportRepository implements ReportRepository {
   private readonly reports = new Map<string, StoredReport>();
   private readonly visitors = new Map<string, VisitorProfile>();
+  private readonly fingerprints = new Map<string, string>();
 
   async saveReport(report: EnvironmentReport, meta?: ReportMeta): Promise<void> {
     this.reports.set(report.reportId, {
@@ -35,6 +36,7 @@ export class InMemoryReportRepository implements ReportRepository {
       grade: meta?.grade,
       riskLevel: meta?.riskLevel,
     });
+    if (meta?.fingerprintHash) this.fingerprints.set(report.reportId, meta.fingerprintHash);
 
     const existing = this.visitors.get(report.subjectId ?? report.sessionId);
     if (existing) {
@@ -107,7 +109,29 @@ export class InMemoryReportRepository implements ReportRepository {
   async deleteReport(tenantId: string, reportId: string): Promise<boolean> {
     const report = this.reports.get(reportId);
     if (!report || report.tenantId !== tenantId) return false;
+    this.fingerprints.delete(reportId);
     return this.reports.delete(reportId);
+  }
+
+  async listRecentClientIps(
+    tenantId: string,
+    fingerprintHash: string,
+    since: string,
+    limit = 100,
+  ): Promise<string[]> {
+    const ips = new Set<string>();
+    for (const [reportId, report] of this.reports) {
+      if (ips.size >= limit) break;
+      if (
+        report.tenantId === tenantId &&
+        this.fingerprints.get(reportId) === fingerprintHash &&
+        report.createdAt >= since &&
+        report.clientIp
+      ) {
+        ips.add(report.clientIp);
+      }
+    }
+    return [...ips].sort();
   }
 
   async deleteExpiredReports(before: string): Promise<number> {

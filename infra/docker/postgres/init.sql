@@ -330,6 +330,12 @@ CREATE INDEX IF NOT EXISTS idx_review_tenant ON review_cases(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_tenant  ON audit_logs(tenant_id);
 
 -- =====================================================================
+-- WP2（IP 速度/同設備多 IP 聚合）：fingerprint_scans 掛設備指紋 hash
+-- =====================================================================
+ALTER TABLE fingerprint_scans ADD COLUMN IF NOT EXISTS fingerprint_hash VARCHAR(64);
+CREATE INDEX IF NOT EXISTS idx_scans_fp_created ON fingerprint_scans(fingerprint_hash, created_at);
+
+-- =====================================================================
 -- 公開站台設定（單一全域列）
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS site_configs (

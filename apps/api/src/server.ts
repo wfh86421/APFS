@@ -389,6 +389,7 @@ const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
   server_tor_ip: 'tor_detected',
   server_vpn_detected: 'vpn_detected',
   server_proxy_detected: 'proxy_detected',
+  server_ip_velocity: 'ip_velocity_anomaly',
 };
 
 /** 依評分引擎觸發的規則自動產生 RiskEvent（收案證據鏈的第一環）。 */
@@ -949,9 +950,29 @@ app.post('/v1/reports', async (request, reply) => {
   report.signals = [...report.signals, ...serverSignals];
 
   const network = await analyzeRequestNetwork(ip, report);
+  // 具身分租戶的收案：計算裝置指紋（供落庫/IP 速度/設備表共用，避免重算）。
+  const deviceForScope = auth ? buildDeviceFingerprint(report, auth.tenant.tenantId) : null;
   // 伺服器事實一併進入評分與證據鏈（不信任客戶端自報為唯一規則來源）。
   const serverIssues = serverNetworkIssues(network);
-  const allIssues = [...(report.issues ?? []), ...serverIssues];
+  const velocityIssues: AnalysisIssue[] = [];
+  if (auth && deviceForScope) {
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const recentIps = await repository.listRecentClientIps(
+      auth.tenant.tenantId,
+      deviceForScope.fingerprintHash,
+      since7d,
+    );
+    if (recentIps.length >= 6) {
+      velocityIssues.push({
+        id: crypto.randomUUID(),
+        type: 'server_ip_velocity_anomaly',
+        severity: 'medium',
+        description: `同裝置近 7 天內由 ${recentIps.length} 個不同 IP 連線（IP 速度異常）`,
+        evidence: { ipCount7d: recentIps.length, ips: recentIps.slice(0, 30) },
+      });
+    }
+  }
+  const allIssues = [...(report.issues ?? []), ...serverIssues, ...velocityIssues];
   report.issues = allIssues;
   const score = await buildScoringEngine().calculate(report, allIssues, DEFAULT_PROFILE);
   const policy = scoreToPolicy(score);
@@ -966,6 +987,7 @@ app.post('/v1/reports', async (request, reply) => {
     grade: score.grade,
     riskLevel: score.riskLevel,
     retentionDays: report.consent.retentionDays,
+    fingerprintHash: deviceForScope?.fingerprintHash,
   });
   const visitor = extractVisitorProfile(report);
   visitor.ipHistory = [ip];
@@ -993,11 +1015,8 @@ app.post('/v1/reports', async (request, reply) => {
 
   // /v1/devices 資料接線：僅具身分租戶的收案寫入設備指紋與網路訊號。
   // 匿名（tenant NULL）不寫入，維持「租戶資料 vs 公開資料」的 owner 邊界。
-  if (auth) {
-    const device = buildDeviceFingerprint(report, auth.tenant.tenantId);
-    if (device) {
-      await riskRepository.upsertDeviceFingerprint(device);
-    }
+  if (auth && deviceForScope) {
+    await riskRepository.upsertDeviceFingerprint(deviceForScope);
     await riskRepository.upsertNetworkSignal(buildNetworkSignal(report, auth.tenant.tenantId, ip, network));
   }
 

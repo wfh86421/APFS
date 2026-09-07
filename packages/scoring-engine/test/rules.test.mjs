@@ -93,3 +93,11 @@ test('乾淨環境：無任何規則觸發 → 100 分、無 explanations', asyn
   assert.equal(score.explanations.length, 0);
   assert.equal(score.riskLevel, 'low');
 });
+
+test('伺服器事實規則：IP 速度異常 server_ip_velocity_anomaly 觸發且 track=fraud', async () => {
+  const score = await calc(makeReport(), [
+    issue('server_ip_velocity_anomaly', { ipCount7d: 9, ips: ['1.1.1.1', '2.2.2.2'] }),
+  ]);
+  assert.ok(score.explanations.some((e) => e.ruleId === 'server_ip_velocity' && e.track === 'fraud'));
+  assert.equal(score.finalScore, 92); // 100 - 8
+});

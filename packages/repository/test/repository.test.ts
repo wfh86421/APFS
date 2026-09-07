@@ -149,3 +149,34 @@ test('掃描計數：countReports 支援全部與租戶範圍', async () => {
   assert.equal(await repo.countReports(), 2);
   assert.equal(await repo.countReports('tenant-a'), 1);
 });
+
+test('listRecentClientIps：同裝置時窗內不同 IP（IP 速度）、租戶/時窗隔離', async () => {
+  const repo = new InMemoryReportRepository();
+  const fp = 'fp-velocity-001';
+  const now = new Date().toISOString();
+  const old = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+
+  // tenant-a、同裝置、近期兩個 IP
+  await repo.saveReport(makeReport({ createdAt: now, sessionId: 'v1' }), {
+    clientIp: '49.214.1.196',
+    fingerprintHash: fp,
+  });
+  await repo.saveReport(makeReport({ createdAt: now, sessionId: 'v2' }), {
+    clientIp: '203.0.113.9',
+    fingerprintHash: fp,
+  });
+  // 10 天前（超出 7 天時窗）第三個 IP → 不計
+  await repo.saveReport(makeReport({ createdAt: old, sessionId: 'v3' }), {
+    clientIp: '198.51.100.7',
+    fingerprintHash: fp,
+  });
+  // 另一 tenant 同 hash → 不計（租戶隔離）
+  await repo.saveReport(
+    makeReport({ tenantId: 'tenant-b', createdAt: now, sessionId: 'v4' }),
+    { clientIp: '9.9.9.9', fingerprintHash: fp },
+  );
+
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const recent = await repo.listRecentClientIps('tenant-a', fp, since7d);
+  assert.deepEqual(recent, ['203.0.113.9', '49.214.1.196']);
+});
