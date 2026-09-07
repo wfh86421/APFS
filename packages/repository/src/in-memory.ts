@@ -10,6 +10,7 @@ import type {
   DeviceFingerprint,
   IpReputation,
   NetworkSignal,
+  OutcomeEntry,
   ReportMeta,
   ReportRepository,
   ReviewCasePatch,
@@ -179,6 +180,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly reviewCases = new Map<string, ReviewCase>();
   private readonly appeals = new Map<string, AppealCase>();
   private readonly auditLogs: AuditLogEntry[] = [];
+  private readonly outcomes: OutcomeEntry[] = [];
   private readonly ipReputations = new Map<string, IpReputation>();
   private readonly siteConfigs = new Map<string, unknown>();
 
@@ -293,6 +295,27 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async listAuditLogs(tenantId: string, limit = 100): Promise<AuditLogEntry[]> {
     return this.auditLogs.filter((entry) => entry.tenantId === tenantId).slice(0, limit);
+  }
+
+  async recordOutcome(entry: OutcomeEntry): Promise<void> {
+    this.outcomes.push(entry);
+  }
+
+  async listOutcomes(
+    tenantId: string,
+    since?: string,
+    until?: string,
+    limit = 500,
+  ): Promise<OutcomeEntry[]> {
+    return this.outcomes
+      .filter(
+        (entry) =>
+          entry.tenantId === tenantId &&
+          (!since || entry.occurredAt >= since) &&
+          (!until || entry.occurredAt <= until),
+      )
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+      .slice(0, limit);
   }
 
   async getIpReputation(ip: string): Promise<IpReputation | null> {

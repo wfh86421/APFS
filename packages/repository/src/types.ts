@@ -153,6 +153,31 @@ export interface AuditLogEntry {
   createdAt?: string;
 }
 
+/** 決策成效回饋的事件型別（WP3：Shadow/ROI 的數據來源）。 */
+export type OutcomeType =
+  | 'fraud_chargeback'
+  | 'fraud_order'
+  | 'false_positive'
+  | 'appeal_accepted'
+  | 'appeal_rejected'
+  | 'decision_log';
+
+/** 成效回饋事件：把「當時的決策/Shadow 反事實」與「事後結果」接起來。 */
+export interface OutcomeEntry {
+  id: string;
+  tenantId?: string;
+  reportId?: string;
+  caseId?: string;
+  sessionId?: string;
+  outcomeType: OutcomeType;
+  /** 決策/反事實決策（enforced 時為實際決策；shadow 時為 would_action）。 */
+  decision?: PolicyDecision;
+  shadow?: boolean;
+  amount?: number;
+  occurredAt: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface IpReputation {
   ipRange: string;
   reputationScore: number;
@@ -184,6 +209,14 @@ export interface RiskRepository {
   createAppeal(appeal: AppealCase): Promise<void>;
   appendAuditLog(entry: AuditLogEntry): Promise<void>;
   listAuditLogs(tenantId: string, limit?: number): Promise<AuditLogEntry[]>;
+  /** 記錄成效回饋事件（tenant 隔離）。 */
+  recordOutcome(entry: OutcomeEntry): Promise<void>;
+  listOutcomes(
+    tenantId: string,
+    since?: string,
+    until?: string,
+    limit?: number,
+  ): Promise<OutcomeEntry[]>;
   getIpReputation(ip: string): Promise<IpReputation | null>;
   upsertIpReputation(reputation: IpReputation): Promise<void>;
   getSiteConfig(key: string): Promise<unknown | null>;

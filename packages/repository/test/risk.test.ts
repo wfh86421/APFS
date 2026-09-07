@@ -215,6 +215,47 @@ test('InMemory IP reputation：upsert 後可取回', async () => {
   assert.equal(reputation.categories[0], 'clean');
 });
 
+test('InMemory 成效回饋：recordOutcome 後 listOutcomes 依租戶/時窗過濾', async () => {
+  const repo = new InMemoryRiskRepository();
+  const now = new Date().toISOString();
+  const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+  await repo.recordOutcome({
+    id: crypto.randomUUID(),
+    tenantId: RISK_TENANT_ID,
+    sessionId: 's-out-1',
+    outcomeType: 'fraud_chargeback',
+    decision: 'block',
+    shadow: false,
+    amount: 1200,
+    occurredAt: now,
+  });
+  await repo.recordOutcome({
+    id: crypto.randomUUID(),
+    tenantId: RISK_TENANT_ID,
+    sessionId: 's-out-2',
+    outcomeType: 'decision_log',
+    decision: 'block',
+    shadow: true,
+    occurredAt: now,
+  });
+  await repo.recordOutcome({
+    id: crypto.randomUUID(),
+    tenantId: '99999999-9999-4999-8999-999999999999',
+    outcomeType: 'fraud_order',
+    occurredAt: now,
+  });
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const list = await repo.listOutcomes(RISK_TENANT_ID, since30);
+  assert.equal(list.length, 2);
+  assert.deepEqual(
+    list.map((e) => e.outcomeType).sort(),
+    ['decision_log', 'fraud_chargeback'],
+  );
+  assert.ok(list.every((e) => e.tenantId === RISK_TENANT_ID));
+  const empty = await repo.listOutcomes(RISK_TENANT_ID, old, old);
+  assert.equal(empty.length, 0);
+});
+
 test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, async () => {
   assert.ok(databaseUrl);
   const repo = new PostgresRiskRepository(databaseUrl);
@@ -251,6 +292,21 @@ test('PostgreSQL 風險層整合（執行期驗證）', { skip: !databaseUrl }, 
     await repo.createAppeal(makeAppeal(reviewCase.caseId));
     await repo.appendAuditLog({ action: 'review-decision', tenantId: RISK_TENANT_ID, metadata: { caseId: reviewCase.caseId } });
     assert.ok((await repo.listAuditLogs(RISK_TENANT_ID)).length >= 1);
+
+    const outcomeId = crypto.randomUUID();
+    await repo.recordOutcome({
+      id: outcomeId,
+      tenantId: RISK_TENANT_ID,
+      caseId: reviewCase.caseId,
+      outcomeType: 'false_positive',
+      decision: 'block',
+      shadow: false,
+      amount: 0,
+      occurredAt: new Date().toISOString(),
+    });
+    assert.ok(
+      (await repo.listOutcomes(RISK_TENANT_ID)).some((o) => o.id === outcomeId && o.outcomeType === 'false_positive'),
+    );
   } finally {
     await repo.close();
   }

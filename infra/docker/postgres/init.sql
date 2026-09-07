@@ -343,3 +343,27 @@ CREATE TABLE IF NOT EXISTS site_configs (
     payload      JSONB NOT NULL,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- =====================================================================
+-- WP3（成效閉環）：決策成效回饋（Shadow 反事實 / 詐欺 / 誤殺）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS decision_outcomes (
+    id            UUID PRIMARY KEY,
+    tenant_id     UUID,
+    report_id     UUID,
+    case_id       UUID,
+    session_id    VARCHAR(64),
+    outcome_type  VARCHAR(32) NOT NULL
+                  CHECK (outcome_type IN
+                    ('fraud_chargeback','fraud_order','false_positive',
+                     'appeal_accepted','appeal_rejected','decision_log')),
+    decision      VARCHAR(16)
+                  CHECK (decision IN ('allow','review','challenge','limit','block','log_only')),
+    shadow        BOOLEAN NOT NULL DEFAULT FALSE,
+    amount        NUMERIC(12,2),
+    occurred_at   TIMESTAMPTZ NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata      JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_tenant_time ON decision_outcomes(tenant_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_outcomes_case       ON decision_outcomes(case_id);

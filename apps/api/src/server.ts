@@ -924,6 +924,100 @@ app.post('/v1/review-cases/:caseId/appeal', async (request, reply) => {
   return reply.code(201).send({ appeal });
 });
 
+const OUTCOME_TYPES = [
+  'fraud_chargeback',
+  'fraud_order',
+  'false_positive',
+  'appeal_accepted',
+  'appeal_rejected',
+  'decision_log',
+] as const;
+
+/** 成效回饋（WP3）：客戶回報事後結果（詐欺拒付/詐欺訂單/誤殺/申訴成立）或 shadow 決策記錄。 */
+app.post('/v1/outcomes', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const body = request.body as {
+    outcomeType?: string;
+    reportId?: string;
+    caseId?: string;
+    sessionId?: string;
+    decision?: string;
+    shadow?: boolean;
+    amount?: number;
+    occurredAt?: string;
+  };
+  if (!body.outcomeType || !(OUTCOME_TYPES as readonly string[]).includes(body.outcomeType)) {
+    return reply.code(400).send({ error: 'invalid_outcome_type', allowed: OUTCOME_TYPES });
+  }
+  if (body.decision && !POLICY_VALUES.includes(body.decision)) {
+    return reply.code(400).send({ error: 'invalid_decision' });
+  }
+  const amount =
+    typeof body.amount === 'number' && Number.isFinite(body.amount) ? Math.max(0, body.amount) : undefined;
+  const outcome = {
+    id: crypto.randomUUID(),
+    tenantId: auth.tenant.tenantId,
+    reportId: body.reportId,
+    caseId: body.caseId,
+    sessionId: body.sessionId,
+    outcomeType: body.outcomeType as (typeof OUTCOME_TYPES)[number],
+    decision: body.decision as PolicyDecision | undefined,
+    shadow: body.shadow === true,
+    amount,
+    occurredAt: body.occurredAt ?? new Date().toISOString(),
+  };
+  await riskRepository.recordOutcome(outcome);
+  await riskRepository.appendAuditLog({
+    action: 'outcome-recorded',
+    tenantId: auth.tenant.tenantId,
+    actorIp: requestIp(request),
+    metadata: { outcomeType: outcome.outcomeType, shadow: outcome.shadow, amount },
+  });
+  return reply.code(201).send({ outcome });
+});
+
+/** ROI 聚合（WP3）：潛在攔截詐欺、誤殺回饋、shadow 反事實統計（租戶隔離）。 */
+app.get('/v1/roi', async (request, reply) => {
+  const auth = await resolveAuth(request);
+  if (!auth) return reply.code(401).send({ error: 'unauthorized' });
+  const query = request.query as { since?: string; until?: string };
+  const until = query.until ?? new Date().toISOString();
+  const since = query.since ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const outcomes = await riskRepository.listOutcomes(auth.tenant.tenantId, since, until);
+
+  const fraud = outcomes.filter(
+    (o) => o.outcomeType === 'fraud_chargeback' || o.outcomeType === 'fraud_order',
+  );
+  const enforcedBlocking = ['block', 'challenge', 'review', 'limit'];
+  const prevented = fraud.filter(
+    (o) => o.shadow !== true && o.decision && enforcedBlocking.includes(o.decision),
+  );
+  const preventedAmount = prevented.reduce((sum, o) => sum + (o.amount ?? 0), 0);
+  const shadowLogs = outcomes.filter((o) => o.outcomeType === 'decision_log' && o.shadow === true);
+  const falsePositives = outcomes.filter(
+    (o) => o.outcomeType === 'false_positive' || o.outcomeType === 'appeal_accepted',
+  );
+  const judged = fraud.length + falsePositives.length;
+  return {
+    window: { since, until },
+    totals: { outcomeCount: outcomes.length, fraudEvents: fraud.length },
+    prevented: {
+      count: prevented.length,
+      estimatedAmount: Math.round(preventedAmount * 100) / 100,
+      note: '詐欺事件中當時決策為 block/challenge/review 者（enforced，非 shadow）',
+    },
+    shadow: {
+      decisionLogCount: shadowLogs.length,
+      note: 'shadowMode 下的高風險反事實決策（would-action）',
+    },
+    falsePositives: {
+      count: falsePositives.length,
+      falsePositiveRate: judged > 0 ? Math.round((falsePositives.length / judged) * 1000) / 10 : 0,
+    },
+  };
+});
+
 app.post('/v1/reports', async (request, reply) => {
   const validation = validateEnvironmentReport(request.body);
   if (!validation.ok) return validationReply(reply, validation);
@@ -1011,6 +1105,25 @@ app.post('/v1/reports', async (request, reply) => {
       reason: `自動開啟審查：risk_level=${score.riskLevel}（規則命中 ${events.length} 項），需人工複核後再決定是否封鎖`,
       appealStatus: 'none',
     });
+  }
+
+  // WP3 Shadow：site_configs.shadowMode 啟用時，把高風險決策記為反事實 decision_log
+  // （平台本就「只記錄不自動封鎖」；shadow 開啟 = 額外留下 would-action 供 ROI 計算）。
+  if (auth && (score.riskLevel === 'high' || score.riskLevel === 'critical')) {
+    const shadowCfg = await riskRepository.getSiteConfig('shadowMode');
+    if ((shadowCfg as { enabled?: boolean } | null)?.enabled === true) {
+      await riskRepository.recordOutcome({
+        id: crypto.randomUUID(),
+        tenantId: auth.tenant.tenantId,
+        reportId: report.reportId,
+        sessionId: report.sessionId,
+        outcomeType: 'decision_log',
+        decision: policy,
+        shadow: true,
+        occurredAt: new Date().toISOString(),
+        metadata: { riskLevel: score.riskLevel, finalScore: score.finalScore, events: events.length },
+      });
+    }
   }
 
   // /v1/devices 資料接線：僅具身分租戶的收案寫入設備指紋與網路訊號。

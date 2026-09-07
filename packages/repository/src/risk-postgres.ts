@@ -3,6 +3,7 @@ import type {
   AppealCase,
   EvidenceConfidence,
   FieldDefinition,
+  PolicyDecision,
   ReviewCase,
   RiskEvent,
   Severity,
@@ -12,12 +13,28 @@ import type {
   DeviceFingerprint,
   IpReputation,
   NetworkSignal,
+  OutcomeEntry,
+  OutcomeType,
   ReviewCasePatch,
   RiskEventFilter,
   RiskRepository,
 } from './types.js';
 
 const { Pool } = pg;
+
+interface OutcomeRow {
+  id: string;
+  tenant_id: string | null;
+  report_id: string | null;
+  case_id: string | null;
+  session_id: string | null;
+  outcome_type: string;
+  decision: string | null;
+  shadow: boolean;
+  amount: string | null;
+  occurred_at: string;
+  metadata: unknown;
+}
 
 interface RiskEventRow {
   event_id: string;
@@ -554,6 +571,62 @@ export class PostgresRiskRepository implements RiskRepository {
       actorIp: row.actor_ip ?? undefined,
       metadata: (row.metadata as Record<string, unknown>) ?? undefined,
       createdAt: new Date(row.created_at).toISOString(),
+    }));
+  }
+
+  async recordOutcome(entry: OutcomeEntry): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO decision_outcomes (
+        id, tenant_id, report_id, case_id, session_id, outcome_type,
+        decision, shadow, amount, occurred_at, metadata
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        entry.id,
+        entry.tenantId ?? null,
+        entry.reportId ?? null,
+        entry.caseId ?? null,
+        entry.sessionId ?? null,
+        entry.outcomeType,
+        entry.decision ?? null,
+        entry.shadow ?? false,
+        entry.amount ?? null,
+        entry.occurredAt,
+        entry.metadata ? JSON.stringify(entry.metadata) : null,
+      ],
+    );
+  }
+
+  async listOutcomes(
+    tenantId: string,
+    since?: string,
+    until?: string,
+    limit = 500,
+  ): Promise<OutcomeEntry[]> {
+    const params: unknown[] = [tenantId];
+    let sql = `SELECT * FROM decision_outcomes WHERE tenant_id = $1`;
+    if (since) {
+      params.push(since);
+      sql += ` AND occurred_at >= $${params.length}`;
+    }
+    if (until) {
+      params.push(until);
+      sql += ` AND occurred_at <= $${params.length}`;
+    }
+    params.push(limit);
+    sql += ` ORDER BY occurred_at DESC LIMIT $${params.length}`;
+    const { rows } = await this.pool.query<OutcomeRow>(sql, params);
+    return rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id ?? undefined,
+      reportId: row.report_id ?? undefined,
+      caseId: row.case_id ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      outcomeType: row.outcome_type as OutcomeType,
+      decision: (row.decision as PolicyDecision) ?? undefined,
+      shadow: row.shadow,
+      amount: row.amount === null ? undefined : Number(row.amount),
+      occurredAt: new Date(row.occurred_at).toISOString(),
+      metadata: (row.metadata as Record<string, unknown>) ?? undefined,
     }));
   }
 
