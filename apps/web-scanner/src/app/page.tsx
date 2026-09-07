@@ -11,6 +11,7 @@ import ConsentBanner, {
 } from '../components/consent-banner';
 import ReportView from '../components/report-view';
 import ScanPanel from '../components/scan-panel';
+import HomeOverviewV2 from '../components/home-overview-v2';
 import { analyzeSignals } from '../lib/analyze';
 import type { HomeConfig } from '../modules/homepage';
 import { isHomeConfigLike, loadHomeConfig } from '../modules/homepage';
@@ -27,6 +28,12 @@ interface ScanResult {
 }
 
 export default function Home() {
+  // build-time 旗標：NEXT_PUBLIC_EXPERIENCE === 'overview' 時改用新版「掃描總覽」
+  // 體驗；否則維持 classic 首頁（預設值，local-only、需點「開始掃描」，E2E 依賴此路徑）。
+  if (process.env.NEXT_PUBLIC_EXPERIENCE === 'overview') {
+    return <HomeOverviewV2 />;
+  }
+
   // 初始化固定為 local-only，避免 server/client hydration mismatch；
   // 儲存的同意選擇在 mount 後再讀取。
   const [consent, setConsent] = useState<ConsentState>({ mode: 'local-only' });

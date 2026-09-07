@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-09-08（INTEG）
+- 新版首頁「掃描結果總覽」（BrowserScan 風格）於 `feat/home-scan-redesign`：進入即自動掃描（standard）、再次掃描需點擊、摘要含頁面/IP；以 `NEXT_PUBLIC_EXPERIENCE=overview` 旗標切換，classic 首頁與 E2E 不受影響。試用站評判中（尚未合併 main）。
+
 ## 2026-09-08（PHASEA）
 - Phase A「版面設定（自訂區塊）」主線完成於 `feat/phase-a-blocks`（commit 前綴 df2c940..65d277d，rebase 於 main 76880f3）：M1 dashboard block registry（7 頁/22 區塊）、M2 `dashboard_blocks` 後端持久化、M3 版面 API（tenant 隔離＋audit）、M4 UI（/admin/layout）；並整合「工作台 6+1 即時卡＋原模組資料字典」與「公開首頁 10 區塊管理」。試用站（VPS :3080/:3081，獨立 DB）評判中；正式站部署由整合窗口接手。
 

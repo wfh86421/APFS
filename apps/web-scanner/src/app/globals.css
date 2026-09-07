@@ -1237,3 +1237,652 @@ a {
   word-break: break-all;
   font-size: 13px;
 }
+
+/* =============================================================
+   Home Overview V2（新版掃描總覽體驗，NEXT_PUBLIC_EXPERIENCE=overview）
+   淺色 BrowserScan 風格；所有 class 前綴 ov-。
+   顏色以 .ov-experience 內部變數為準，不受 site 深/淺主題影響。
+   ============================================================= */
+.ov-experience {
+  --ov-bg: #eef2f7;
+  --ov-surface: #ffffff;
+  --ov-surface-2: #f6f8fc;
+  --ov-border: #e2e8f0;
+  --ov-text: #17233d;
+  --ov-muted: #64748b;
+  --ov-accent: #3b6cff;
+  --ov-accent-soft: rgba(59, 108, 255, 0.09);
+  --ov-good: #0f9d6e;
+  --ov-warn: #b45309;
+  --ov-bad: #dc2626;
+  --ov-hero-top: #0e1a3f;
+  --ov-hero-bottom: #1d3066;
+
+  min-height: 100vh;
+  background: var(--ov-bg);
+  color: var(--ov-text);
+}
+
+.ov-experience a {
+  color: var(--ov-accent);
+  text-decoration: none;
+}
+
+/* 僅在新版總覽體驗存在時，讓 canvas 底色配合淺色主題（classic/admin 不受影響）。 */
+html:has(.ov-experience) body {
+  background: #eef2f7;
+}
+
+.ov-top {
+  background: var(--ov-surface);
+  border-bottom: 1px solid var(--ov-border);
+}
+
+.ov-top-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ov-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.ov-brand-mark {
+  font-size: 22px;
+}
+
+.ov-brand-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ov-brand-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ov-accent);
+  background: var(--ov-accent-soft);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.ov-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ov-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ov-border);
+  background: var(--ov-surface-2);
+  color: var(--ov-muted);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ov-chip-server {
+  color: var(--ov-good);
+  border-color: rgba(15, 157, 110, 0.35);
+  background: rgba(15, 157, 110, 0.08);
+}
+
+.ov-chip-local {
+  color: var(--ov-warn);
+  border-color: rgba(180, 83, 9, 0.35);
+  background: rgba(180, 83, 9, 0.08);
+}
+
+.ov-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ov-border);
+  background: var(--ov-surface);
+  color: var(--ov-text);
+  border-radius: 12px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ov-btn:hover:not(:disabled) {
+  filter: brightness(1.03);
+  box-shadow: 0 2px 8px rgba(15, 30, 65, 0.12);
+}
+
+.ov-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ov-btn-primary {
+  background: var(--ov-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.ov-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 26px 20px 64px;
+}
+
+.ov-intro {
+  margin-bottom: 18px;
+}
+
+.ov-title {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+.ov-subtitle {
+  color: var(--ov-muted);
+  margin: 0;
+  font-size: 14px;
+  max-width: 860px;
+}
+
+.ov-warning,
+.ov-error {
+  border: 1px solid var(--ov-border);
+  border-left: 4px solid var(--ov-warn);
+  background: var(--ov-surface);
+  color: var(--ov-text);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.ov-warning {
+  border-left-color: var(--ov-warn);
+}
+
+.ov-error {
+  border-left-color: var(--ov-bad);
+  color: var(--ov-bad);
+}
+
+/* ── 掃描進度（10 模組 ✅/❌/⏳，與 classic ScanPanel 同款語意） ── */
+.ov-scan-progress {
+  margin-bottom: 16px;
+}
+
+.ov-progress {
+  display: flex;
+  flex-direction: column;
+}
+
+.ov-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 2px;
+  font-size: 14px;
+  border-bottom: 1px dashed var(--ov-border);
+}
+
+.ov-progress-row:last-child {
+  border-bottom: none;
+}
+
+.ov-progress-icon {
+  width: 20px;
+  text-align: center;
+}
+
+.ov-progress-name {
+  min-width: 170px;
+  font-weight: 600;
+}
+
+.ov-progress-status {
+  color: var(--ov-muted);
+  font-size: 13px;
+}
+
+.ov-progress-ms {
+  color: var(--ov-muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.ov-progress-failed .ov-progress-name,
+.ov-progress-failed .ov-progress-status {
+  color: var(--ov-bad);
+}
+
+/* ── 卡片通用 ── */
+.ov-card {
+  background: var(--ov-surface);
+  border: 1px solid var(--ov-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(15, 30, 65, 0.06);
+}
+
+.ov-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ov-card-icon {
+  font-size: 17px;
+}
+
+.ov-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ov-card-head .ov-chip {
+  margin-left: auto;
+}
+
+.ov-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ov-empty {
+  color: var(--ov-muted);
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.ov-note {
+  color: var(--ov-muted);
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+/* 摘要列欄位（hero 用，疊排） */
+.ov-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px 22px;
+}
+
+.ov-summary-item {
+  min-width: 0;
+}
+
+.ov-summary-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-summary-value {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #fff;
+  word-break: break-all;
+}
+
+/* ── 快速摘要 hero（深色底白字） ── */
+.ov-hero {
+  background: linear-gradient(135deg, var(--ov-hero-top), var(--ov-hero-bottom));
+  color: #fff;
+  border-radius: 20px;
+  padding: 22px 24px 24px;
+  margin-bottom: 26px;
+  box-shadow: 0 12px 28px rgba(15, 30, 80, 0.18);
+}
+
+.ov-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ov-hero-chip {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ov-hero-title {
+  margin: 0 0 16px;
+  font-size: 19px;
+}
+
+/* ── 主區標題 + 網格（響應式 2~4 欄） ── */
+.ov-main-title {
+  font-size: 20px;
+  margin: 0 0 14px;
+}
+
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.ov-card-wide {
+  grid-column: 1 / -1;
+}
+
+.ov-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ov-field-label {
+  font-size: 12px;
+  color: var(--ov-muted);
+}
+
+.ov-field-value {
+  font-size: 14px;
+  font-weight: 700;
+  word-break: break-all;
+  color: var(--ov-text);
+}
+
+/* ── 網路旗標 chips ── */
+.ov-flag-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ov-flag-label {
+  font-size: 12px;
+  color: var(--ov-muted);
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+.ov-flag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ov-flag {
+  border: 1px solid var(--ov-border);
+  background: var(--ov-surface-2);
+  color: var(--ov-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ov-flag-on {
+  color: var(--ov-bad);
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(220, 38, 38, 0.07);
+}
+
+/* ── 異常與風險 ── */
+.ov-subhead {
+  font-size: 13px;
+  color: var(--ov-muted);
+  font-weight: 700;
+  margin: 6px 0 2px;
+}
+
+.ov-risk-row {
+  border-left: 3px solid var(--ov-border);
+  background: var(--ov-surface-2);
+  border-radius: 0 10px 10px 0;
+  padding: 8px 12px;
+  margin: 6px 0 0;
+}
+
+.ov-risk-good {
+  border-left-color: var(--ov-good);
+}
+
+.ov-risk-warn {
+  border-left-color: var(--ov-warn);
+}
+
+.ov-risk-bad {
+  border-left-color: var(--ov-bad);
+}
+
+.ov-risk-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.ov-risk-meta {
+  font-size: 12px;
+  color: var(--ov-muted);
+  margin-top: 3px;
+}
+
+/* ── 評分 ── */
+.ov-score-hero {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.ov-score-num {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ov-score-good {
+  color: var(--ov-good);
+}
+
+.ov-score-warn {
+  color: var(--ov-warn);
+}
+
+.ov-score-bad {
+  color: var(--ov-bad);
+}
+
+.ov-score-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ov-score-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ov-score-meta {
+  font-size: 12.5px;
+  color: var(--ov-muted);
+}
+
+.ov-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 28px;
+  margin-top: 18px;
+}
+
+.ov-dim-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.ov-dim-value {
+  font-weight: 700;
+}
+
+.ov-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ov-surface-2);
+  border: 1px solid var(--ov-border);
+  overflow: hidden;
+}
+
+.ov-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ov-bar-good {
+  background: var(--ov-good);
+}
+
+.ov-bar-warn {
+  background: var(--ov-warn);
+}
+
+.ov-bar-bad {
+  background: var(--ov-bad);
+}
+
+.ov-score-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ov-border);
+}
+
+.ov-foot-chip {
+  border: 1px solid var(--ov-border);
+  background: var(--ov-surface-2);
+  color: var(--ov-muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── badges ── */
+.ov-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ov-badge-good {
+  background: rgba(15, 157, 110, 0.1);
+  border-color: rgba(15, 157, 110, 0.3);
+  color: var(--ov-good);
+}
+
+.ov-badge-warn {
+  background: rgba(180, 83, 9, 0.1);
+  border-color: rgba(180, 83, 9, 0.3);
+  color: var(--ov-warn);
+}
+
+.ov-badge-bad {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--ov-bad);
+}
+
+/* ── 頁尾與註記 ── */
+.ov-source-note {
+  color: var(--ov-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 18px 2px 0;
+}
+
+.ov-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 44px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ov-border);
+  color: var(--ov-muted);
+  font-size: 13px;
+}
+
+.ov-footer-links a {
+  margin: 0 4px;
+}
+
+/* ── 響應式 ── */
+@media (max-width: 1100px) {
+  .ov-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ov-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-dims {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-summary {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .ov-top-inner {
+    padding: 10px 14px;
+  }
+
+  .ov-page {
+    padding: 20px 14px 48px;
+  }
+}
