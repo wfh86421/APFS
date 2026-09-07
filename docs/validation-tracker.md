@@ -1,6 +1,6 @@
 # ShieldScan 驗證指標 — 可追蹤清單
 
-> 更新：2026-09-06
+> 更新：2026-09-07（P0 現況抽查：docs/reviews/2026-09-07-current-head-spotcheck.md）
 > 使用方式：每週更新「狀態／證據」，達標才讓對應里程碑往下一階段移動。
 > 圖例：✅ 達標｜🟡 進行中（技術可用、需量化驗證）｜⬜ 未開始
 
@@ -28,8 +28,8 @@
 | 模型 AUC（異常偵測） | ≥0.85 | ⬜ | Phase4 ML 尚未開始 |
 | 必要欄位缺失率 | <1% | ⬜ | 對報告欄位做統計 job |
 | 高風險事件有證據鏈 | 100% | 🟡 | RiskEvent evidenceJson 已結構化；需計量覆蓋 |
-| 敏感欄位存取有日誌 | 100% | 🟡 | audit_logs 已接；需檢查所有敏感端點覆蓋 |
-| 未授權存取事件 | 0 | 🟡 | RBAC 已建；需安全測試 |
+| 敏感欄位存取有日誌 | 100% | 🟡 | audit_logs 已含 tenant_id 並逐「寫入/決策」端點記錄（init.sql:95；server.ts keys/report-delete/visitor-delete/review/site-config/risk-events/outcome）；讀取類（報告/訪客/設備/審計查詢）尚未逐筆寫審計 → 待補（2026-09-07 抽查，見 docs/reviews/2026-09-07-current-head-spotcheck.md） |
+| 未授權存取事件 | 0 | 🟡 | 角色防升等＋路由/資料層 tenantId 隔離已落地（server.ts:574-579/611-615/641-645；repository types.ts:49-58,227-241；risk-postgres 全數 `WHERE tenant_id=$1`）；仍：註冊預設 security_admin、治理端點權限未收斂 → 需安全測試（2026-09-07 抽查） |
 
 ## C. 產品指標
 
@@ -41,7 +41,7 @@
 | SDK 安裝量 | 100（npm） | ⬜ | 尚未發 npm |
 | 標準化報告累積 | 10 萬筆 | 🟡 | 報告已落庫；需累積 |
 | 風險事件可獨立查詢 | 通過 | ✅ | /v1/risk-events |
-| 設備指紋跨 session 聚類 | 可用 | ✅ | /v1/devices |
+| 設備指紋跨 session 聚類 | 可用 | ✅ | /v1/devices；收案已接線寫入（server.ts:1263-1268，僅具身分租戶）＋by-ip/relations 圖譜 API（2026-09-07 抽查） |
 
 ## D. 商業指標
 
@@ -80,3 +80,4 @@
 - 管理入口合併＋DB 持久化（2026-09-06）：`/admin` 管理者工作台改頁籤（後台模組／首頁區塊）；新增 `site_configs` 表與 `/v1/admin/configs/:key`、`/v1/public/config/:key`；workbench/homepage 設定填 API Key 後同步資料庫，公開首頁從資料庫讀取。
 - 後台模組資料化（2026-09-06）：新增 `module-data.ts` 資料字典，6＋1 每個模組對應 API 與欄位清單，可在模組列展開檢視；後續可由 field_definitions/Plugin Registry 動態供應。
 - 真實報告詳情頁（2026-09-06）：`/admin/reports` 報告可點擊 → `/admin/reports/[reportId]`，依 6＋1 模組設定渲染真實報告、風險事件與快速處置。
+- P0 現況抽查（2026-09-07，基準 76880f3）：tenant 隔離路由、review_cases/audit_logs tenant_id、devices 寫入接線、CSP headers、key revoke/rotate 五項全 PASS；詳見 docs/reviews/2026-09-07-current-head-spotcheck.md（殘留：註冊預設 security_admin、讀取類審計未逐筆、site_configs 全域列、CSP 非ce 化）。
