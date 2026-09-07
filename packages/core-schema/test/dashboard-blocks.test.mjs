@@ -10,9 +10,9 @@ import {
   validateBlockSettings,
 } from '@shieldscan/core-schema';
 
-test('M1 總量：6 頁 / 15 區塊，區塊 key 全域唯一', () => {
-  assert.equal(ADMIN_PAGE_KEYS.length, 6);
-  assert.equal(listAllBlocks().length, 15);
+test('M1 總量：7 頁 / 22 區塊，區塊 key 全域唯一', () => {
+  assert.equal(ADMIN_PAGE_KEYS.length, 7);
+  assert.equal(listAllBlocks().length, 22);
 
   const keys = listAllBlocks().map((b) => b.key);
   assert.equal(new Set(keys).size, keys.length, 'block key 不得重複');
@@ -43,7 +43,12 @@ test('governance 頁區塊為 restricted，其餘頁為 normal', () => {
   for (const b of listPageBlocks('governance')) {
     assert.equal(b.accessLevel, 'restricted');
   }
-  for (const page of ADMIN_PAGE_KEYS.filter((p) => p !== 'governance')) {
+  for (const b of listPageBlocks('workbench')) {
+    // 工作台治理卡 restricted；其餘分類卡 normal
+    if (b.key === 'workbench.governance') assert.equal(b.accessLevel, 'restricted');
+    else assert.equal(b.accessLevel, 'normal');
+  }
+  for (const page of ADMIN_PAGE_KEYS.filter((p) => p !== 'governance' && p !== 'workbench')) {
     for (const b of listPageBlocks(page)) {
       assert.equal(b.accessLevel, 'normal');
     }

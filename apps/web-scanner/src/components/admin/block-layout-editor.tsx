@@ -12,6 +12,7 @@ import {
   type BlockFieldDef,
 } from '@shieldscan/core-schema';
 import { apiBaseUrl } from '../../lib/api';
+import WorkbenchPreview from './workbench-live';
 
 /**
  * Phase A UI 雛形（TRIAL 評判用）：版面設定
@@ -355,6 +356,22 @@ export default function BlockLayoutEditor() {
   const defs = useMemo(() => listPageBlocks(page), [page]);
   const byKey = useMemo(() => new Map(defs.map((d) => [d.key, d])), [defs]);
 
+  // 每塊有效標題（設定覆寫或預設），供預覽與工作台卡使用。
+  const titles = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const d of defs) {
+      const settings = layout.settings[d.key];
+      const titleField = d.fields.find((f) => f.kind === 'text' && f.key === 'title') as
+        | { default: string }
+        | undefined;
+      map[d.key] =
+        settings && typeof settings.title === 'string'
+          ? settings.title
+          : (titleField?.default ?? d.title);
+    }
+    return map;
+  }, [defs, layout.settings]);
+
   const commit = async (next: PageLayout) => {
     setLayout(next);
     const current = mode;
@@ -514,34 +531,28 @@ export default function BlockLayoutEditor() {
       </div>
 
       {preview ? (
-        <div className="pab-preview">
-          <h3>{ADMIN_PAGES[page].title} — 自訂檢視（預覽）</h3>
-          {ordered.filter((d) => !layout.disabled.includes(d.key)).length === 0 && (
-            <div className="pv-empty">此頁所有區塊都已停用。</div>
-          )}
-          {ordered
-            .filter((d) => !layout.disabled.includes(d.key))
-            .map((d) => {
-              const settings = layout.settings[d.key];
-              const titleField = d.fields.find(
-                (f) => f.kind === 'text' && f.key === 'title',
-              ) as { default: string } | undefined;
-              const title =
-                settings && typeof settings.title === 'string'
-                  ? settings.title
-                  : (titleField?.default ?? d.title);
-              return (
+        page === 'workbench' ? (
+          <WorkbenchPreview layout={layout} blockTitles={titles} />
+        ) : (
+          <div className="pab-preview">
+            <h3>{ADMIN_PAGES[page].title} — 自訂檢視（預覽）</h3>
+            {ordered.filter((d) => !layout.disabled.includes(d.key)).length === 0 && (
+              <div className="pv-empty">此頁所有區塊都已停用。</div>
+            )}
+            {ordered
+              .filter((d) => !layout.disabled.includes(d.key))
+              .map((d) => (
                 <div className="pv-card" key={d.key}>
                   <b>
-                    {d.icon} {title}
+                    {d.icon} {titles[d.key]}
                   </b>
                   <small style={{ color: '#8fa2ba' }}>
-                    （區塊資料將於 M2/M3 接線真實內容）
+                    （此區塊已啟用；資料接線依頁別進行中）
                   </small>
                 </div>
-              );
-            })}
-        </div>
+              ))}
+          </div>
+        )
       ) : (
         <div className="pab-blocks">
           {ordered.map((d, index) => {
