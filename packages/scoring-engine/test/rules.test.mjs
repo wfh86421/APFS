@@ -101,3 +101,19 @@ test('伺服器事實規則：IP 速度異常 server_ip_velocity_anomaly 觸發�
   assert.ok(score.explanations.some((e) => e.ruleId === 'server_ip_velocity' && e.track === 'fraud'));
   assert.equal(score.finalScore, 92); // 100 - 8
 });
+
+test('WP4 規則：server_bot_suspected 觸發 bot_detected（-20）', async () => {
+  const score = await calc(makeReport(), [issue('server_bot_suspected', { userAgent: 'curl/8' })]);
+  assert.ok(score.explanations.some((e) => e.ruleId === 'bot_detected' && e.track === 'fraud'));
+  assert.equal(score.finalScore, 80);
+});
+
+test('WP4 規則：server_header_incoherence 觸發（-6、fraud）', async () => {
+  const score = await calc(makeReport(), [
+    issue('server_header_incoherence', { uaOs: 'Windows', clientHintsPlatform: 'macOS' }),
+  ]);
+  assert.ok(
+    score.explanations.some((e) => e.ruleId === 'server_header_incoherence' && e.track === 'fraud'),
+  );
+  assert.equal(score.finalScore, 94);
+});

@@ -390,6 +390,7 @@ const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
   server_vpn_detected: 'vpn_detected',
   server_proxy_detected: 'proxy_detected',
   server_ip_velocity: 'ip_velocity_anomaly',
+  server_header_incoherence: 'header_incoherence',
 };
 
 /** 依評分引擎觸發的規則自動產生 RiskEvent（收案證據鏈的第一環）。 */
@@ -463,6 +464,69 @@ function serverNetworkIssues(network: NetworkAnalysis): AnalysisIssue[] {
     push('server_webrtc_leak', 'medium', 'WebRTC 公網 IP 與伺服器判定不一致', {
       publicIp: network.webrtc.publicIp,
       localIps: network.webrtc.localIps,
+    });
+  }
+  return issues;
+}
+
+/**
+ * 請求標頭一致性校驗（WP4，伺服器獨立判定）：以 server.httpHeaders 訊號
+ * （node-sdk collectServerSignals 收的原始 headers）檢查
+ *  1) UA 非一般瀏覽器（無頭/程式客戶端）→ server_bot_suspected
+ *  2) UA OS 與 sec-ch-ua-platform 矛盾、或 sec-ch-ua 品牌與 UA 矛盾 → server_header_incoherence
+ * 不信任客戶端自報的解析結果。
+ */
+function headerCoherenceIssues(report: EnvironmentReport): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+  const hh = report.signals.find((s) => s.key === 'httpHeaders')?.value as
+    | {
+        userAgent?: string;
+        acceptLanguage?: string;
+        secChUa?: string;
+        secChUaPlatform?: string;
+      }
+    | undefined;
+  if (!hh) return issues;
+  const uaText = String(hh.userAgent ?? '');
+  const push = (
+    type: string,
+    severity: AnalysisIssue['severity'],
+    description: string,
+    evidence: Record<string, unknown>,
+  ): void => {
+    issues.push({ id: crypto.randomUUID(), type, severity, description, evidence });
+  };
+
+  const headless = /HeadlessChrome|PhantomJS|python-requests|curl\/|wget\/|axios|node-fetch/i.test(uaText);
+  const notBrowser = !/Mozilla/i.test(uaText) && uaText.trim().length > 0;
+  if (uaText.trim().length === 0 || headless || notBrowser) {
+    push('server_bot_suspected', 'high', '伺服器判定 User-Agent 非一般瀏覽器（無頭/程式客戶端）', {
+      userAgent: uaText.slice(0, 120),
+    });
+    return issues;
+  }
+
+  const platform = String(hh.secChUaPlatform ?? '');
+  const uaOs = /Android/i.test(uaText)
+    ? 'Android'
+    : /Windows/i.test(uaText)
+      ? 'Windows'
+      : /iPhone|iPad/i.test(uaText)
+        ? 'iOS'
+        : /Macintosh|Mac OS X/i.test(uaText)
+          ? 'macOS'
+          : /Linux/i.test(uaText)
+            ? 'Linux'
+            : '';
+  if (platform && uaOs && platform !== uaOs) {
+    push('server_header_incoherence', 'medium', 'UA 宣稱 OS 與 Client Hints 平台不符（伺服器獨立判定）', {
+      uaOs,
+      clientHintsPlatform: platform,
+    });
+  }
+  if (hh.secChUa && /"Google Chrome"/.test(hh.secChUa) && uaText && !/Chrome/i.test(uaText)) {
+    push('server_header_incoherence', 'medium', 'sec-ch-ua 宣稱 Chrome 但 UA 無 Chrome 標記', {
+      secChUa: hh.secChUa.slice(0, 120),
     });
   }
   return issues;
@@ -1066,7 +1130,12 @@ app.post('/v1/reports', async (request, reply) => {
       });
     }
   }
-  const allIssues = [...(report.issues ?? []), ...serverIssues, ...velocityIssues];
+  const allIssues = [
+    ...(report.issues ?? []),
+    ...serverIssues,
+    ...velocityIssues,
+    ...headerCoherenceIssues(report),
+  ];
   report.issues = allIssues;
   const score = await buildScoringEngine().calculate(report, allIssues, DEFAULT_PROFILE);
   const policy = scoreToPolicy(score);

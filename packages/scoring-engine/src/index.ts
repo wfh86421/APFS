@@ -262,5 +262,15 @@ export function defaultRules(): ScoringRule[] {
       description: '同裝置短時間內由多個不同 IP 連線（疑似共享裝置/帳號農場/代理輪換）',
       evaluate: (_r, issues) => issues.some((i) => i.type === 'server_ip_velocity_anomaly'),
     },
+    {
+      id: 'server_header_incoherence',
+      name: '請求標頭一致性異常',
+      category: 'spoofing',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 6,
+      description: '伺服器獨立判定的 UA/Client Hints 不一致（OS 或品牌矛盾）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'server_header_incoherence'),
+    },
   ];
 }
