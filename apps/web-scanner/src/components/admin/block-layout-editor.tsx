@@ -13,6 +13,7 @@ import {
 } from '@shieldscan/core-schema';
 import { apiBaseUrl } from '../../lib/api';
 import WorkbenchPreview, { moduleDictFor } from './workbench-live';
+import HomepageConfig from './homepage-config';
 
 /**
  * Phase A UI 雛形（TRIAL 評判用）：版面設定
@@ -472,6 +473,11 @@ export default function BlockLayoutEditor() {
         .pab h2{margin:0 0 4px;font-size:17px}
         .pab .pab-sub{color:#8fa2ba;font-size:12.5px;margin:0 0 10px;line-height:1.6}
         .pab .pab-banner{background:#10233c;border:1px solid #2f5d8f;border-radius:9px;color:#bcd3ec;font-size:12px;padding:7px 11px;margin:0 0 10px}
+        .pab .pab-hp{border:1px solid #2f5d8f;border-radius:12px;padding:12px 14px;background:#0f1a2c;display:flex;flex-direction:column;gap:10px}
+        .pab .pab-hp-head b{font-size:13.5px;color:#8fc2ff}
+        .pab .pab-hp-head span{display:block;color:#8fa2ba;font-size:12px;line-height:1.7;margin-top:2px}
+        .pab .pab-hp summary{cursor:pointer;color:#bcd3ec;font-size:12.5px}
+        .pab .pab-hp-body{margin-top:8px}
         .pab .pab-pages{display:flex;gap:6px;flex-wrap:wrap}
         .pab .pab-pages button{background:#15233c;border:1px solid #22344f;color:#bcd3ec;border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer}
         .pab .pab-pages button.on{background:#1c3a63;border-color:#4da3ff;color:#fff}
@@ -599,6 +605,21 @@ export default function BlockLayoutEditor() {
             );
           })}
         </div>
+      )}
+
+      {page === 'homepage' && (
+        <section className="pab-hp">
+          <div className="pab-hp-head">
+            <b>🌐 公開首頁區塊（整合自管理者工作台）</b>
+            <span>真實首頁結構：頂部連結・同意橫幅・一鍵掃描・結果各段（分數/異常/硬體/瀏覽器/網路/CTA）・頁尾 — 啟停與排序即時影響公開首頁 `/`，存 site_configs（全域）。</span>
+          </div>
+          <details open>
+            <summary>展開／收合：管理公開首頁 10 區塊</summary>
+            <div className="pab-hp-body">
+              <HomepageConfig embedded />
+            </div>
+          </details>
+        </section>
       )}
 
       {editing && byKey.get(editing) && (
