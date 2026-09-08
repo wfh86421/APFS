@@ -26,6 +26,7 @@
 - 合併到 main：fast-forward 或 rebase 後推送；大功能建議先開分支跑 CI 再合。
 
 ## 4. 驗證指令（本機/CI 一致）
+
 ```bash
 # 全部套件型別檢查與建置
 pnpm -r typecheck && pnpm -r build
@@ -45,6 +46,7 @@ pnpm --filter @shieldscan/web-scanner e2e
 - VPS `/root/APFS`（docker compose）；流程見 `docs/deploy-vps.md`。
 - 上線前先跑 schema 同步（新版 init.sql 冪等），再重建 api/web 映像。
 - 5432/6379 對外綁定問題（0.0.0.0）屬已知待辦：改 127.0.0.1 前請確認內網連線路徑。
+- **並行試用站＝備用站（禁止關閉）**：VPS `http://107.174.241.48:3080/`（web）與 `:3081`（api）對應 `shieldscan-trial` 堆疊（compose `/root/shieldscan-trial`、程式 `/root/shieldscan-trial-code`、獨立 DB、build 旗標 `NEXT_PUBLIC_EXPERIENCE=overview`）。**未經使用者明確指示，不得關閉／停止／刪除／重設該堆疊或其資料**；正式站改版前先在試用站驗證；試用站與正式站同版本程式時作為備援。
 
 ## 6. 已知脈絡（供追溯）
 - 完整審查報告：`docs/reviews/`（基準 cfbb540 / ee2ff6e）。
