@@ -1338,15 +1338,15 @@ export default function HomeOverviewV2() {
               </div>
             </section>
 
-            {/* 掃描進度：位於 Issues 上方；僅掃描中顯示，完成即自動隱藏／收合，展開可看模組明細
-                掃描中一律顯示（order:-1 置頂），不因區塊啟停設定而消失。 */}
+            {/* 掃描進度：位於 Issues 正上方；僅掃描中顯示，完成即自動隱藏／收合，展開可看模組明細
+                與 Issues 同 order（同值依 DOM 順序＝緊貼 Issues 上方），不因區塊啟停設定而消失。 */}
             {busy && (
               <ScanProgressBlock
                 progress={progress}
                 percent={scanPercent}
                 open={progressOpen}
                 onToggle={() => setProgressOpen((prev) => !prev)}
-                style={{ order: -1 }}
+                style={{ order: ovRankOf('scan-overview.issues') }}
               />
             )}
 
