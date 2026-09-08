@@ -2467,3 +2467,6 @@ html:has(.ov-experience) body {
 .ov-loc-flag{font-size:14px;line-height:1;margin-right:4px;vertical-align:-1px}
 .ov-loc-geo-sep{opacity:.55;margin:0 3px}
 .ov-loc-country{white-space:nowrap}
+
+.ov-loc-flag-img{width:18px;height:auto;border-radius:2px;margin-right:5px;vertical-align:-2px;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+.ov-loc-flag-img[src='']{display:none}

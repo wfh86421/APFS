@@ -28,7 +28,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https://flagcdn.com",
               `connect-src ${connect.join(' ')}`,
               "font-src 'self' data:",
               "media-src 'self' blob:",

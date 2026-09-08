@@ -530,6 +530,15 @@ function countryFlagEmoji(geo: RichGeo | null): string {
   return code ? flagEmojiFromCode(code) : '';
 }
 
+/** countryCode（含名稱 fallback）→ 兩字 code；無則空字串（供旗幟圖片用）。 */
+function countryFlagCodeOf(geo: RichGeo | null): string {
+  const direct = countryCodeOf(geo);
+  if (direct && /^[A-Za-z]{2}$/.test(direct)) return direct.toUpperCase();
+  const country = asStr(geo, 'country');
+  if (!country) return '';
+  return COUNTRY_CODE_FALLBACK[country.trim().toLowerCase()] ?? '';
+}
+
 /**
  * 工具列地理位置行內容：`city / 旗 country`（旗緊鄰國家文字前方）。
  * 缺城市或國家時顯示有者；皆無顯示 —。
@@ -958,6 +967,10 @@ export default function HomeOverviewV2() {
   const geoCity = asStr(geo, 'city');
   const geoCountry = asStr(geo, 'country');
   const geoFlag = countryFlagEmoji(geo);
+  const geoFlagCode = countryFlagCodeOf(geo);
+  const geoFlagSrc = geoFlagCode
+    ? `https://flagcdn.com/w40/${geoFlagCode.toLowerCase()}.png`
+    : '';
   const hasGeo = Boolean(geoCity || geoCountry);
 
   const actionLabel = busy
@@ -1040,7 +1053,17 @@ export default function HomeOverviewV2() {
                       {geoCity} <span className="ov-loc-geo-sep">/</span>{' '}
                     </>
                   ) : null}
-                  {geoFlag ? (
+                  {geoFlagSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      className="ov-loc-flag-img"
+                      src={geoFlagSrc}
+                      alt=""
+                      width={18}
+                      height={13.5}
+                      loading="lazy"
+                    />
+                  ) : geoFlag ? (
                     <span className="ov-loc-flag" aria-hidden="true">
                       {geoFlag}
                     </span>
