@@ -9,6 +9,7 @@ const NAV: Array<{ href: string; label: string; icon: string; ready: boolean }> 
   { href: '/admin/events', label: '事件查詢', icon: '🚨', ready: true },
   { href: '/admin/devices', label: '設備指紋', icon: '🧬', ready: true },
   { href: '/admin/roi', label: '成效 ROI', icon: '📈', ready: true },
+  { href: '/admin/baselines', label: '基準分布', icon: '🧮', ready: true },
   { href: '/admin/reports/demo', label: '報告決策示範', icon: '📋', ready: true },
   { href: '/admin/overview', label: '管理概覽', icon: '📊', ready: true },
   { href: '/admin/layout', label: '版面設定', icon: '🧱', ready: true },
