@@ -10,9 +10,9 @@ import {
   validateBlockSettings,
 } from '@shieldscan/core-schema';
 
-test('M1 總量：7 頁 / 22 區塊，區塊 key 全域唯一', () => {
-  assert.equal(ADMIN_PAGE_KEYS.length, 7);
-  assert.equal(listAllBlocks().length, 22);
+test('M1 總量：8 頁 / 30 區塊，區塊 key 全域唯一', () => {
+  assert.equal(ADMIN_PAGE_KEYS.length, 8);
+  assert.equal(listAllBlocks().length, 30);
 
   const keys = listAllBlocks().map((b) => b.key);
   assert.equal(new Set(keys).size, keys.length, 'block key 不得重複');

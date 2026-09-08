@@ -650,11 +650,11 @@ const blocks: readonly BlockDef[] = [
   /* ---------- scan-overview（公開「掃描總覽」首頁，NEXT_PUBLIC_EXPERIENCE=overview） ----------
    * home-overview-v2.tsx 依此頁版面（order/disabled）渲染。
    * 註：ov.score（評分卡／真實度）不獨立成塊——hero 已內含隱私評分大數字與瀏覽器指紋
-   * 真實度（見 home-overview-v2 的 ov-hero-score）；因此併入 ov.hero。
+   * 真實度（見 home-overview-v2 的 ov-hero-score）；因此併入 scan-overview.hero。
    * fields 留空：本頁區塊僅支援「啟停＋排序」，不做欄位參數覆寫。
    */
   {
-    key: 'ov.toolbar',
+    key: 'scan-overview.toolbar',
     page: 'scan-overview',
     icon: '📍',
     title: '頂部 IP 工具列',
@@ -665,7 +665,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.hero',
+    key: 'scan-overview.hero',
     page: 'scan-overview',
     icon: '🛡️',
     title: '快速摘要＋隱私評分',
@@ -676,7 +676,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.issues',
+    key: 'scan-overview.issues',
     page: 'scan-overview',
     icon: '📉',
     title: '扣分項分析 Issues',
@@ -687,7 +687,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.ip',
+    key: 'scan-overview.ip',
     page: 'scan-overview',
     icon: '🌐',
     title: 'IP 地址卡',
@@ -698,7 +698,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.location',
+    key: 'scan-overview.location',
     page: 'scan-overview',
     icon: '🗺️',
     title: '地理位置卡',
@@ -709,7 +709,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.hardware',
+    key: 'scan-overview.hardware',
     page: 'scan-overview',
     icon: '🖥️',
     title: '硬件卡',
@@ -720,7 +720,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.browser',
+    key: 'scan-overview.browser',
     page: 'scan-overview',
     icon: '🧬',
     title: '瀏覽器卡',
@@ -731,7 +731,7 @@ const blocks: readonly BlockDef[] = [
     fields: [],
   },
   {
-    key: 'ov.software',
+    key: 'scan-overview.software',
     page: 'scan-overview',
     icon: '🧩',
     title: '軟件卡',

@@ -148,23 +148,23 @@ const OV_LAYOUT_KEY = `ss.layout.v1.${OV_PAGE_KEY}`;
 
 /** 本頁實際有 JSX 的區塊（與 core-schema 註冊的 ov.* 對應；尚未有 JSX 的未來區塊不列）。 */
 const OV_RENDER_KEYS: readonly string[] = [
-  'ov.toolbar',
-  'ov.hero',
-  'ov.issues',
-  'ov.ip',
-  'ov.location',
-  'ov.hardware',
-  'ov.browser',
-  'ov.software',
+  'scan-overview.toolbar',
+  'scan-overview.hero',
+  'scan-overview.issues',
+  'scan-overview.ip',
+  'scan-overview.location',
+  'scan-overview.hardware',
+  'scan-overview.browser',
+  'scan-overview.software',
 ];
 
 /** 落在「資訊卡片網格」（.ov-grid）內的區塊。 */
 const OV_CARD_KEYS: readonly string[] = [
-  'ov.ip',
-  'ov.location',
-  'ov.hardware',
-  'ov.browser',
-  'ov.software',
+  'scan-overview.ip',
+  'scan-overview.location',
+  'scan-overview.hardware',
+  'scan-overview.browser',
+  'scan-overview.software',
 ];
 
 /** CSS order 給值上限：清單找不到的 key 一律排最後（永不與註記衝突）。 */
@@ -1085,8 +1085,8 @@ export default function HomeOverviewV2() {
   /** 每個區塊一個條件 wrapper：停用 → 不渲染（display:none，其餘依序排列）；啟用 → 依 layout.order 給 CSS order。 */
   const ovStyle = (k: string): CSSProperties =>
     ovVisible(k) ? { order: ovRankOf(k) } : { order: ovRankOf(k), display: 'none' };
-  const heroVisible = ovVisible('ov.hero');
-  const issuesVisible = ovVisible('ov.issues');
+  const heroVisible = ovVisible('scan-overview.hero');
+  const issuesVisible = ovVisible('scan-overview.issues');
   const cardsShown = OV_CARD_KEYS.filter(ovVisible).sort((a, b) => ovRankOf(a) - ovRankOf(b));
   const cardsVisible = cardsShown.length > 0;
   /** 「主區標題＋資訊卡網格」整組的 order＝啟用卡片中最前面的位置（維持卡片容器為一個網格）。 */
@@ -1149,12 +1149,12 @@ export default function HomeOverviewV2() {
 
       <div className="ov-page">
         {/* 頂部工具列：📍 當下 IP（＋IP 地理位置小字）＋ 複製 ＋ 重新掃描（sticky）
-            ov.toolbar 停用 → 整個工具列隱藏（其餘區塊設定不影響此處與掃描等待提示）。 */}
+            scan-overview.toolbar 停用 → 整個工具列隱藏（其餘區塊設定不影響此處與掃描等待提示）。 */}
         <div
           className="ov-locbar"
           role="toolbar"
           aria-label="目前 IP 工具列"
-          style={ovVisible('ov.toolbar') ? undefined : { display: 'none' }}
+          style={ovVisible('scan-overview.toolbar') ? undefined : { display: 'none' }}
         >
           <span className="ov-loc-pin" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1278,7 +1278,7 @@ export default function HomeOverviewV2() {
             )}
 
             {/* ① 頂部概覽 Overview hero（深色）── 左：兩欄標籤:值摘要；右：隱私評分大數字 */}
-            <section className="ov-hero" style={ovStyle('ov.hero')}>
+            <section className="ov-hero" style={ovStyle('scan-overview.hero')}>
               <div className="ov-hero-meta">
                 <span className="ov-hero-chip">
                   來源：{current.analysisSource === 'server' ? '伺服器分析' : '本機預覽'}
@@ -1355,7 +1355,7 @@ export default function HomeOverviewV2() {
               icon="📉"
               title="扣分項分析 Issues"
               className="ov-card-wide ov-card-issues"
-              style={ovStyle('ov.issues')}
+              style={ovStyle('scan-overview.issues')}
             >
               {(() => {
                 const explanations = current.score.explanations ?? [];
@@ -1421,7 +1421,7 @@ export default function HomeOverviewV2() {
             {cardsVisible && (
               <div className="ov-grid" style={{ order: cardsGroupRank }}>
               {/* ── ③ IP address 詳情卡 ─────────────────────── */}
-              <Card icon="🌐" title="IP 地址" className="ov-card-half" style={ovStyle('ov.ip')}>
+              <Card icon="🌐" title="IP 地址" className="ov-card-half" style={ovStyle('scan-overview.ip')}>
                 <Field label="IP" value={network?.ip ?? webrtcPublicIp(signals, network)} />
                 <Field label="WebRTC" value={webrtcPublicIp(signals, network)} />
                 <Field
@@ -1444,7 +1444,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ④ Location 詳情卡 ──────────────────────── */}
-              <Card icon="🗺️" title="地理位置" className="ov-card-half" style={ovStyle('ov.location')}>
+              <Card icon="🗺️" title="地理位置" className="ov-card-half" style={ovStyle('scan-overview.location')}>
                 <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
                 <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
                 <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
@@ -1467,7 +1467,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑤ Hardware 硬體卡 ─────────────────────── */}
-              <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols" style={ovStyle('ov.hardware')}>
+              <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols" style={ovStyle('scan-overview.hardware')}>
                 <Field label="訪客ID" value={visitorIdLabel(current.report)} />
                 <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
                 <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
@@ -1501,7 +1501,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑥ Browser 瀏覽器卡 ─────────────────────── */}
-              <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols" style={ovStyle('ov.browser')}>
+              <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols" style={ovStyle('scan-overview.browser')}>
                 <Field label="隱身模式" value={DASH} />
                 <Field label="設備型號" value={DASH} />
                 <Field label="操作系統" value={osName(signals)} />
@@ -1516,7 +1516,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑦ Software 軟體卡 ──────────────────────── */}
-              <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3" style={ovStyle('ov.software')}>
+              <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3" style={ovStyle('scan-overview.software')}>
                 <Field label="基於IP的時區" value={asStr(geo, 'timezone') ?? DASH} />
                 <Field label="時區" value={timezoneLabel(signals)} />
                 <Field label="基於IP的時間" value={timeInZone(asStr(geo, 'timezone'))} />
