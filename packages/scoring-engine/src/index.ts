@@ -272,5 +272,47 @@ export function defaultRules(): ScoringRule[] {
       description: '伺服器獨立判定的 UA/Client Hints 不一致（OS 或品牌矛盾）',
       evaluate: (_r, issues) => issues.some((i) => i.type === 'server_header_incoherence'),
     },
+    /* ---------- 環境一致性規則（對齊 whoer/browserscan，縮小分數落差） ---------- */
+    {
+      id: 'timezone_mismatch',
+      name: '時區與 IP 不一致',
+      category: 'spoofing',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 8,
+      description: '瀏覽器時區與 IP 所在時區不一致（疑似代理或更改時區）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'timezone_mismatch'),
+    },
+    {
+      id: 'language_mismatch',
+      name: '語言與 IP 國家不一致',
+      category: 'spoofing',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 6,
+      description: '瀏覽器語言與 IP 所在國家常用語言不一致（疑似隱藏位置）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'language_mismatch'),
+    },
+    {
+      id: 'webrtc_ip_mismatch',
+      name: 'WebRTC IP 與連線 IP 不同',
+      category: 'spoofing',
+      severity: 'warning',
+      track: 'fraud',
+      deduction: 8,
+      description: 'WebRTC 公網 IP 與伺服器連線 IP 不同（疑似 IP 隱藏/分流不一致）',
+      evaluate: (_r, issues) =>
+        issues.some((i) => i.type === 'webrtc_ip_mismatch' || i.type === 'server_webrtc_leak'),
+    },
+    {
+      id: 'canvas_disabled',
+      name: 'Canvas 停用/不支援',
+      category: 'privacy_protection',
+      severity: 'warning',
+      track: 'privacy',
+      deduction: 5,
+      description: 'Canvas API 不支援或停用（環境極異常或隱私保護過度）',
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'canvas_disabled'),
+    },
   ];
 }

@@ -682,6 +682,10 @@ const ISSUE_ZH: Record<string, string> = {
   server_proxy_detected: 'Proxy 代理伺服器偵測',
   server_ip_velocity: '同裝置 7 天 IP 速度異常',
   server_header_incoherence: '請求標頭一致性異常',
+  timezone_mismatch: '時區與 IP 不一致',
+  language_mismatch: '語言與 IP 國家不一致',
+  webrtc_ip_mismatch: 'WebRTC IP 與連線 IP 不同',
+  canvas_disabled: 'Canvas 停用/不支援',
 };
 
 function issueZhName(key: string): string {
@@ -869,7 +873,10 @@ function ScanProgressBlock({
     <section className="ov-card ov-scan-progress" aria-label="掃描進度" style={style}>
       <div className="ov-card-head">
         <span className="ov-scan-spinner" aria-hidden="true" />
-        <h3 className="ov-card-title">掃描中… {percent}%</h3>
+        <h3 className="ov-card-title">掃描中…</h3>
+        <span className="ov-scan-pct" aria-hidden="false">
+          {percent}%
+        </span>
         <button
           type="button"
           className="ov-detail-toggle"
@@ -1242,13 +1249,23 @@ export default function HomeOverviewV2() {
           </div>
         )}
 
-        {/* 自動掃描期間／尚未有結果時：只放一行低調提示 + spinner，不出現模組列或按鈕面板 */}
-        {!current && !scanError && (!busy || scanKind === 'auto') && (
-          <div className="ov-auto-wait" role="status" aria-live="polite">
-            <span className="ov-auto-spinner" aria-hidden="true" />
-            <span>正在掃描環境，請稍候…</span>
-          </div>
-        )}
+        {/* 自動掃描期間／尚未有結果時：只放低調提示；有進度時顯示進度條＋百分比 */}
+        {!current && !scanError && (!busy || scanKind === 'auto') &&
+          (scanPercent > 0 ? (
+            <div className="ov-auto-wait" role="status" aria-live="polite">
+              <span className="ov-auto-spinner" aria-hidden="true" />
+              <span>自動掃描中…</span>
+              <span className="ov-auto-pct">{scanPercent}%</span>
+              <div className="ov-auto-bar" role="progressbar" aria-valuenow={scanPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`自動掃描進度 ${scanPercent}%`}>
+                <div className="ov-auto-bar-fill" style={{ width: `${scanPercent}%` }} />
+              </div>
+            </div>
+          ) : (
+            <div className="ov-auto-wait" role="status" aria-live="polite">
+              <span className="ov-auto-spinner" aria-hidden="true" />
+              <span>正在掃描環境，請稍候…</span>
+            </div>
+          ))}
 
         {!current && scanError && !busy && (
           <div className="ov-scanning">

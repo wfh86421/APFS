@@ -576,6 +576,145 @@ function serverNetworkIssues(network: NetworkAnalysis): AnalysisIssue[] {
   return issues;
 }
 
+/** 語言對照：國家(ISO code/常用名) → 主要語言前綴（僅用於一致性粗判）。 */
+const COUNTRY_LANG: Record<string, string> = {
+  TW: 'zh', CN: 'zh', HK: 'zh', MO: 'zh', SG: 'en',
+  US: 'en', GB: 'en', AU: 'en', CA: 'en', IE: 'en', NZ: 'en',
+  JP: 'ja', KR: 'ko', VN: 'vi', TH: 'th', ID: 'id', MY: 'ms', PH: 'tl',
+  DE: 'de', FR: 'fr', NL: 'nl', IT: 'it', ES: 'es', PT: 'pt', RU: 'ru',
+  TR: 'tr', PL: 'pl', SE: 'sv', NO: 'no', FI: 'fi', DK: 'da', CZ: 'cs',
+};
+const COUNTRY_LANG_BYNAME: Record<string, string> = {
+  taiwan: 'zh', china: 'zh', 'hong kong': 'zh', macau: 'zh', singapore: 'en',
+  'united states': 'en', 'united kingdom': 'en', australia: 'en', japan: 'ja',
+  'south korea': 'ko', vietnam: 'vi', thailand: 'th', indonesia: 'id',
+  malaysia: 'ms', philippines: 'tl', germany: 'de', france: 'fr', netherlands: 'nl',
+};
+
+function tzOffsetMinutesOf(timeZone: string): number | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'longOffset',
+    }).formatToParts(new Date());
+    const name = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(name);
+    if (!match) return null;
+    const sign = match[1] === '-' ? -1 : 1;
+    const hh = Number(match[2]);
+    const mm = match[3] ? Number(match[3]) : 0;
+    return sign * (hh * 60 + mm);
+  } catch {
+    return null;
+  }
+}
+
+function isPublicIpV4(ip?: string): boolean {
+  if (!ip) return false;
+  const parts = ip.split('.');
+  if (parts.length !== 4) return false;
+  const nums = parts.map((p) => Number(p));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b] = nums;
+  if (a === 0 || a === 10 || a === 127) return false;
+  if (a === 100 && b >= 64 && b <= 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 172 && b >= 16 && b <= 31) return false;
+  if (a === 192 && b === 168) return false;
+  if (a === 198 && (b === 18 || b === 19)) return false;
+  if (a >= 224) return false;
+  return true;
+}
+
+/**
+ * 環境一致性 issues（對齊 whoer/browserscan 的扣分面，縮小分數落差）：
+ * Canvas 停用、瀏覽器時區 vs IP 時區、瀏覽器語言 vs IP 國家語言、WebRTC 公網 vs HTTP IP。
+ * 全部由「伺服器事實 + 訊號」判定，不信任客戶端自報。
+ */
+function environmentalCoherenceIssues(
+  report: EnvironmentReport,
+  network: NetworkAnalysis,
+): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+  const push = (
+    type: string,
+    severity: AnalysisIssue['severity'],
+    description: string,
+    evidence: Record<string, unknown>,
+  ): void => {
+    issues.push({ id: crypto.randomUUID(), type, severity, description, evidence });
+  };
+  const valueOf = (key: string): Record<string, unknown> | undefined => {
+    const s = report.signals.find((sig) => sig.key === key);
+    return s && typeof s.value === 'object' && s.value !== null
+      ? (s.value as Record<string, unknown>)
+      : undefined;
+  };
+
+  const canvas = valueOf('canvas');
+  if (canvas && canvas.supported === false) {
+    push('canvas_disabled', 'medium', 'Canvas API 不支援或停用（環境極異常或隱私保護過度）', {
+      supported: false,
+    });
+  }
+
+  const tz = valueOf('timezone');
+  const browserTz = typeof tz?.timezone === 'string' ? tz.timezone : undefined;
+  const ipTz = network.geo?.timezone;
+  if (browserTz && ipTz && browserTz.toLowerCase() !== ipTz.toLowerCase()) {
+    const browserOffset =
+      typeof tz?.offsetHours === 'number' && Number.isFinite(tz.offsetHours)
+        ? Math.round(tz.offsetHours) * 60
+        : null;
+    const ipOffset = tzOffsetMinutesOf(ipTz);
+    if (browserOffset === null || ipOffset === null || browserOffset !== ipOffset) {
+      push(
+        'timezone_mismatch',
+        'warning',
+        '瀏覽器時區與 IP 所在時區不一致（疑似使用代理或更改時區）',
+        { browserTimeZone: browserTz, ipTimeZone: ipTz, browserOffsetMinutes: browserOffset, ipOffsetMinutes: ipOffset },
+      );
+    }
+  }
+
+  const locale = valueOf('locale');
+  const rawLang = Array.isArray(locale?.languages) && locale?.languages.length
+    ? String(locale.languages[0])
+    : typeof locale?.language === 'string'
+      ? locale.language
+      : '';
+  const geo = network.geo as { countryCode?: string; country?: string } | null | undefined;
+  const expected =
+    COUNTRY_LANG[(geo?.countryCode ?? '').toUpperCase()] ??
+    COUNTRY_LANG_BYNAME[(geo?.country ?? '').toLowerCase()] ??
+    '';
+  if (expected && rawLang && !rawLang.toLowerCase().startsWith(expected)) {
+    push(
+      'language_mismatch',
+      'warning',
+      '瀏覽器語言與 IP 所在國家常用語言不一致（疑似試圖隱藏實際位置）',
+      { language: rawLang, expectedPrefix: expected, country: geo?.country },
+    );
+  }
+
+  const httpIp = network.ip;
+  const webrtcIp = network.webrtc?.publicIp;
+  if (
+    isPublicIpV4(httpIp) &&
+    isPublicIpV4(webrtcIp) &&
+    httpIp !== webrtcIp
+  ) {
+    push(
+      'webrtc_ip_mismatch',
+      'warning',
+      'WebRTC 公網 IP 與伺服器連線 IP 不同（疑似 IP 隱藏或分流不一致）',
+      { httpIp, webrtcIp },
+    );
+  }
+
+  return issues;
+}
+
 /**
  * 請求標頭一致性校驗（WP4，伺服器獨立判定）：以 server.httpHeaders 訊號
  * （node-sdk collectServerSignals 收的原始 headers）檢查
@@ -1334,6 +1473,7 @@ app.post('/v1/reports', async (request, reply) => {
     ...serverIssues,
     ...velocityIssues,
     ...headerCoherenceIssues(report),
+    ...environmentalCoherenceIssues(report, network),
   ];
   report.issues = allIssues;
   const score = await buildScoringEngine().calculate(report, allIssues, DEFAULT_PROFILE);
