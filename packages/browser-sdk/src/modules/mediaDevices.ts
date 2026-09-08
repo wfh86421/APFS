@@ -1,3 +1,4 @@
+import { sha256 } from '../sha.js';
 import type { DetectionModule } from '../index.js';
 
 /**
@@ -13,6 +14,14 @@ export const mediaDevicesModule: DetectionModule = {
   version: '0.1.0',
   priority: 47,
   async collect() {
+    // enumerateDevices 只在安全連線（https/localhost）暴露；plain-http 部署時誠實標記原因。
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      return {
+        key: 'mediaDevices',
+        value: { supported: false, reason: 'insecure-context' },
+        confidence: 1,
+      };
+    }
     const md = navigator.mediaDevices as
       | (MediaDevices & { enumerateDevices?: () => Promise<MediaDeviceInfo[]> })
       | undefined;
@@ -43,7 +52,3 @@ export const mediaDevicesModule: DetectionModule = {
   getEntropy: () => 4,
 };
 
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}

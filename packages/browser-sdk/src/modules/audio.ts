@@ -1,3 +1,4 @@
+import { sha256 } from '../sha.js';
 import type { DetectionModule } from '../index.js';
 
 /** Audio 指紋：AudioContext 輸出哈希。熵值約 12 bits。 */
@@ -40,7 +41,3 @@ export const audioModule: DetectionModule = {
   getEntropy: () => 12,
 };
 
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}

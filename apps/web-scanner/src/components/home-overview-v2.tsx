@@ -552,7 +552,9 @@ function fontsListLabel(signals: NormalizedSignal[]): string {
 function mediaDevicesLabel(signals: NormalizedSignal[]): string {
   const md = valueOf(signals, 'mediaDevices');
   if (!md) return DASH;
-  if (md.supported === false) return '不支援';
+  if (md.supported === false) {
+    return md.reason === 'insecure-context' ? '僅 HTTPS 可用' : '不支援';
+  }
   const counts = (md.counts ?? {}) as Record<string, unknown>;
   const audioIn = Number(counts.audioinput ?? 0);
   const videoIn = Number(counts.videoinput ?? 0);
@@ -1671,8 +1673,8 @@ export default function HomeOverviewV2() {
             )}
 
             <p className="ov-source-note" style={{ order: OV_FALLBACK_RANK + 1 }}>
-              資料來源：@shieldscan/browser-sdk 10 個採集模組（UA / Client Hints / Canvas / WebGL /
-              WebGPU / Audio / 螢幕 / 語言 / 時區 / WebRTC）→ analyzeSignals（standard）→
+              資料來源：@shieldscan/browser-sdk 13 個採集模組（UA / Client Hints / Canvas / WebGL /
+              WebGPU / Audio / 螢幕 / 語言 / 時區 / WebRTC / 字體 / Client Rects / 媒體裝置）→ analyzeSignals（standard）→
               submitReport（伺服器 network／score）。伺服器連線失敗時顯示降級警告並退回本機預覽。
             </p>
           </div>
