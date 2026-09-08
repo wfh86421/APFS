@@ -19,6 +19,8 @@ export const audioModule: DetectionModule = {
     const analyser = ctx.createAnalyser();
     const gain = ctx.createGain();
     const sampleRate = ctx.sampleRate;
+    // 靜音取樣：音調不送到喇叭（避免可聽「嗶聲」），仍走完整 AudioContext 管線取得特徵。
+    gain.gain.value = 0;
     oscillator.type = 'triangle';
     oscillator.connect(analyser);
     analyser.connect(gain);

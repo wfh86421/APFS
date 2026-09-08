@@ -1410,7 +1410,17 @@ html:has(.ov-experience) body {
 
 .ov-loc-pin {
   display: inline-flex;
+  align-self: flex-start;
+  margin-top: 4px;
   color: var(--ov-accent);
+}
+
+.ov-loc-id {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
 }
 
 .ov-loc-ip {
@@ -1424,6 +1434,21 @@ html:has(.ov-experience) body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 340px;
+}
+
+/* IP 下方小字的地理位置行：`city / 旗 country`（缺一顯示有者，皆無 —） */
+.ov-loc-geo {
+  display: block;
+  min-width: 0;
+  max-width: 340px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  color: var(--ov-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ov-loc-sep {
@@ -1644,9 +1669,68 @@ html:has(.ov-experience) body {
   color: var(--ov-bad);
 }
 
-/* ── 掃描進度（10 模組 ✅/❌/⏳，與 classic ScanPanel 同款語意；僅手動重新掃描顯示） ── */
+/* ── 掃描進度區塊（Issues 上方；掃描中顯示、完成即自動隱藏/收合） ── */
 .ov-scan-progress {
   margin-bottom: 16px;
+}
+
+.ov-scan-spinner {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--ov-border);
+  border-top-color: var(--ov-accent);
+  animation: ov-spin 0.8s linear infinite;
+}
+
+/* 展開「詳細」／收合 按鈕（掃描進度區塊頭） */
+.ov-detail-toggle {
+  appearance: none;
+  margin-left: auto;
+  border: 1px solid var(--ov-border);
+  background: var(--ov-panel-2);
+  color: var(--ov-accent);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ov-detail-toggle:hover {
+  border-color: var(--ov-accent);
+  color: var(--ov-accent);
+  background: var(--ov-accent-soft);
+}
+
+/* 進度條（完成 %；bar 顏色 --ov-accent） */
+.ov-scan-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ov-inset);
+  border: 1px solid var(--ov-border);
+  overflow: hidden;
+}
+
+.ov-scan-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ov-accent);
+  transition: width 0.3s ease;
+}
+
+/* 展開後：模組明細（✅/⏳/❌ ＋模組名＋耗時，樣式沿用 ov-progress-*） */
+.ov-scan-details {
+  margin-top: 12px;
+  border-top: 1px dashed var(--ov-border);
+  padding-top: 8px;
 }
 
 /* ── 自動掃描期間：低調置中的單行提示 + spinner（不顯示模組列/按鈕面板） ── */
@@ -2378,6 +2462,3 @@ html:has(.ov-experience) body {
     padding: 20px 14px 48px;
   }
 }
-
-/* INTEG: 頁面細字列（overview hero）*/
-.ov-page-line{margin:0 0 10px;font-size:12px;color:var(--ov-muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

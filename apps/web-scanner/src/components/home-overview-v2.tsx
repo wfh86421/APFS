@@ -461,6 +461,90 @@ function geoOf(network?: ServerNetworkAnalysis): RichGeo | null {
   return g ? (g as RichGeo) : null;
 }
 
+/* ------------------------------------------------------------------ */
+/* 地理位置行（工具列 IP 下方）與國家旗 emoji                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * countryCode（ISO 3166-1 alpha-2，server 為 ip-api 所提供）→ 國旗 emoji。
+ * offset 127397：code 大寫兩字 → 逐字元 codePointAt 相減後 fromCodePoint。
+ */
+function flagEmojiFromCode(countryCode: string | undefined): string {
+  if (!countryCode) return '';
+  const code = countryCode.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  return String.fromCodePoint(...[...code].map((ch) => 127397 + (ch.codePointAt(0) ?? 0)));
+}
+
+/** 無 countryCode 時的小型常用國家名稱對照（中文／英文名 → code），再轉 emoji。 */
+const COUNTRY_CODE_FALLBACK: Record<string, string> = {
+  越南: 'VN',
+  vietnam: 'VN',
+  台灣: 'TW',
+  台湾: 'TW',
+  taiwan: 'TW',
+  中國: 'CN',
+  中国: 'CN',
+  china: 'CN',
+  美國: 'US',
+  美国: 'US',
+  'united states': 'US',
+  usa: 'US',
+  日本: 'JP',
+  japan: 'JP',
+  韓國: 'KR',
+  韩国: 'KR',
+  'south korea': 'KR',
+  korea: 'KR',
+  新加坡: 'SG',
+  singapore: 'SG',
+  泰國: 'TH',
+  泰国: 'TH',
+  thailand: 'TH',
+  印尼: 'ID',
+  indonesia: 'ID',
+  馬來西亞: 'MY',
+  马来西亚: 'MY',
+  malaysia: 'MY',
+  香港: 'HK',
+  'hong kong': 'HK',
+  澳門: 'MO',
+  澳门: 'MO',
+  macau: 'MO',
+  macao: 'MO',
+};
+
+/** geo.countryCode 原始值（geo 型別未宣告該欄時以 Record 方式讀取）。 */
+function countryCodeOf(geo: RichGeo | null): string | undefined {
+  const raw = (geo as Record<string, unknown> | null)?.countryCode;
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : undefined;
+}
+
+/** 國家旗 emoji：優先 geo.countryCode → 退常用國家名稱對照；皆無 → 空字串（不顯示旗）。 */
+function countryFlagEmoji(geo: RichGeo | null): string {
+  const fromCode = flagEmojiFromCode(countryCodeOf(geo));
+  if (fromCode) return fromCode;
+  const country = asStr(geo, 'country');
+  if (!country) return '';
+  const code = COUNTRY_CODE_FALLBACK[country.trim().toLowerCase()];
+  return code ? flagEmojiFromCode(code) : '';
+}
+
+/**
+ * 工具列地理位置行內容：`city / 旗 country`（旗緊鄰國家文字前方）。
+ * 缺城市或國家時顯示有者；皆無顯示 —。
+ */
+function geoLineValue(geo: RichGeo | null): string {
+  if (!geo) return DASH;
+  const city = asStr(geo, 'city');
+  const country = asStr(geo, 'country');
+  if (!city && !country) return DASH;
+  const flag = countryFlagEmoji(geo);
+  const countryPart = country ? (flag ? `${flag} ${country}` : country) : '';
+  if (city && countryPart) return `${city} / ${countryPart}`;
+  return countryPart || city || DASH;
+}
+
 const RISK_ZH: Record<string, string> = {
   low: '低風險',
   medium: '中風險',
@@ -661,35 +745,69 @@ function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`ov-badge ov-badge-${tone}`}>{children}</span>;
 }
 
-function ProgressBlock({ title, progress }: { title: string; progress: ScanProgressEvent[] }) {
-  const completed = progress.filter((p) => p.status === 'completed').length;
-  const percent = progress.length === 0 ? 0 : Math.round((completed / MODULES.length) * 100);
+/**
+ * 「掃描進度」區塊（位於 Issues 上方；僅掃描中顯示，完成即自動隱藏／收合）。
+ * 預設收合只看到進度條（bar 顏色 --ov-accent）；展開「詳細」才列出各模組
+ * ✅/⏳/❌ ＋模組名＋耗時（語意與 classic 模組進度列相同）。
+ */
+function ScanProgressBlock({
+  progress,
+  percent,
+  open,
+  onToggle,
+}: {
+  progress: ScanProgressEvent[];
+  percent: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <section className="ov-card ov-scan-progress">
+    <section className="ov-card ov-scan-progress" aria-label="掃描進度">
       <div className="ov-card-head">
-        <span className="ov-card-icon" aria-hidden="true">
-          {title.includes('重新') ? '🔄' : '🔍'}
-        </span>
-        <h3 className="ov-card-title">{title}</h3>
-        <span className="ov-chip">
-          {completed}/{MODULES.length} ・ {percent}%
-        </span>
+        <span className="ov-scan-spinner" aria-hidden="true" />
+        <h3 className="ov-card-title">掃描中… {percent}%</h3>
+        <button
+          type="button"
+          className="ov-detail-toggle"
+          aria-expanded={open}
+          aria-controls="ov-scan-detail-list"
+          onClick={onToggle}
+        >
+          {open ? '收合' : '詳細'}
+          <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+        </button>
       </div>
-      <div className="ov-progress">
-        {progress.length === 0 && <p className="ov-empty">正在初始化採集模組…</p>}
-        {[...progress]
-          .sort((a, b) => a.index - b.index)
-          .map((p) => (
-            <div className={`ov-progress-row ov-progress-${p.status}`} key={p.moduleId}>
-              <span className="ov-progress-icon" aria-hidden="true">
-                {p.status === 'completed' ? '✅' : p.status === 'failed' ? '❌' : '⏳'}
-              </span>
-              <span className="ov-progress-name">{p.moduleName}</span>
-              <span className="ov-progress-status">{STATUS_LABEL[p.status]}</span>
-              {p.status === 'completed' && <span className="ov-progress-ms">{Math.round(p.durationMs)} ms</span>}
-            </div>
-          ))}
+      <div
+        className="ov-scan-bar"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-label={`掃描進度 ${percent}%`}
+      >
+        <div className="ov-scan-bar-fill" style={{ width: `${percent}%` }} />
       </div>
+      {open && (
+        <div className="ov-scan-details" id="ov-scan-detail-list">
+          <div className="ov-progress">
+            {progress.length === 0 && <p className="ov-empty">正在初始化採集模組…</p>}
+            {[...progress]
+              .sort((a, b) => a.index - b.index)
+              .map((p) => (
+                <div className={`ov-progress-row ov-progress-${p.status}`} key={p.moduleId}>
+                  <span className="ov-progress-icon" aria-hidden="true">
+                    {p.status === 'completed' ? '✅' : p.status === 'failed' ? '❌' : '⏳'}
+                  </span>
+                  <span className="ov-progress-name">{p.moduleName}</span>
+                  <span className="ov-progress-status">{STATUS_LABEL[p.status]}</span>
+                  {p.status === 'completed' && (
+                    <span className="ov-progress-ms">{Math.round(p.durationMs)} ms</span>
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -702,10 +820,12 @@ export default function HomeOverviewV2() {
   const [data, setData] = useState<OvData | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ScanProgressEvent[]>([]);
+  /** 「掃描進度」詳細（模組行）是否展開；預設收合，掃描結束自動收合。 */
+  const [progressOpen, setProgressOpen] = useState(false);
   const [scanError, setScanError] = useState<string>();
   const [armed, setArmed] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
-  /** 目前掃描的發起方式：首次自動（安靜、不秀模組列）或手動重新掃描（秀細節）。 */
+  /** 目前掃描的發起方式：首次自動（安靜）或手動重新掃描；模組進度一律由「掃描進度」區塊呈現。 */
   const [scanKind, setScanKind] = useState<'auto' | 'manual'>('auto');
   const [copiedTip, setCopiedTip] = useState(false);
   const copyTimerRef = useRef<number | undefined>(undefined);
@@ -726,6 +846,11 @@ export default function HomeOverviewV2() {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, [themeMode]);
+
+  // 掃描結束（busy → false）即自動收合「詳細」，避免模組行一直佔位。
+  useEffect(() => {
+    if (!busy) setProgressOpen(false);
+  }, [busy]);
 
   const chooseTheme = (mode: ThemeMode) => {
     setThemeMode(mode);
@@ -748,6 +873,7 @@ export default function HomeOverviewV2() {
     setScanKind(autoScan ? 'auto' : 'manual');
     setScanError(undefined);
     setProgress([]);
+    setProgressOpen(false);
     const startedAt = performance.now();
 
     try {
@@ -826,6 +952,8 @@ export default function HomeOverviewV2() {
   const summaryRows = current ? buildSummaryRows(current) : [];
   const uaText = asStr(valueOf(signals, 'ua'), 'userAgent') ?? '';
   const toolbarIp = current ? (network?.ip ?? webrtcPublicIp(signals, network)) : DASH;
+  /** 工具列地理位置行（IP 下方小字）：`city / 旗 country`，皆無 → —。 */
+  const geoLine = geoLineValue(geo);
 
   const actionLabel = busy
     ? `掃描中… ${scanPercent}%`
@@ -882,7 +1010,7 @@ export default function HomeOverviewV2() {
       </header>
 
       <div className="ov-page">
-        {/* 頂部工具列：📍 當下 IP ＋ 複製 ＋ 重新掃描（sticky，取代原標題區與獨立重新掃描按鈕） */}
+        {/* 頂部工具列：📍 當下 IP（＋IP 地理位置小字）＋ 複製 ＋ 重新掃描（sticky） */}
         <div className="ov-locbar" role="toolbar" aria-label="目前 IP 工具列">
           <span className="ov-loc-pin" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -890,8 +1018,16 @@ export default function HomeOverviewV2() {
               <circle cx="12" cy="10.8" r="2.4" />
             </svg>
           </span>
-          <span className="ov-loc-ip" title={toolbarIp !== DASH ? `目前 IP：${toolbarIp}` : '尚未取得 IP'}>
-            {toolbarIp}
+          <span className="ov-loc-id">
+            <span className="ov-loc-ip" title={toolbarIp !== DASH ? `目前 IP：${toolbarIp}` : '尚未取得 IP'}>
+              {toolbarIp}
+            </span>
+            <span
+              className="ov-loc-geo"
+              title={geoLine !== DASH ? `IP 地理位置：${geoLine}` : 'IP 地理位置尚未取得'}
+            >
+              {geoLine}
+            </span>
           </span>
           <span className="ov-loc-sep" aria-hidden="true" />
           <button
@@ -936,11 +1072,6 @@ export default function HomeOverviewV2() {
           </div>
         )}
 
-        {/* 掃描中（僅手動重新掃描才顯示模組進度列；自動掃描保持安靜） */}
-        {busy && scanKind === 'manual' && progress.length > 0 && (
-          <ProgressBlock title={current ? '重新掃描中…' : '掃描中…'} progress={progress} />
-        )}
-
         {/* 自動掃描期間／尚未有結果時：只放一行低調提示 + spinner，不出現模組列或按鈕面板 */}
         {!current && !scanError && (!busy || scanKind === 'auto') && (
           <div className="ov-auto-wait" role="status" aria-live="polite">
@@ -978,9 +1109,6 @@ export default function HomeOverviewV2() {
               <div className="ov-hero-main">
                 <div className="ov-hero-left">
                   <h2 className="ov-hero-title">快速摘要：網站從這次連線看到的你</h2>
-                  <p className="ov-page-line" title={current.pageUrl}>
-                    頁面：{current.pageUrl}
-                  </p>
                   <div className="ov-summary">
                     {summaryRows.map((row) => (
                       <div
@@ -1029,6 +1157,16 @@ export default function HomeOverviewV2() {
                 </div>
               </div>
             </section>
+
+            {/* 掃描進度：位於 Issues 上方；僅掃描中顯示，完成即自動隱藏／收合，展開可看模組明細 */}
+            {busy && (
+              <ScanProgressBlock
+                progress={progress}
+                percent={scanPercent}
+                open={progressOpen}
+                onToggle={() => setProgressOpen((prev) => !prev)}
+              />
+            )}
 
             {/* ② 扣分項分析 Issues（名稱 -x% ＋說明＋證據） */}
             <Card icon="📉" title="扣分項分析 Issues" className="ov-card-wide ov-card-issues">
