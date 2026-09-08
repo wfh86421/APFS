@@ -869,34 +869,73 @@ function ScanProgressBlock({
   onToggle: () => void;
   style?: CSSProperties;
 }) {
+  // 企業級動態進度台：fake-ease 平滑進度 + 終端機階段日誌。
+  // 佈局固定：[狀態日誌(左,固定寬)] [進度條(伸縮)] [%(右,等寬)] → 文字切換不抖動。
+  const [pct, setPct] = useState(0);
+  const [flash, setFlash] = useState(false);
+  const [stageIdx, setStageIdx] = useState(0);
+
+  // 每次新掃描開始（真實進度歸零）時重置假進度與完成態。
+  useEffect(() => {
+    if (percent === 0) {
+      setFlash(false);
+      setPct(0);
+    }
+  }, [percent]);
+
+  useEffect(() => {
+    if (percent >= 100 && !flash) {
+      setPct(100);
+      setFlash(true);
+      return;
+    }
+    if (!flash) {
+      const timer = window.setInterval(() => {
+        setPct((prev) => {
+          if (prev >= 99) return 99;
+          // 0-90 加速隨機 +2~8%；90+ 放緩
+          const step = prev < 90 ? 2 + Math.random() * 6 : 0.6 + Math.random() * 1.8;
+          const next = Math.min(99, prev + step);
+          // 若有真實進度，不落後於真實進度太多（以真實為主，假進度只補「無進度期」的視覺）
+          return percent > 0 ? Math.max(next, Math.min(percent, 99)) : next;
+        });
+      }, 160);
+      return () => window.clearInterval(timer);
+    }
+  }, [percent, flash]);
+
+  useEffect(() => {
+    const s = STAGE_LOG.findIndex((x) => pct < x.until);
+    setStageIdx(s < 0 ? STAGE_LOG.length - 1 : s);
+  }, [pct]);
+
+  const stage = STAGE_LOG[stageIdx];
+  const barWidth = `${Math.min(pct, 100)}%`;
+
   return (
     <section className="ov-card ov-scan-progress" aria-label="掃描進度" style={style}>
-      <div className="ov-card-head">
-        <span className="ov-scan-spinner" aria-hidden="true" />
-        <h3 className="ov-card-title">掃描中…</h3>
-        <span className="ov-scan-pct" aria-hidden="false">
-          {percent}%
-        </span>
-        <button
-          type="button"
-          className="ov-detail-toggle"
-          aria-expanded={open}
-          aria-controls="ov-scan-detail-list"
-          onClick={onToggle}
-        >
-          {open ? '收合' : '詳細'}
+      <div className="ov-console">
+        <div className="ov-console-log" aria-hidden="true">
+          {stage ? (
+            <>
+              <span className="ov-console-stage">{stage.label}</span>
+              <span className="ov-console-caret">▊</span>
+            </>
+          ) : (
+            <span className="ov-console-idle">initializing…</span>
+          )}
+        </div>
+        <div className="ov-console-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={`掃描進度 ${Math.round(pct)}%`}>
+          <div className="ov-console-bar-fill" style={{ width: barWidth }} />
+        </div>
+        <span className="ov-console-pct">{Math.round(pct)}%</span>
+      </div>
+      <div className="ov-console-foot">
+        <button type="button" className="ov-detail-toggle" aria-expanded={open} aria-controls="ov-scan-detail-list" onClick={onToggle}>
+          {open ? '收合詳細' : '詳細模組'}
           <span aria-hidden="true">{open ? '▴' : '▾'}</span>
         </button>
-      </div>
-      <div
-        className="ov-scan-bar"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        aria-label={`掃描進度 ${percent}%`}
-      >
-        <div className="ov-scan-bar-fill" style={{ width: `${percent}%` }} />
+        {percent >= 100 && <span className="ov-console-done">✅ 檢測完畢，生成安全審計報告。</span>}
       </div>
       {open && (
         <div className="ov-scan-details" id="ov-scan-detail-list">
@@ -922,6 +961,16 @@ function ScanProgressBlock({
     </section>
   );
 }
+
+/** 終端機風格階段日誌（0→100 分五段）。 */
+const STAGE_LOG: Array<{ label: string; until: number }> = [
+  { label: '[Network] 解析邊界路由與 DNS 節點…', until: 20 },
+  { label: '[WebRTC] 穿透探測與真實 IP 溯源…', until: 40 },
+  { label: '[Hardware] 提取 Canvas 與 WebGL 渲染管線指紋…', until: 65 },
+  { label: '[Environment] 掃描 TCP 異常端口與系統熵值…', until: 85 },
+  { label: '[Synthesis] 交叉比對威脅矩陣，生成風控評分…', until: 99 },
+  { label: '✅ 檢測完畢，生成安全審計報告。', until: 101 },
+];
 
 /* ------------------------------------------------------------------ */
 /* 主元件                                                               */
@@ -1249,23 +1298,17 @@ export default function HomeOverviewV2() {
           </div>
         )}
 
-        {/* 自動掃描期間／尚未有結果時：只放低調提示；有進度時顯示進度條＋百分比 */}
-        {!current && !scanError && (!busy || scanKind === 'auto') &&
-          (scanPercent > 0 ? (
-            <div className="ov-auto-wait" role="status" aria-live="polite">
-              <span className="ov-auto-spinner" aria-hidden="true" />
-              <span>自動掃描中…</span>
-              <span className="ov-auto-pct">{scanPercent}%</span>
-              <div className="ov-auto-bar" role="progressbar" aria-valuenow={scanPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`自動掃描進度 ${scanPercent}%`}>
-                <div className="ov-auto-bar-fill" style={{ width: `${scanPercent}%` }} />
-              </div>
-            </div>
-          ) : (
-            <div className="ov-auto-wait" role="status" aria-live="polite">
-              <span className="ov-auto-spinner" aria-hidden="true" />
-              <span>正在掃描環境，請稍候…</span>
-            </div>
-          ))}
+        {/* 進入／自動掃描（尚無結果時）：以企業級動態進度台呈現 */}
+        {!current && !scanError && busy && (
+          <div className="ov-console-wrap">
+            <ScanProgressBlock
+              progress={progress}
+              percent={scanPercent}
+              open={progressOpen}
+              onToggle={() => setProgressOpen((v) => !v)}
+            />
+          </div>
+        )}
 
         {!current && scanError && !busy && (
           <div className="ov-scanning">

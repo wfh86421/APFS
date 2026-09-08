@@ -2498,3 +2498,18 @@ html:has(.ov-experience) body {
 .ov-auto-pct{font-weight:800;color:var(--ov-accent,#1d4ed8);font-size:14px}
 .ov-auto-bar{flex-basis:100%;height:8px;background:var(--ov-border,#e2e8f0);border-radius:999px;overflow:hidden}
 .ov-auto-bar-fill{height:100%;background:var(--ov-accent,#1d4ed8);border-radius:999px;transition:width .2s ease}
+
+/* 企業級動態進度台（scan console）：[日誌 固定寬] [進度條] [% 等寬] 不抖動 */
+.ov-console-wrap{max-width:920px;margin:24px auto 0;width:100%}
+.ov-scan-progress .ov-console{display:flex;align-items:center;gap:14px;background:#0a1220;border:1px solid #1e3a5f;border-radius:12px;padding:14px 16px;box-shadow:0 0 0 1px rgba(45,212,191,.12),0 8px 24px rgba(0,0,0,.25)}
+.ov-console-log{flex:0 0 320px;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#5eead4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ov-console-stage{}
+.ov-console-caret{animation:ov-blink 1s steps(1) infinite;color:#22d3ee}
+.ov-console-bar{flex:1 1 auto;height:10px;background:#14233b;border-radius:999px;overflow:hidden;position:relative}
+.ov-console-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#34d399);box-shadow:0 0 12px rgba(34,211,238,.55);transition:width .16s linear}
+.ov-console-pct{flex:0 0 54px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;font-weight:700;color:#e2f4ff;font-variant-numeric:tabular-nums}
+.ov-console-foot{display:flex;align-items:center;gap:14px;margin-top:10px;min-height:22px}
+.ov-console-done{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#34d399}
+.ov-console-idle{color:#64748b}
+@keyframes ov-blink{50%{opacity:0}}
+@media (max-width:760px){.ov-console-log{flex-basis:200px}.ov-scan-progress .ov-console{gap:8px;padding:10px 10px}}
