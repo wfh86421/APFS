@@ -1541,9 +1541,53 @@ html:has(.ov-experience) body {
   color: var(--ov-bad);
 }
 
-/* ── 掃描進度（10 模組 ✅/❌/⏳，與 classic ScanPanel 同款語意） ── */
+/* ── 掃描進度（10 模組 ✅/❌/⏳，與 classic ScanPanel 同款語意；僅手動重新掃描顯示） ── */
 .ov-scan-progress {
   margin-bottom: 16px;
+}
+
+/* ── 自動掃描期間：低調置中的單行提示 + spinner（不顯示模組列/按鈕面板） ── */
+.ov-auto-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 150px;
+  padding: 50px 20px 40px;
+  color: var(--ov-muted);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.ov-auto-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--ov-border);
+  border-top-color: var(--ov-accent);
+  animation: ov-spin 0.8s linear infinite;
+}
+
+@keyframes ov-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 結果出現的簡短過場（避免掃描完成瞬間的閃跳） */
+.ov-results.ov-fade-in {
+  animation: ov-fade-in 0.35s ease both;
+}
+
+@keyframes ov-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .ov-progress {

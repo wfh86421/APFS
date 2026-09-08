@@ -677,6 +677,8 @@ export default function HomeOverviewV2() {
   const [scanError, setScanError] = useState<string>();
   const [armed, setArmed] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
+  /** 目前掃描的發起方式：首次自動（安靜、不秀模組列）或手動重新掃描（秀細節）。 */
+  const [scanKind, setScanKind] = useState<'auto' | 'manual'>('auto');
   const dataRef = useRef<OvData | null>(null);
 
   // 掛載後才讀取 localStorage（避免 SSR/水合不一致）；html 主題已在模組載入時同步。
@@ -701,8 +703,9 @@ export default function HomeOverviewV2() {
     setHtmlTheme(mode);
   };
 
-  const runScan = async () => {
+  const runScan = async (autoScan = false) => {
     setBusy(true);
+    setScanKind(autoScan ? 'auto' : 'manual');
     setScanError(undefined);
     setProgress([]);
     const startedAt = performance.now();
@@ -770,7 +773,7 @@ export default function HomeOverviewV2() {
     if (autoScanStarted) return;
     autoScanStarted = true;
     setArmed(true);
-    void runScan();
+    void runScan(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -833,14 +836,17 @@ export default function HomeOverviewV2() {
                 {current.analysisSource === 'server' ? '伺服器分析' : '本機預覽'}
               </span>
             )}
-            <button
-              type="button"
-              className="ov-btn ov-btn-primary"
-              onClick={() => void runScan()}
-              disabled={busy || !armed}
-            >
-              {actionLabel}
-            </button>
+            {/* 首次自動掃描期間不顯示按鈕區（畫面保持乾淨）；手動/重新掃描才出現 */}
+            {!(busy && scanKind === 'auto') && (
+              <button
+                type="button"
+                className="ov-btn ov-btn-primary"
+                onClick={() => void runScan()}
+                disabled={busy || !armed}
+              >
+                {actionLabel}
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -868,22 +874,16 @@ export default function HomeOverviewV2() {
           </div>
         )}
 
-        {/* 掃描中：模組進度列（與 classic ScanPanel 相同的 ✅/❌/⏳ 10 模組） */}
-        {busy && progress.length > 0 && (
-          <ProgressBlock title={current ? '重新掃描中…' : '自動掃描中…'} progress={progress} />
+        {/* 掃描中（僅手動重新掃描才顯示模組進度列；自動掃描保持安靜） */}
+        {busy && scanKind === 'manual' && progress.length > 0 && (
+          <ProgressBlock title={current ? '重新掃描中…' : '掃描中…'} progress={progress} />
         )}
 
-        {!current && !scanError && (
-          <div className="ov-scanning">
-            <section className="ov-card">
-              <div className="ov-card-head">
-                <span className="ov-card-icon" aria-hidden="true">
-                  ⏳
-                </span>
-                <h3 className="ov-card-title">等待自動掃描…</h3>
-              </div>
-              <p className="ov-empty">頁面載入完成後將自動執行一次掃描，毋須點擊。</p>
-            </section>
+        {/* 自動掃描期間／尚未有結果時：只放一行低調提示 + spinner，不出現模組列或按鈕面板 */}
+        {!current && !scanError && (!busy || scanKind === 'auto') && (
+          <div className="ov-auto-wait" role="status" aria-live="polite">
+            <span className="ov-auto-spinner" aria-hidden="true" />
+            <span>正在掃描環境，請稍候…</span>
           </div>
         )}
 
@@ -903,7 +903,7 @@ export default function HomeOverviewV2() {
 
         {/* 結果總覽 */}
         {current && (
-          <>
+          <div className="ov-results ov-fade-in">
             {/* ① 頂部概覽 Overview hero（深色）── 左：兩欄標籤:值摘要；右：隱私評分大數字 */}
             <section className="ov-hero">
               <div className="ov-hero-meta">
@@ -1155,7 +1155,7 @@ export default function HomeOverviewV2() {
               WebGPU / Audio / 螢幕 / 語言 / 時區 / WebRTC）→ analyzeSignals（standard）→
               submitReport（伺服器 network／score）。伺服器連線失敗時顯示降級警告並退回本機預覽。
             </p>
-          </>
+          </div>
         )}
 
         {/* 頁尾導覽列 */}
