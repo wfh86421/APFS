@@ -615,7 +615,8 @@ function isPublicIpV4(ip?: string): boolean {
   if (parts.length !== 4) return false;
   const nums = parts.map((p) => Number(p));
   if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
-  const [a, b] = nums;
+  const a = nums[0] as number;
+  const b = nums[1] as number;
   if (a === 0 || a === 10 || a === 127) return false;
   if (a === 100 && b >= 64 && b <= 127) return false;
   if (a === 169 && b === 254) return false;
