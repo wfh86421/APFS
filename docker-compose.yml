@@ -61,6 +61,7 @@ services:
       dockerfile: apps/web-scanner/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_EXPERIENCE: overview
     ports:
       - "3000:3000"
     depends_on:
