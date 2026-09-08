@@ -45,7 +45,7 @@ services:
       DATABASE_URL: postgresql://shieldscan:${POSTGRES_PASSWORD:-shieldscan}@postgres:5432/shieldscan
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       REPORT_SIGNING_SECRET: ${REPORT_SIGNING_SECRET:-dev-only-change-me}
-      NETWORK_PROVIDER: ${NETWORK_PROVIDER:-mock}
+      NETWORK_PROVIDER: ip-api
     ports:
       - "3001:3001"
     depends_on:
