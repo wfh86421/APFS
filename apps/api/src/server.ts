@@ -432,9 +432,9 @@ function extractVisitorProfile(report: EnvironmentReport): VisitorProfile {
 /* /v1/devices 資料接線：收案時把設備指紋/網路訊號寫入 risk 表          */
 /* ------------------------------------------------------------------ */
 
-/** 取報告中穩定訊號的雜湊（canvas/webgl/webgpu/audio/fonts/ua）。 */
+/** 取報告中穩定訊號的雜湊（canvas/webgl/webgpu/audio/fonts/clientRects/ua）。 */
 function stableSignalHashes(report: EnvironmentReport): { key: string; hash: string }[] {
-  const keys = ['canvas', 'webgl', 'webgpu', 'audio', 'fonts', 'ua'] as const;
+  const keys = ['canvas', 'webgl', 'webgpu', 'audio', 'fonts', 'clientRects', 'ua'] as const;
   const out: { key: string; hash: string }[] = [];
   for (const key of keys) {
     const hash = report.signals.find((s) => s.key === key)?.hash;
@@ -463,6 +463,8 @@ function buildDeviceFingerprint(
     webglHash: find('webgl'),
     webgpuHash: find('webgpu'),
     audioHash: find('audio'),
+    fontsHash: find('fonts'),
+    clientRectsHash: find('clientRects'),
     firstSeen: report.createdAt,
     lastSeen: report.createdAt,
     sessionCount: 1,

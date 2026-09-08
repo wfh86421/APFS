@@ -5,7 +5,10 @@ import {
   audioModule,
   canvasModule,
   clientHintsModule,
+  clientRectsModule,
+  fontsModule,
   localeModule,
+  mediaDevicesModule,
   screenModule,
   ShieldScanSDK,
   timezoneModule,
@@ -28,6 +31,9 @@ const MODULES = [
   screenModule,
   localeModule,
   timezoneModule,
+  fontsModule,
+  clientRectsModule,
+  mediaDevicesModule,
   webrtcModule,
 ];
 

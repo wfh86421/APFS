@@ -1,0 +1,21 @@
+# 2026-09-09 INTEG 窗口：W1 指紋採集補齊（fonts/clientRects/mediaDevices）（代號 INTEG）
+
+- **目標**：W1「指紋採集補齊」——把已預留 DB 欄位但 SDK 從未採集的**真護城河指紋**補上：Fonts、Client Rects、MediaDevices（僅狀態），讓設備指紋資料面更完整、跨 session 聚類更準。
+- **現況盤點**：`device_fingerprints` 表已有 `fonts_hash/client_rects_hash` 欄位、repository 型別/insert 已支援；server `stableSignalHashes` 已含 `fonts`；缺的是 browser-sdk 採集模組與 web 頁面註冊、server 對應 mapping。
+- **關鍵決策**：
+  - fonts：**保守測寬法**（font-family 帶不存在哨兵字型），只有真安裝且度量與預設 sans-serif 不同才列入 → 寧漏報不誤報，確保 hash 跨 session 穩定（護城河用途首重穩定）；含 CJK/程式/展示 40 個候選字型。
+  - clientRects：固定文字元素 `getClientRects()` 序列（座標/尺寸四捨五入）hash，反映排版引擎/OS 細節。
+  - mediaDevices：`enumerateDevices()` **不取流、不觸發權限詢問**；回報各 kind 數量＋`labeled>0`（曾授權）狀態；無 DB 欄位、只進 report signals（隱私安全版，呼應策略文件「僅狀態」）。
+  - server：`stableSignalHashes` keys 補 `clientRects`；`buildDeviceFingerprint` 補 `fontsHash: find('fonts')`、`clientRectsHash: find('clientRects')` → 既有 PG/in-memory upsert 自動落庫（兩者皆全量寫入/合併，不需改 repository）。
+  - 三個 web 頁（scan-panel / login-risk-demo / home-overview-v2）MODULES 註冊新模組。
+- **改動檔案（commit 前綴）**：
+  - `packages/browser-sdk/src/modules/fonts.ts`、`clientRects.ts`、`mediaDevices.ts`（新增）
+  - `packages/browser-sdk/src/index.ts`（匯出三模組）
+  - `apps/web-scanner/src/components/scan-panel.tsx`、`demo/login-risk-demo.tsx`、`home-overview-v2.tsx`（註冊）
+  - `apps/api/src/server.ts`（device 指紋 mapping）
+  - `docs/logs/2026-09-09-INTEG-w1-fingerprint-collection.md`（本檔）、`CHANGELOG.md`
+- **驗證結果**：browser-sdk build ✅；api typecheck ✅；web-scanner typecheck ✅（tsc 全 0）。執行期採集需瀏覽器（本沙箱無法跑 document/navigator），留待試用站實測。
+- **未完成/待辦**：
+  - 試用站（:3080）實際掃描判讀：fonts detected 清單、clientRects/mediaDevices 訊號是否入報告、devices 頁 hash 是否落庫（需 VPS SSH，密碼在舊對話）。
+  - 未來規則可吃 fonts（如 headless 常缺字型集）——不在本包。
+- **給其他 agent 的備註**：新 signal keys = `fonts`（value.detected[]）、`clientRects`、`mediaDevices`（value.counts/labeled）；hash 為穩定特徵，**已納入 device_fingerprints 聚類材料**（fingerprintHash 會因新特徵加入而改變既有裝置的分群基底——屬預期，累積期勿以舊 hash 比對）。

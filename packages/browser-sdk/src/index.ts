@@ -149,5 +149,8 @@ export { timezoneModule } from './modules/timezone.js';
 export { webrtcModule } from './modules/webrtc.js';
 export { uaModule } from './modules/ua.js';
 export { clientHintsModule } from './modules/clientHints.js';
+export { fontsModule } from './modules/fonts.js';
+export { clientRectsModule } from './modules/clientRects.js';
+export { mediaDevicesModule } from './modules/mediaDevices.js';
 export { buildReport } from './report.js';
 export { newUuid } from './uuid.js';
