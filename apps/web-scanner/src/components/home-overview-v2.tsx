@@ -527,6 +527,65 @@ function touchSupportLabel(signals: NormalizedSignal[]): string {
   return points > 0 ? `是（${points} 點）` : '否';
 }
 
+/** 字體指紋（fonts 訊號）摘要：保守測寬偵測到的已安裝字型數。 */
+function fontsSummaryLabel(signals: NormalizedSignal[]): string {
+  const fonts = valueOf(signals, 'fonts');
+  if (!fonts) return DASH;
+  if (fonts.supported === false) return '不支援';
+  const list = Array.isArray(fonts.detected)
+    ? (fonts.detected as unknown[]).filter((item): item is string => typeof item === 'string')
+    : [];
+  return `${list.length} 種已安裝`;
+}
+
+/** 字體清單（保守測寬偵測結果，長度上限）。 */
+function fontsListLabel(signals: NormalizedSignal[]): string {
+  const fonts = valueOf(signals, 'fonts');
+  const list = Array.isArray(fonts?.detected)
+    ? (fonts.detected as unknown[]).filter((item): item is string => typeof item === 'string')
+    : [];
+  if (list.length === 0) return DASH;
+  return truncate(list.join('、'), 120);
+}
+
+/** 媒體裝置狀態（mediaDevices 訊號，enumerateDevices 僅狀態、不取流）。 */
+function mediaDevicesLabel(signals: NormalizedSignal[]): string {
+  const md = valueOf(signals, 'mediaDevices');
+  if (!md) return DASH;
+  if (md.supported === false) return '不支援';
+  const counts = (md.counts ?? {}) as Record<string, unknown>;
+  const audioIn = Number(counts.audioinput ?? 0);
+  const videoIn = Number(counts.videoinput ?? 0);
+  const audioOut = Number(counts.audiooutput ?? 0);
+  const parts: string[] = [];
+  if (audioIn > 0) parts.push(`麥克風×${audioIn}`);
+  if (videoIn > 0) parts.push(`鏡頭×${videoIn}`);
+  if (audioOut > 0) parts.push(`喇叭×${audioOut}`);
+  if (parts.length === 0) return '無可列舉裝置';
+  const granted = Number(md.labeled ?? 0) > 0;
+  return `${parts.join('、')}${granted ? '（曾授權）' : ''}`;
+}
+
+/** WebGL Report：GL vendor＋renderer 組合字串（真實訊號值，非 hash）。 */
+function webglReportLabel(signals: NormalizedSignal[]): string {
+  const webgl = valueOf(signals, 'webgl');
+  const vendor = asStr(webgl, 'vendor');
+  const renderer = asStr(webgl, 'renderer');
+  if (!vendor && !renderer) return DASH;
+  return [vendor, renderer].filter((part): part is string => typeof part === 'string').join(' / ');
+}
+
+/** 端口檢測：收案時 server 附上的 unusual_open_ports issue（W4 接線）。 */
+function openPortsLabel(report?: EnvironmentReport): string {
+  const issue = report?.issues?.find((i) => i.type === 'unusual_open_ports');
+  const ports = issue?.evidence?.openPorts;
+  if (Array.isArray(ports)) {
+    const list = ports.filter((p): p is number => typeof p === 'number').join('、');
+    return list.length > 0 ? `偵測到 ${list} 開放` : DASH;
+  }
+  return DASH;
+}
+
 /** 訪客 ID：report.subjectId ?? report.sessionId。 */
 function visitorIdLabel(report: EnvironmentReport): string {
   return truncate(report.subjectId ?? report.sessionId, 24);
@@ -1514,7 +1573,7 @@ export default function HomeOverviewV2() {
                 <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
                 <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
                 <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
-                <Field label="郵政編碼" value={DASH} />
+                <Field label="郵政編碼" value={asStr(geo, 'postalCode') ?? DASH} />
                 <Field
                   label="緯度"
                   value={(() => {
@@ -1529,7 +1588,7 @@ export default function HomeOverviewV2() {
                     return lng !== undefined ? lng.toFixed(4) : DASH;
                   })()}
                 />
-                <p className="ov-note">郵政編碼需郵遞區號地理資料庫，目前未提供。</p>
+                <p className="ov-note">郵政編碼由 IP 地理資料庫（ip-api）提供；該來源無值時顯示 —（並非隱私遮罩）。</p>
               </Card>
 
               {/* ── ⑤ Hardware 硬體卡 ─────────────────────── */}
@@ -1537,11 +1596,11 @@ export default function HomeOverviewV2() {
                 <Field label="訪客ID" value={visitorIdLabel(current.report)} />
                 <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
                 <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
-                <Field label="WebGL Report" value={DASH} />
+                <Field label="WebGL Report" value={webglReportLabel(signals)} />
                 <Field label="廠商" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
                 <Field label="渲染" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
                 <Field label="Audio" value={hashHead(signalOf(signals, 'audio')?.hash)} />
-                <Field label="Client Rects" value={DASH} />
+                <Field label="Client Rects" value={hashHead(signalOf(signals, 'clientRects')?.hash)} />
                 <Field label="WebGPU Report" value={hashHead(signalOf(signals, 'webgpu')?.hash)} />
                 <Field label="屏幕分辨率" value={screenValue(signals, 'resolution')} />
                 <Field label="可用屏幕尺寸" value={screenValue(signals, 'availResolution')} />
@@ -1555,14 +1614,14 @@ export default function HomeOverviewV2() {
                   label="邏輯處理器核心"
                   value={current.nav.cores && current.nav.cores > 0 ? `${current.nav.cores}` : DASH}
                 />
-                <Field label="媒體設備" value={DASH} />
+                <Field label="媒體設備" value={mediaDevicesLabel(signals)} />
                 <p className="ov-note">
                   {(() => {
                     const parts: string[] = [];
                     if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
                     return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
-                  WebGL Report／Client Rects／媒體設備 未採集或需權限，顯示 —。
+                  訪客ID／Canvas／WebGL／Audio／Client Rects／WebGPU 為本次掃描即時實測 hash（前 8 碼）；設備內存／邏輯處理器核心取自已授權的本機 Navigator（真實值）。
                 </p>
               </Card>
 
@@ -1593,16 +1652,18 @@ export default function HomeOverviewV2() {
                 <Field label="機器人偵測" value={botDetectionLabel(current)} />
                 <Field label="Do Not Track" value={doNotTrackLabel(signals)} />
                 <Field label="JavaScript" value="是" />
-                <Field label="Flash" value={DASH} />
-                <Field label="ActiveX" value={DASH} />
-                <Field label="Java" value={DASH} />
+                <Field label="Flash" value="不支援" />
+                <Field label="ActiveX" value="不支援" />
+                <Field label="Java" value="不支援" />
                 <Field label="Cookie" value={cookieEnabledLabel(signals)} />
-                <Field label="端口檢測（僅檢測 22、3389）" value={DASH} />
-                <Field label="字體" value={DASH} />
-                <Field label="字體列表" value={DASH} />
+                <Field label="端口檢測（僅檢測 22、3389）" value={openPortsLabel(current.report)} />
+                <Field label="字體" value={fontsSummaryLabel(signals)} />
+                <Field label="字體列表" value={fontsListLabel(signals)} />
                 <p className="ov-note">
                   Cookie／Do Not Track／語言／時區 等為即時實測值；請求頭語言以 navigator.languages
-                  近似。端口檢測／字體／字體列表／Flash／ActiveX／Java 未採集或需登入，顯示 —。
+                  近似（瀏覽器不直接暴露標頭）。Flash／ActiveX／Java 為現代瀏覽器事實值「不支援」；
+                  字體採保守測寬法，只列出「確定已安裝」的常用字型（估算子集，非完整清單）；
+                  端口檢測需先執行合規 port-scan（僅掃來源 IP、限流＋審計），未執行顯示 —。
                 </p>
               </Card>
 
