@@ -50,8 +50,14 @@ function loadLayout(page: AdminPageKey): PageLayout {
     const raw = window.localStorage.getItem(storageKey(page));
     if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<PageLayout>;
-    const order = Array.isArray(parsed.order)
-      ? [...new Set([...base.order, ...parsed.order])]
+    // 儲存順序優先（支援排序並在 reload 後保持），並剔除已下架區塊、
+    // 把新註冊的區塊依預設位置補在未列出的尾端。
+    const storedOrder = parsed.order;
+    const order = Array.isArray(storedOrder)
+      ? [
+          ...storedOrder.filter((k) => base.order.includes(k)),
+          ...base.order.filter((k) => !storedOrder.includes(k)),
+        ]
       : base.order;
     const disabled = Array.isArray(parsed.disabled) ? parsed.disabled : base.disabled;
     const settings: SettingsMap = { ...base.settings };

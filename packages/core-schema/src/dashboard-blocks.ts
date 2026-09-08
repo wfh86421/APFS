@@ -22,6 +22,7 @@ export const ADMIN_PAGE_KEYS = [
   'workbench',
   'devices',
   'homepage',
+  'scan-overview',
   'governance',
 ] as const;
 export type AdminPageKey = (typeof ADMIN_PAGE_KEYS)[number];
@@ -209,7 +210,7 @@ export function validateBlockSettings(
 }
 
 /* ------------------------------------------------------------------ */
-/* 頁面與區塊資料（6 頁 / 15 區塊，依 M1 確認清單）                      */
+/* 頁面與區塊資料（7 頁 / 30 區塊；依 M1 確認清單＋公開掃描總覽頁）        */
 /* ------------------------------------------------------------------ */
 
 export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
@@ -259,6 +260,15 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
     title: '首頁內容',
     icon: '📣',
     description: '公開首頁 hero 與區段啟停（全域語意；寫入限 security_admin）。',
+    accessLevel: 'normal',
+  },
+  'scan-overview': {
+    key: 'scan-overview',
+    route: '/',
+    title: '掃描總覽',
+    icon: '📡',
+    description:
+      '公開首頁「掃描總覽」體驗（NEXT_PUBLIC_EXPERIENCE=overview）：頂部 IP 工具列、快速摘要 hero、扣分項與 IP／地理／硬件／瀏覽器／軟體卡。啟停與排序即時影響 `/`。',
     accessLevel: 'normal',
   },
   governance: {
@@ -636,6 +646,100 @@ const blocks: readonly BlockDef[] = [
       { kind: 'toggle', key: 'showFeatures', label: '顯示功能介紹', default: true },
       { kind: 'toggle', key: 'showFooter', label: '顯示頁尾', default: true },
     ],
+  },
+  /* ---------- scan-overview（公開「掃描總覽」首頁，NEXT_PUBLIC_EXPERIENCE=overview） ----------
+   * home-overview-v2.tsx 依此頁版面（order/disabled）渲染。
+   * 註：ov.score（評分卡／真實度）不獨立成塊——hero 已內含隱私評分大數字與瀏覽器指紋
+   * 真實度（見 home-overview-v2 的 ov-hero-score）；因此併入 ov.hero。
+   * fields 留空：本頁區塊僅支援「啟停＋排序」，不做欄位參數覆寫。
+   */
+  {
+    key: 'ov.toolbar',
+    page: 'scan-overview',
+    icon: '📍',
+    title: '頂部 IP 工具列',
+    description: 'sticky 工具列：目前 IP、地理位置、複製與重新掃描。',
+    defaultEnabled: true,
+    defaultPosition: 0,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.hero',
+    page: 'scan-overview',
+    icon: '🛡️',
+    title: '快速摘要＋隱私評分',
+    description: '兩欄快速摘要（IP／地理／瀏覽器…）＋隱私評分大數字、真實度與等級徽章。',
+    defaultEnabled: true,
+    defaultPosition: 1,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.issues',
+    page: 'scan-overview',
+    icon: '📉',
+    title: '扣分項分析 Issues',
+    description: '規則與訊號扣分項（名稱／說明／證據）。',
+    defaultEnabled: true,
+    defaultPosition: 2,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.ip',
+    page: 'scan-overview',
+    icon: '🌐',
+    title: 'IP 地址卡',
+    description: 'IP／WebRTC／STUN／IP 計數／ISP 欄位。',
+    defaultEnabled: true,
+    defaultPosition: 3,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.location',
+    page: 'scan-overview',
+    icon: '🗺️',
+    title: '地理位置卡',
+    description: '國家／州省／城市／郵遞區號／經緯度欄位。',
+    defaultEnabled: true,
+    defaultPosition: 4,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.hardware',
+    page: 'scan-overview',
+    icon: '🖥️',
+    title: '硬件卡',
+    description: '訪客 ID／Canvas／WebGL／Audio／螢幕／設備記憶體欄位。',
+    defaultEnabled: true,
+    defaultPosition: 5,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.browser',
+    page: 'scan-overview',
+    icon: '🧬',
+    title: '瀏覽器卡',
+    description: 'OS／瀏覽器名稱／版本／Header／JavaScript 欄位。',
+    defaultEnabled: true,
+    defaultPosition: 6,
+    accessLevel: 'normal',
+    fields: [],
+  },
+  {
+    key: 'ov.software',
+    page: 'scan-overview',
+    icon: '🧩',
+    title: '軟件卡',
+    description: '時區／語言／DNT／Cookie／端口與外掛偵測欄位。',
+    defaultEnabled: true,
+    defaultPosition: 7,
+    accessLevel: 'normal',
+    fields: [],
   },
   /* ---------- governance（restricted） ---------- */
   {

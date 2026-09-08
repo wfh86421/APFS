@@ -19,7 +19,13 @@
  *   - network          ：submitReport 回傳的伺服器網路分析（geo/webrtc/dnsLeak…）
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   audioModule,
   canvasModule,
@@ -35,6 +41,7 @@ import {
   type ScanProgressEvent,
 } from '@shieldscan/browser-sdk';
 import {
+  listPageBlocks,
   policyDecisionForRiskLevel,
   type EnvironmentReport,
   type NormalizedSignal,
@@ -126,6 +133,90 @@ const STATUS_LABEL: Record<ScanProgressEvent['status'], string> = {
 
 /** 嚴格模式下 effect 會跑兩次：以 module 層級旗標保證「僅自動掃描一次」。 */
 let autoScanStarted = false;
+
+/* ------------------------------------------------------------------ */
+/* 版面設定整合（/admin/layout →「掃描總覽」頁）                          */
+/*   - 同一來源：core-schema 註冊表（listPageBlocks('scan-overview')）   */
+/*     ＋ localStorage `ss.layout.v1.scan-overview`（編輯器與本頁共用）。  */
+/*   - order：區塊渲染順序；disabled：停用區塊（不渲染）。                 */
+/*   - 讀不到設定（或尚未載入）＝全部預設顯示（defaultEnabled），           */
+/*     與現行行為完全一致。                                             */
+/* ------------------------------------------------------------------ */
+
+const OV_PAGE_KEY = 'scan-overview' as const;
+const OV_LAYOUT_KEY = `ss.layout.v1.${OV_PAGE_KEY}`;
+
+/** 本頁實際有 JSX 的區塊（與 core-schema 註冊的 ov.* 對應；尚未有 JSX 的未來區塊不列）。 */
+const OV_RENDER_KEYS: readonly string[] = [
+  'ov.toolbar',
+  'ov.hero',
+  'ov.issues',
+  'ov.ip',
+  'ov.location',
+  'ov.hardware',
+  'ov.browser',
+  'ov.software',
+];
+
+/** 落在「資訊卡片網格」（.ov-grid）內的區塊。 */
+const OV_CARD_KEYS: readonly string[] = [
+  'ov.ip',
+  'ov.location',
+  'ov.hardware',
+  'ov.browser',
+  'ov.software',
+];
+
+/** CSS order 給值上限：清單找不到的 key 一律排最後（永不與註記衝突）。 */
+const OV_FALLBACK_RANK = 900;
+
+interface OvLayout {
+  order: string[];
+  disabled: string[];
+}
+
+/** 預設版面：依 core-schema defaultPosition 排序、全部啟用。 */
+function defaultOvLayout(): OvLayout {
+  const defs = listPageBlocks(OV_PAGE_KEY)
+    .filter((d) => OV_RENDER_KEYS.includes(d.key))
+    .sort((a, b) => a.defaultPosition - b.defaultPosition);
+  return {
+    order: defs.map((d) => d.key),
+    disabled: defs.filter((d) => !d.defaultEnabled).map((d) => d.key),
+  };
+}
+
+/**
+ * 讀取版面設定：
+ * - 儲存順序優先（編輯器寫入的排序），未知／已下架 key 剔除，
+ *   新註冊區塊依預設位置補在尾端；
+ * - disabled 只保留已知區塊；
+ * - 任一環節出錯或無設定 → 回傳全預設（現行行為不變）。
+ */
+function readOvLayout(): OvLayout {
+  const base = defaultOvLayout();
+  if (typeof window === 'undefined') return base;
+  try {
+    const raw = window.localStorage.getItem(OV_LAYOUT_KEY);
+    if (!raw) return base;
+    const parsed = JSON.parse(raw) as { order?: unknown; disabled?: unknown } | null;
+    if (!parsed || typeof parsed !== 'object') return base;
+    const known = new Set<string>(OV_RENDER_KEYS);
+    const storedOrder = Array.isArray(parsed.order)
+      ? parsed.order.filter((k): k is string => typeof k === 'string' && known.has(k))
+      : [];
+    const order =
+      storedOrder.length > 0
+        ? [...storedOrder, ...base.order.filter((k) => !storedOrder.includes(k))]
+        : base.order;
+    const disabled = Array.isArray(parsed.disabled)
+      ? parsed.disabled.filter((k): k is string => typeof k === 'string' && known.has(k))
+      : base.disabled;
+    return { order, disabled };
+  } catch {
+    return base;
+  }
+}
 
 interface NavSnapshot {
   cores: number | null;
@@ -730,15 +821,17 @@ function Card({
   icon,
   title,
   className = '',
+  style,
   children,
 }: {
   icon: string;
   title: string;
   className?: string;
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   return (
-    <section className={`ov-card ${className}`}>
+    <section className={`ov-card ${className}`} style={style}>
       <div className="ov-card-head">
         <span className="ov-card-icon" aria-hidden="true">
           {icon}
@@ -764,14 +857,16 @@ function ScanProgressBlock({
   percent,
   open,
   onToggle,
+  style,
 }: {
   progress: ScanProgressEvent[];
   percent: number;
   open: boolean;
   onToggle: () => void;
+  style?: CSSProperties;
 }) {
   return (
-    <section className="ov-card ov-scan-progress" aria-label="掃描進度">
+    <section className="ov-card ov-scan-progress" aria-label="掃描進度" style={style}>
       <div className="ov-card-head">
         <span className="ov-scan-spinner" aria-hidden="true" />
         <h3 className="ov-card-title">掃描中… {percent}%</h3>
@@ -836,6 +931,8 @@ export default function HomeOverviewV2() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
   /** 目前掃描的發起方式：首次自動（安靜）或手動重新掃描；模組進度一律由「掃描進度」區塊呈現。 */
   const [scanKind, setScanKind] = useState<'auto' | 'manual'>('auto');
+  /** 版面設定：初始＝預設全顯示（SSR/首幀一致）；mount 後讀取 localStorage 再套用。 */
+  const [ovLayout, setOvLayout] = useState<OvLayout>(() => defaultOvLayout());
   const [copiedTip, setCopiedTip] = useState(false);
   const copyTimerRef = useRef<number | undefined>(undefined);
   const dataRef = useRef<OvData | null>(null);
@@ -843,6 +940,12 @@ export default function HomeOverviewV2() {
   // 掛載後才讀取 localStorage（避免 SSR/水合不一致）；html 主題已在模組載入時同步。
   useEffect(() => {
     setThemeMode(readStoredTheme());
+  }, []);
+
+  // 掛載後讀取 /admin/layout「掃描總覽」版面（localStorage ss.layout.v1.scan-overview）。
+  // 讀不到或解析失敗時維持預設＝全部顯示（行為與未接版面時一致）。
+  useEffect(() => {
+    setOvLayout(readOvLayout());
   }, []);
 
   // 「跟隨系統」時監聽系統明暗變化，即時切換 html[data-theme]。
@@ -973,6 +1076,23 @@ export default function HomeOverviewV2() {
     : '';
   const hasGeo = Boolean(geoCity || geoCountry);
 
+  /* ---- 版面設定判定（ovLayout：order 排序／disabled 停用） ---- */
+  const ovVisible = (k: string): boolean => !ovLayout.disabled.includes(k);
+  const ovRankOf = (k: string): number => {
+    const i = ovLayout.order.indexOf(k);
+    return i < 0 ? OV_FALLBACK_RANK : i;
+  };
+  /** 每個區塊一個條件 wrapper：停用 → 不渲染（display:none，其餘依序排列）；啟用 → 依 layout.order 給 CSS order。 */
+  const ovStyle = (k: string): CSSProperties =>
+    ovVisible(k) ? { order: ovRankOf(k) } : { order: ovRankOf(k), display: 'none' };
+  const heroVisible = ovVisible('ov.hero');
+  const issuesVisible = ovVisible('ov.issues');
+  const cardsShown = OV_CARD_KEYS.filter(ovVisible).sort((a, b) => ovRankOf(a) - ovRankOf(b));
+  const cardsVisible = cardsShown.length > 0;
+  /** 「主區標題＋資訊卡網格」整組的 order＝啟用卡片中最前面的位置（維持卡片容器為一個網格）。 */
+  const cardsGroupRank = cardsVisible ? Math.min(...cardsShown.map(ovRankOf)) : OV_FALLBACK_RANK;
+  const ovEmptyHintVisible = !heroVisible && !issuesVisible && !cardsVisible;
+
   const actionLabel = busy
     ? `掃描中… ${scanPercent}%`
     : current
@@ -1028,8 +1148,14 @@ export default function HomeOverviewV2() {
       </header>
 
       <div className="ov-page">
-        {/* 頂部工具列：📍 當下 IP（＋IP 地理位置小字）＋ 複製 ＋ 重新掃描（sticky） */}
-        <div className="ov-locbar" role="toolbar" aria-label="目前 IP 工具列">
+        {/* 頂部工具列：📍 當下 IP（＋IP 地理位置小字）＋ 複製 ＋ 重新掃描（sticky）
+            ov.toolbar 停用 → 整個工具列隱藏（其餘區塊設定不影響此處與掃描等待提示）。 */}
+        <div
+          className="ov-locbar"
+          role="toolbar"
+          aria-label="目前 IP 工具列"
+          style={ovVisible('ov.toolbar') ? undefined : { display: 'none' }}
+        >
           <span className="ov-loc-pin" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 21s-6.2-5.4-6.2-10.2A6.2 6.2 0 0 1 12 4.6a6.2 6.2 0 0 1 6.2 6.2C18.2 15.6 12 21 12 21z" />
@@ -1140,9 +1266,19 @@ export default function HomeOverviewV2() {
 
         {/* 結果總覽 */}
         {current && (
-          <div className="ov-results ov-fade-in">
+          <div
+            className="ov-results ov-fade-in"
+            style={{ display: 'flex', flexDirection: 'column' }}
+          >
+            {/* 全部區塊都被版面設定停用時的提示（不影響掃描流程） */}
+            {ovEmptyHintVisible && (
+              <div className="ov-empty" style={{ order: 0 }}>
+                已依版面設定隱藏此頁所有區塊（/admin/layout →「掃描總覽」可重新啟用）。
+              </div>
+            )}
+
             {/* ① 頂部概覽 Overview hero（深色）── 左：兩欄標籤:值摘要；右：隱私評分大數字 */}
-            <section className="ov-hero">
+            <section className="ov-hero" style={ovStyle('ov.hero')}>
               <div className="ov-hero-meta">
                 <span className="ov-hero-chip">
                   來源：{current.analysisSource === 'server' ? '伺服器分析' : '本機預覽'}
@@ -1202,18 +1338,25 @@ export default function HomeOverviewV2() {
               </div>
             </section>
 
-            {/* 掃描進度：位於 Issues 上方；僅掃描中顯示，完成即自動隱藏／收合，展開可看模組明細 */}
+            {/* 掃描進度：位於 Issues 上方；僅掃描中顯示，完成即自動隱藏／收合，展開可看模組明細
+                掃描中一律顯示（order:-1 置頂），不因區塊啟停設定而消失。 */}
             {busy && (
               <ScanProgressBlock
                 progress={progress}
                 percent={scanPercent}
                 open={progressOpen}
                 onToggle={() => setProgressOpen((prev) => !prev)}
+                style={{ order: -1 }}
               />
             )}
 
             {/* ② 扣分項分析 Issues（名稱 -x% ＋說明＋證據） */}
-            <Card icon="📉" title="扣分項分析 Issues" className="ov-card-wide ov-card-issues">
+            <Card
+              icon="📉"
+              title="扣分項分析 Issues"
+              className="ov-card-wide ov-card-issues"
+              style={ovStyle('ov.issues')}
+            >
               {(() => {
                 const explanations = current.score.explanations ?? [];
                 const issues = current.report.issues ?? [];
@@ -1268,12 +1411,17 @@ export default function HomeOverviewV2() {
               })()}
             </Card>
 
-            {/* 主區標題 + 資訊卡片網格 */}
-            <h2 className="ov-main-title">哪些信息會被網站看到</h2>
+            {/* 主區標題 + 資訊卡片網格（至少一張資訊卡啟用時才顯示；卡片維持在 .ov-grid 容器內） */}
+            {cardsVisible && (
+              <h2 className="ov-main-title" style={{ order: cardsGroupRank }}>
+                哪些信息會被網站看到
+              </h2>
+            )}
 
-            <div className="ov-grid">
+            {cardsVisible && (
+              <div className="ov-grid" style={{ order: cardsGroupRank }}>
               {/* ── ③ IP address 詳情卡 ─────────────────────── */}
-              <Card icon="🌐" title="IP 地址" className="ov-card-half">
+              <Card icon="🌐" title="IP 地址" className="ov-card-half" style={ovStyle('ov.ip')}>
                 <Field label="IP" value={network?.ip ?? webrtcPublicIp(signals, network)} />
                 <Field label="WebRTC" value={webrtcPublicIp(signals, network)} />
                 <Field
@@ -1296,7 +1444,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ④ Location 詳情卡 ──────────────────────── */}
-              <Card icon="🗺️" title="地理位置" className="ov-card-half">
+              <Card icon="🗺️" title="地理位置" className="ov-card-half" style={ovStyle('ov.location')}>
                 <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
                 <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
                 <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
@@ -1319,7 +1467,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑤ Hardware 硬體卡 ─────────────────────── */}
-              <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols">
+              <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols" style={ovStyle('ov.hardware')}>
                 <Field label="訪客ID" value={visitorIdLabel(current.report)} />
                 <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
                 <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
@@ -1353,7 +1501,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑥ Browser 瀏覽器卡 ─────────────────────── */}
-              <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols">
+              <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols" style={ovStyle('ov.browser')}>
                 <Field label="隱身模式" value={DASH} />
                 <Field label="設備型號" value={DASH} />
                 <Field label="操作系統" value={osName(signals)} />
@@ -1368,7 +1516,7 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── ⑦ Software 軟體卡 ──────────────────────── */}
-              <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3">
+              <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3" style={ovStyle('ov.software')}>
                 <Field label="基於IP的時區" value={asStr(geo, 'timezone') ?? DASH} />
                 <Field label="時區" value={timezoneLabel(signals)} />
                 <Field label="基於IP的時間" value={timeInZone(asStr(geo, 'timezone'))} />
@@ -1393,8 +1541,9 @@ export default function HomeOverviewV2() {
               </Card>
 
             </div>
+            )}
 
-            <p className="ov-source-note">
+            <p className="ov-source-note" style={{ order: OV_FALLBACK_RANK + 1 }}>
               資料來源：@shieldscan/browser-sdk 10 個採集模組（UA / Client Hints / Canvas / WebGL /
               WebGPU / Audio / 螢幕 / 語言 / 時區 / WebRTC）→ analyzeSignals（standard）→
               submitReport（伺服器 network／score）。伺服器連線失敗時顯示降級警告並退回本機預覽。
