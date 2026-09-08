@@ -16,9 +16,12 @@ import type {
   NetworkSignal,
   OutcomeEntry,
   OutcomeType,
+  ReportFact,
   ReviewCasePatch,
   RiskEventFilter,
   RiskRepository,
+  RuleBaseline,
+  RuleBaselineFilter,
 } from './types.js';
 
 const { Pool } = pg;
@@ -35,6 +38,16 @@ interface OutcomeRow {
   amount: string | null;
   occurred_at: string;
   metadata: unknown;
+}
+
+interface BaselineRow {
+  rule_id: string;
+  dim: string;
+  dim_value: string;
+  total: number;
+  hits: number;
+  hit_rate: string | number;
+  updated_at: string;
 }
 
 interface RiskEventRow {
@@ -741,6 +754,62 @@ export class PostgresRiskRepository implements RiskRepository {
       `DELETE FROM dashboard_blocks WHERE tenant_id = $1 AND block_key = $2`,
       [tenantId, blockKey],
     );
+  }
+
+  async insertReportFact(fact: ReportFact): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO report_facts (report_id, tenant_id, country, asn, tz_offset, rules_hit, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz, NOW()))
+       ON CONFLICT (report_id) DO UPDATE SET
+         country = EXCLUDED.country,
+         asn = EXCLUDED.asn,
+         tz_offset = EXCLUDED.tz_offset,
+         rules_hit = EXCLUDED.rules_hit`,
+      [
+        fact.reportId,
+        fact.tenantId ?? null,
+        fact.country ?? null,
+        fact.asn ?? null,
+        fact.tzOffset ?? null,
+        fact.rulesHit,
+        fact.createdAt ?? null,
+      ],
+    );
+  }
+
+  async listBaselines(filter: RuleBaselineFilter = {}): Promise<RuleBaseline[]> {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (filter.ruleId) {
+      params.push(filter.ruleId);
+      clauses.push(`rule_id = $${params.length}`);
+    }
+    if (filter.dim) {
+      params.push(filter.dim);
+      clauses.push(`dim = $${params.length}`);
+    }
+    if (filter.dimValue) {
+      params.push(filter.dimValue);
+      clauses.push(`dim_value = $${params.length}`);
+    }
+    params.push(Math.min(filter.limit ?? 200, 1000));
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const { rows } = await this.pool.query<BaselineRow>(
+      `SELECT rule_id, dim, dim_value, total, hits, hit_rate, updated_at
+       FROM rule_baselines ${where}
+       ORDER BY dim ASC, dim_value ASC, total DESC
+       LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map((row) => ({
+      ruleId: row.rule_id,
+      dim: row.dim as RuleBaseline['dim'],
+      dimValue: row.dim_value,
+      total: row.total,
+      hits: row.hits,
+      hitRate: Number(row.hit_rate),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    }));
   }
 
   private toRiskEvent(row: RiskEventRow): RiskEvent {

@@ -386,3 +386,31 @@ CREATE TABLE IF NOT EXISTS dashboard_blocks (
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_blocks_tenant
     ON dashboard_blocks(tenant_id, position);
+
+-- =====================================================================
+-- 基準分布（數位黃金 Step 2）：report_facts = 每筆掃描的事實維度＋命中規則
+-- rule_baselines = 每日/即時聚合（rule × dim × value → total/hits/hit_rate）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS report_facts (
+    report_id   UUID PRIMARY KEY,
+    tenant_id   UUID,
+    country     VARCHAR(64),
+    asn         VARCHAR(96),
+    tz_offset   SMALLINT,
+    rules_hit   TEXT[] NOT NULL DEFAULT '{}',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_facts_created ON report_facts(created_at);
+
+CREATE TABLE IF NOT EXISTS rule_baselines (
+    id          BIGSERIAL PRIMARY KEY,
+    rule_id     VARCHAR(64) NOT NULL,
+    dim         VARCHAR(16) NOT NULL,          -- country | asn | tz
+    dim_value   VARCHAR(96) NOT NULL,
+    total       INTEGER NOT NULL DEFAULT 0,
+    hits        INTEGER NOT NULL DEFAULT 0,
+    hit_rate    NUMERIC(6,4) NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (rule_id, dim, dim_value)
+);

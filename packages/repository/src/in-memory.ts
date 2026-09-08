@@ -14,11 +14,14 @@ import type {
   IpReputation,
   NetworkSignal,
   OutcomeEntry,
+  ReportFact,
   ReportMeta,
   ReportRepository,
   ReviewCasePatch,
   RiskEventFilter,
   RiskRepository,
+  RuleBaseline,
+  RuleBaselineFilter,
   StoredReport,
   VisitorProfile,
 } from './types.js';
@@ -241,6 +244,7 @@ export class InMemoryRiskRepository implements RiskRepository {
   private readonly ipReputations = new Map<string, IpReputation>();
   private readonly siteConfigs = new Map<string, unknown>();
   private readonly dashboardBlocks = new Map<string, DashboardBlockState>();
+  private readonly facts = new Map<string, ReportFact>();
 
   async insertRiskEvent(event: RiskEvent): Promise<void> {
     this.events.set(event.eventId, event);
@@ -411,5 +415,67 @@ export class InMemoryRiskRepository implements RiskRepository {
 
   async resetDashboardBlock(tenantId: string, blockKey: string): Promise<void> {
     this.dashboardBlocks.delete(`${tenantId}:${blockKey}`);
+  }
+
+  async insertReportFact(fact: ReportFact): Promise<void> {
+    this.facts.set(fact.reportId, { ...fact, rulesHit: [...fact.rulesHit] });
+  }
+
+  async listBaselines(filter: RuleBaselineFilter = {}): Promise<RuleBaseline[]> {
+    // 以目前 facts 即時彙整（in-memory 僅供測試/開發）。
+    const totalBy = new Map<string, number>();
+    const hitsBy = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const fact of this.facts.values()) {
+      const dims: Array<[string, string]> = [];
+      if (fact.country) dims.push(['country', fact.country]);
+      if (fact.asn) dims.push(['asn', fact.asn]);
+      if (fact.tzOffset !== undefined && fact.tzOffset !== null) dims.push(['tz', String(fact.tzOffset)]);
+      if (dims.length === 0) continue;
+      for (const [dim, value] of dims) {
+        const key = `total|${dim}|${value}`;
+        totalBy.set(key, (totalBy.get(key) ?? 0) + 1);
+        for (const rule of fact.rulesHit) {
+          const hkey = `hit|${rule}|${dim}|${value}`;
+          if (!seen.has(`${hkey}|${fact.reportId}`)) {
+            seen.add(`${hkey}|${fact.reportId}`);
+            hitsBy.set(hkey, (hitsBy.get(hkey) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    const rows: RuleBaseline[] = [];
+    for (const [key, total] of totalBy) {
+      const parts = key.split('|');
+      const dim = parts[1];
+      const value = parts[2];
+      if (!dim || !value) continue;
+      const ruleHits = new Map<string, number>();
+      for (const [hkey, hits] of hitsBy) {
+        const hp = hkey.split('|');
+        const rule = hp[1];
+        const hdim = hp[2];
+        const hvalue = hp[3];
+        if (rule && hdim === dim && hvalue === value) ruleHits.set(rule, hits);
+      }
+      for (const [ruleId, hits] of ruleHits) {
+        rows.push({
+          ruleId,
+          dim: dim as RuleBaseline['dim'],
+          dimValue: value,
+          total,
+          hits,
+          hitRate: total > 0 ? hits / total : 0,
+        });
+      }
+    }
+    const filtered = rows.filter(
+      (r) =>
+        (!filter.ruleId || r.ruleId === filter.ruleId) &&
+        (!filter.dim || r.dim === filter.dim) &&
+        (!filter.dimValue || r.dimValue === filter.dimValue),
+    );
+    const limit = Math.min(filter.limit ?? 200, 1000);
+    return filtered.sort((a, b) => a.dim.localeCompare(b.dim) || a.dimValue.localeCompare(b.dimValue)).slice(0, limit);
   }
 }

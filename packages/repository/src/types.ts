@@ -228,6 +228,35 @@ export interface DashboardBlockState {
   updatedBy?: string;
 }
 
+/** 基準分布（數位黃金 Step2）：每筆掃描的事實維度＋命中的規則 id。 */
+export interface ReportFact {
+  reportId: string;
+  tenantId?: string;
+  country?: string;
+  asn?: string;
+  tzOffset?: number | null;
+  rulesHit: string[];
+  createdAt?: string;
+}
+
+/** 基準分布聚合列：rule × dim × dim_value 的 total/hits/hit_rate。 */
+export interface RuleBaseline {
+  ruleId: string;
+  dim: 'country' | 'asn' | 'tz';
+  dimValue: string;
+  total: number;
+  hits: number;
+  hitRate: number;
+  updatedAt?: string;
+}
+
+export interface RuleBaselineFilter {
+  ruleId?: string;
+  dim?: string;
+  dimValue?: string;
+  limit?: number;
+}
+
 /**
  * Phase 1 查詢層：風險事件與欄位定義（Schema Registry 雛形）。
  * 對應 risk_events / field_definitions 資料表。
@@ -269,4 +298,8 @@ export interface RiskRepository {
   upsertDashboardBlock(tenantId: string, state: DashboardBlockState): Promise<void>;
   /** 還原單一區塊為預設（刪除覆寫列）。 */
   resetDashboardBlock(tenantId: string, blockKey: string): Promise<void>;
+  /** 基準分布：記錄一筆掃描事實（收案時寫入，冪等）。 */
+  insertReportFact(fact: ReportFact): Promise<void>;
+  /** 基準分布：查詢聚合列。 */
+  listBaselines(filter?: RuleBaselineFilter): Promise<RuleBaseline[]>;
 }

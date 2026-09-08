@@ -1405,6 +1405,33 @@ app.post('/v1/reports', async (request, reply) => {
     await tenantService.recordUsage(auth.tenant.tenantId, 1, 'report');
   }
 
+  // 基準分布（數位黃金 Step2）：每筆掃描寫入事實維度＋命中規則，供聚合（失敗不阻擋收案）。
+  try {
+    const tzSignal = report.signals.find((s) => s.key === 'timezone')?.value as
+      | { offsetHours?: number }
+      | undefined;
+    const geoDim = network.geo as { country?: string; asn?: string } | null | undefined;
+    const rulesHit = [
+      ...new Set([
+        ...(score.explanations ?? []).map((e) => e.ruleId),
+        ...(report.issues ?? []).map((i) => i.type),
+      ]),
+    ].slice(0, 30);
+    await riskRepository.insertReportFact({
+      reportId: report.reportId,
+      tenantId: report.tenantId,
+      country: geoDim?.country,
+      asn: geoDim?.asn,
+      tzOffset:
+        typeof tzSignal?.offsetHours === 'number' && Number.isFinite(tzSignal.offsetHours)
+          ? Math.round(tzSignal.offsetHours)
+          : null,
+      rulesHit,
+    });
+  } catch (err) {
+    app.log.warn({ err }, 'report_fact insert failed (non-fatal)');
+  }
+
   if (score.riskLevel === 'high' || score.riskLevel === 'critical') {
     await fireRiskWebhooks({
       tenantId: auth?.tenant.tenantId,
@@ -1754,6 +1781,21 @@ app.post('/v1/dashboard/blocks/:blockKey/reset', async (request, reply) => {
     metadata: { blockKey, actorKeyId: auth.key.keyId },
   });
   return { ok: true, blockKey, reset: true };
+});
+
+/** 基準分布查詢（公開聚合，無個人資料）：rule × dim(country|asn|tz) 的 total/hits/hit_rate。 */
+app.get('/v1/baselines', async (request, reply) => {
+  const q = request.query as { rule?: string; dim?: string; dimValue?: string; limit?: string };
+  const dim =
+    q.dim && ['country', 'asn', 'tz'].includes(q.dim) ? (q.dim as 'country' | 'asn' | 'tz') : undefined;
+  const limit = q.limit ? Math.max(1, Math.min(1000, Number(q.limit))) : 200;
+  const rows = await riskRepository.listBaselines({
+    ruleId: q.rule || undefined,
+    dim,
+    dimValue: q.dimValue || undefined,
+    limit,
+  });
+  return { rows, count: rows.length };
 });
 
 app.get('/v1/plugin-profile', async (_request, reply) => {
