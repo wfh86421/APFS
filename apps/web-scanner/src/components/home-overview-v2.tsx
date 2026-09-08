@@ -200,6 +200,34 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
+/** 複製純文字到剪貼簿：先試 navigator.clipboard，失敗退回 execCommand 方案。 */
+async function copyPlainText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* 走 fallback */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function isPublicIpv4(ip: string): boolean {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
   if (!m) return false;
@@ -679,6 +707,8 @@ export default function HomeOverviewV2() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
   /** 目前掃描的發起方式：首次自動（安靜、不秀模組列）或手動重新掃描（秀細節）。 */
   const [scanKind, setScanKind] = useState<'auto' | 'manual'>('auto');
+  const [copiedTip, setCopiedTip] = useState(false);
+  const copyTimerRef = useRef<number | undefined>(undefined);
   const dataRef = useRef<OvData | null>(null);
 
   // 掛載後才讀取 localStorage（避免 SSR/水合不一致）；html 主題已在模組載入時同步。
@@ -701,6 +731,16 @@ export default function HomeOverviewV2() {
     setThemeMode(mode);
     persistTheme(mode);
     setHtmlTheme(mode);
+  };
+
+  // 複製當下 IP（network.ip → WebRTC 公網），成功後顯示「已複製」1.5 秒。
+  const handleCopyIp = async () => {
+    if (toolbarIp === DASH) return;
+    const ok = await copyPlainText(toolbarIp);
+    if (!ok) return;
+    setCopiedTip(true);
+    if (copyTimerRef.current !== undefined) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopiedTip(false), 1500);
   };
 
   const runScan = async (autoScan = false) => {
@@ -785,6 +825,7 @@ export default function HomeOverviewV2() {
   const signals = current?.report.signals ?? [];
   const summaryRows = current ? buildSummaryRows(current) : [];
   const uaText = asStr(valueOf(signals, 'ua'), 'userAgent') ?? '';
+  const toolbarIp = current ? (network?.ip ?? webrtcPublicIp(signals, network)) : DASH;
 
   const actionLabel = busy
     ? `掃描中… ${scanPercent}%`
@@ -836,29 +877,50 @@ export default function HomeOverviewV2() {
                 {current.analysisSource === 'server' ? '伺服器分析' : '本機預覽'}
               </span>
             )}
-            {/* 首次自動掃描期間不顯示按鈕區（畫面保持乾淨）；手動/重新掃描才出現 */}
-            {!(busy && scanKind === 'auto') && (
-              <button
-                type="button"
-                className="ov-btn ov-btn-primary"
-                onClick={() => void runScan()}
-                disabled={busy || !armed}
-              >
-                {actionLabel}
-              </button>
-            )}
           </div>
         </div>
       </header>
 
       <div className="ov-page">
-        {/* 頁首說明 */}
-        <div className="ov-intro">
-          <h1 className="ov-title">🛡️ ShieldScan 掃描總覽</h1>
-          <p className="ov-subtitle">
-            進入頁面即自動掃描一次（同意模式 standard，會上傳至伺服器分析）。
-            下方顯示網站／伺服器能從你的瀏覽器與網路環境看到哪些資訊；之後可點「重新掃描」再次檢測。
-          </p>
+        {/* 頂部工具列：📍 當下 IP ＋ 複製 ＋ 重新掃描（sticky，取代原標題區與獨立重新掃描按鈕） */}
+        <div className="ov-locbar" role="toolbar" aria-label="目前 IP 工具列">
+          <span className="ov-loc-pin" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21s-6.2-5.4-6.2-10.2A6.2 6.2 0 0 1 12 4.6a6.2 6.2 0 0 1 6.2 6.2C18.2 15.6 12 21 12 21z" />
+              <circle cx="12" cy="10.8" r="2.4" />
+            </svg>
+          </span>
+          <span className="ov-loc-ip" title={toolbarIp !== DASH ? `目前 IP：${toolbarIp}` : '尚未取得 IP'}>
+            {toolbarIp}
+          </span>
+          <span className="ov-loc-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="ov-loc-btn"
+            aria-label="複製目前 IP"
+            title="複製目前 IP"
+            disabled={toolbarIp === DASH}
+            onClick={() => void handleCopyIp()}
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2.2" />
+              <path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H15" />
+            </svg>
+            {copiedTip && <span className="ov-copy-tip" role="status">已複製</span>}
+          </button>
+          <button
+            type="button"
+            className={`ov-loc-btn${busy ? ' is-spinning' : ''}`}
+            aria-label={actionLabel}
+            title={actionLabel}
+            disabled={busy || !armed}
+            onClick={() => void runScan()}
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 11.5a8 8 0 1 0-2.2 5.6" />
+              <path d="M20 4.8v5.2h-5.2" />
+            </svg>
+          </button>
         </div>
 
         {/* 降級／錯誤警告 */}
