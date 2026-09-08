@@ -2462,3 +2462,8 @@ html:has(.ov-experience) body {
     padding: 20px 14px 48px;
   }
 }
+
+/* INTEG: 地理位置列：國旗圖示與國家名 */
+.ov-loc-flag{font-size:14px;line-height:1;margin-right:4px;vertical-align:-1px}
+.ov-loc-geo-sep{opacity:.55;margin:0 3px}
+.ov-loc-country{white-space:nowrap}

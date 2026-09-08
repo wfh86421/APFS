@@ -954,6 +954,11 @@ export default function HomeOverviewV2() {
   const toolbarIp = current ? (network?.ip ?? webrtcPublicIp(signals, network)) : DASH;
   /** 工具列地理位置行（IP 下方小字）：`city / 旗 country`，皆無 → —。 */
   const geoLine = geoLineValue(geo);
+  /** 結構化拆解（旗以獨立 span 緊鄰國家名稱，確保圖示明確顯示）。 */
+  const geoCity = asStr(geo, 'city');
+  const geoCountry = asStr(geo, 'country');
+  const geoFlag = countryFlagEmoji(geo);
+  const hasGeo = Boolean(geoCity || geoCountry);
 
   const actionLabel = busy
     ? `掃描中… ${scanPercent}%`
@@ -1026,7 +1031,23 @@ export default function HomeOverviewV2() {
               className="ov-loc-geo"
               title={geoLine !== DASH ? `IP 地理位置：${geoLine}` : 'IP 地理位置尚未取得'}
             >
-              {geoLine}
+              {!hasGeo ? (
+                DASH
+              ) : (
+                <>
+                  {geoCity ? (
+                    <>
+                      {geoCity} <span className="ov-loc-geo-sep">/</span>{' '}
+                    </>
+                  ) : null}
+                  {geoFlag ? (
+                    <span className="ov-loc-flag" aria-hidden="true">
+                      {geoFlag}
+                    </span>
+                  ) : null}
+                  {geoCountry ? <span className="ov-loc-country">{geoCountry}</span> : null}
+                </>
+              )}
             </span>
           </span>
           <span className="ov-loc-sep" aria-hidden="true" />
