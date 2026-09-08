@@ -184,24 +184,148 @@ function webrtcLocalIps(signals: NormalizedSignal[]): string[] {
     : [];
 }
 
-function parseBrowser(uaText: string): string {
-  if (!uaText) return DASH;
-  const grab = (pattern: RegExp): string | undefined => {
+interface BrowserParts {
+  name: string;
+  version: string;
+}
+
+/** 解析 UA 為「瀏覽器名稱」與「瀏覽器版本」（對齊圖 1 的 瀏覽器／瀏覽器版本 兩欄）。 */
+function browserParts(uaText: string): BrowserParts {
+  if (!uaText) return { name: DASH, version: '' };
+  const grab = (pattern: RegExp): string => {
     const hit = uaText.match(pattern)?.[1];
-    return typeof hit === 'string' ? hit.split('.')[0] ?? hit : undefined;
+    return typeof hit === 'string' ? hit : '';
   };
-  if (/EdgA?\//i.test(uaText)) return `Edge ${grab(/EdgA?\/([\d.]+)/i) ?? ''}`.trim();
-  if (/OPR\//.test(uaText)) return `Opera ${grab(/OPR\/([\d.]+)/) ?? ''}`.trim();
-  if (/Firefox\//i.test(uaText)) return `Firefox ${grab(/Firefox\/([\d.]+)/i) ?? ''}`.trim();
-  if (/Chrome\//i.test(uaText) && !/CriOS\//i.test(uaText)) {
-    return `Chrome ${grab(/Chrome\/([\d.]+)/) ?? ''}`.trim();
-  }
+  if (/EdgA?\//i.test(uaText)) return { name: 'Edge', version: grab(/EdgA?\/([\d.]+)/i) };
+  if (/OPR\//.test(uaText)) return { name: 'Opera', version: grab(/OPR\/([\d.]+)/) };
+  if (/Firefox\//i.test(uaText)) return { name: 'Firefox', version: grab(/Firefox\/([\d.]+)/i) };
+  if (/CriOS\//i.test(uaText)) return { name: 'Chrome iOS', version: grab(/CriOS\/([\d.]+)/) };
+  if (/Chrome\//i.test(uaText)) return { name: 'Chrome', version: grab(/Chrome\/([\d.]+)/) };
   if (/Version\//i.test(uaText) && /Safari\//i.test(uaText)) {
-    return `Safari ${grab(/Version\/([\d.]+)/i) ?? ''}`.trim();
+    return { name: 'Safari', version: grab(/Version\/([\d.]+)/i) };
   }
-  if (/CriOS\//i.test(uaText)) return `Chrome iOS ${grab(/CriOS\/([\d.]+)/) ?? ''}`.trim();
   const first = uaText.split(' ')[0];
-  return typeof first === 'string' && first.length > 0 ? first : DASH;
+  return { name: typeof first === 'string' && first.length > 0 ? first : DASH, version: '' };
+}
+
+/** 摘要列「瀏覽器」欄位：名稱＋版本（例如 Chrome 131.0.6778.109）。 */
+function browserLabel(uaText: string): string {
+  const parts = browserParts(uaText);
+  return parts.version ? `${parts.name} ${parts.version}` : parts.name;
+}
+
+/** 摘要列「你」欄位：Client Hints platform → navigator.platform → UA 推估 OS。 */
+function youPlatform(signals: NormalizedSignal[]): string {
+  const ch = valueOf(signals, 'clientHints');
+  const chPlatform = asStr(ch, 'platform');
+  if (chPlatform) return chPlatform;
+  const ua = valueOf(signals, 'ua');
+  const uaPlatform = asStr(ua, 'platform');
+  if (uaPlatform) return uaPlatform;
+  return osName(signals);
+}
+
+function asBool(rec: Record<string, unknown> | null | undefined, key: string): boolean | undefined {
+  const v = rec?.[key];
+  return typeof v === 'boolean' ? v : undefined;
+}
+
+/** UTC 偏移（小時，可含 .5）→ UTC+08:00 樣式。 */
+function offsetLabel(offsetHours: number): string {
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetHours);
+  const hh = Math.floor(abs);
+  const mm = Math.round((abs - hh) * 60);
+  return `UTC${sign}${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+/** 時區欄位：名稱＋偏移（例如 Asia/Taipei (UTC+08:00)）。 */
+function timezoneLabel(signals: NormalizedSignal[]): string {
+  const tz = valueOf(signals, 'timezone');
+  const name = asStr(tz, 'timezone');
+  const offset = asNum(tz, 'offsetHours');
+  if (!name && offset === undefined) return DASH;
+  const offsetPart = offset !== undefined ? ` (${offsetLabel(offset)})` : '';
+  return `${name ?? DASH}${offsetPart}`;
+}
+
+/** 在指定 IANA 時區格式化「現在時間」（基於 IP 的時區）；無效或失敗回 —。 */
+function timeInZone(zone: string | undefined): string {
+  if (!zone) return DASH;
+  try {
+    return new Intl.DateTimeFormat('zh-TW', {
+      hour12: false,
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(new Date());
+  } catch {
+    return DASH;
+  }
+}
+
+/** 本地時間：timezone 訊號 localTime（ISO）轉本機時區顯示。 */
+function localTimeLabel(signals: NormalizedSignal[]): string {
+  const tz = valueOf(signals, 'timezone');
+  const raw = asStr(tz, 'localTime');
+  if (!raw) return DASH;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? DASH : d.toLocaleString('zh-TW', { hour12: false });
+}
+
+/** Do Not Track（ua 訊號 navigator.doNotTrack）。 */
+function doNotTrackLabel(signals: NormalizedSignal[]): string {
+  const ua = valueOf(signals, 'ua');
+  const raw = ua?.doNotTrack;
+  if (typeof raw !== 'string' || raw.length === 0) return DASH;
+  if (raw === '1') return '是';
+  if (raw === '0') return '否';
+  if (raw === 'unspecified') return '未指定';
+  return raw;
+}
+
+/** Cookie（ua 訊號 navigator.cookieEnabled）。 */
+function cookieEnabledLabel(signals: NormalizedSignal[]): string {
+  const ua = valueOf(signals, 'ua');
+  const enabled = asBool(ua, 'cookieEnabled');
+  return enabled === undefined ? DASH : enabled ? '是' : '否';
+}
+
+/** 語言欄位：locale.language → ua.language。 */
+function languageLabel(signals: NormalizedSignal[]): string {
+  const locale = valueOf(signals, 'locale');
+  const ua = valueOf(signals, 'ua');
+  return asStr(locale, 'language') ?? asStr(ua, 'language') ?? DASH;
+}
+
+/** Internationalization API：locale 訊號 intlLocale。 */
+function intlLocaleLabel(signals: NormalizedSignal[]): string {
+  return asStr(valueOf(signals, 'locale'), 'intlLocale') ?? DASH;
+}
+
+/** 螢幕解析度／可用螢幕尺寸（screen 訊號 resolution／availResolution）。 */
+function screenValue(signals: NormalizedSignal[], key: string): string {
+  return asStr(valueOf(signals, 'screen'), key) ?? DASH;
+}
+
+function screenColorDepthLabel(signals: NormalizedSignal[]): string {
+  const depth = asNum(valueOf(signals, 'screen'), 'colorDepth');
+  return depth !== undefined ? `${depth} bit` : DASH;
+}
+
+function touchSupportLabel(signals: NormalizedSignal[]): string {
+  const points = asNum(valueOf(signals, 'screen'), 'maxTouchPoints');
+  if (points === undefined) return DASH;
+  return points > 0 ? `是（${points} 點）` : '否';
+}
+
+/** 訪客 ID：report.subjectId ?? report.sessionId。 */
+function visitorIdLabel(report: EnvironmentReport): string {
+  return truncate(report.subjectId ?? report.sessionId, 24);
 }
 
 function osName(signals: NormalizedSignal[]): string {
@@ -276,8 +400,37 @@ function numTone(score: number): Tone {
 interface SummaryRow {
   label: string;
   value: string;
+  /** 摘要中需放大顯示的欄位（IP，置於摘要列最後）。 */
+  big?: boolean;
 }
 
+function keywordHits(data: OvData): string[] {
+  return [
+    ...(data.score.explanations ?? []).map((e) => e.ruleId.toLowerCase()),
+    ...data.report.issues.map((i) => i.type.toLowerCase()),
+  ];
+}
+
+/** 機器人偵測：沿用既有推估（score.explanations / report.issues 關鍵字），伺服器成功時才有值。 */
+function botDetectionLabel(data: OvData): string {
+  if (!data.network) return DASH;
+  return keywordHits(data).some((w) => w.includes('bot')) ? '是' : '否';
+}
+
+/** 黑名單：沿用既有推估（blacklist / reputation 關鍵字），伺服器成功時才有值。 */
+function blacklistLabel(data: OvData): string {
+  if (!data.network) return DASH;
+  return keywordHits(data).some((w) => w.includes('blacklist') || w.includes('reputation'))
+    ? '是'
+    : '否';
+}
+
+/**
+ * 圖 1（BrowserScan/tc）頂部快速摘要（兩欄「標籤:值」列）。
+ * 順序：頁面 → 瀏覽器 → 你 → IP 時區 → 地理位置 → 語言 → 郵政編碼 → ISP →
+ * 代理伺服器 → 匿名服務 → 黑名單 → DNS Leak → 機器人偵測 → IP（放大）。
+ * 值取不到顯示 —；伺服器上傳失敗（降級）時伺服器欄位一律 —。
+ */
 function buildSummaryRows(data: OvData): SummaryRow[] {
   const signals = data.report.signals;
   const network = data.network;
@@ -286,17 +439,20 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
 
   const ua = valueOf(signals, 'ua');
   const uaText = asStr(ua, 'userAgent') ?? '';
-  const locale = valueOf(signals, 'locale');
-  const tz = valueOf(signals, 'timezone');
 
-  const geoPlace = [asStr(geo, 'country'), asStr(geo, 'city')].filter(Boolean).join(' / ');
+  const geoPlace = [asStr(geo, 'country'), asStr(geo, 'region'), asStr(geo, 'city')]
+    .filter(Boolean)
+    .join(' / ');
   const publicIp = webrtcPublicIp(signals, network);
   const ipValue = serverOk && network?.ip ? network.ip : publicIp;
 
-  const hitWords: string[] = [
-    ...(data.score.explanations ?? []).map((e) => e.ruleId.toLowerCase()),
-    ...data.report.issues.map((i) => i.type.toLowerCase()),
-  ];
+  const ispValue = (() => {
+    const isp = asStr(geo, 'isp');
+    const asn = asStr(geo, 'asn');
+    if (!isp) return DASH;
+    return asn ? `${isp}（AS ${asn}）` : isp;
+  })();
+
   const anonParts: string[] = [];
   if (network?.vpn) anonParts.push('VPN');
   if (network?.tor) anonParts.push('Tor');
@@ -304,35 +460,22 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
 
   return [
     { label: '頁面', value: data.pageUrl || DASH },
-    { label: 'IP', value: ipValue },
-    { label: '瀏覽器', value: parseBrowser(uaText) },
-    { label: '平台 / 作業系統', value: osName(signals) },
+    { label: '瀏覽器', value: browserLabel(uaText) },
+    { label: '你', value: youPlatform(signals) },
     { label: 'IP 時區', value: asStr(geo, 'timezone') ?? DASH },
     { label: '地理位置', value: geoPlace || DASH },
-    { label: '語言', value: asStr(locale, 'language') ?? asStr(ua, 'language') ?? DASH },
-    { label: 'ISP', value: asStr(geo, 'isp') ?? DASH },
+    { label: '語言', value: languageLabel(signals) },
+    { label: '郵政編碼', value: DASH },
+    { label: 'ISP', value: ispValue },
     { label: '代理伺服器', value: serverOk ? yesNo(network?.proxy) : DASH },
     {
       label: '匿名服務',
       value: serverOk ? (anonParts.length > 0 ? `是（${anonParts.join('、')}）` : '否') : DASH,
     },
-    {
-      label: '黑名單',
-      value: serverOk
-        ? hitWords.some((w) => w.includes('blacklist') || w.includes('reputation'))
-          ? '是'
-          : '否'
-        : DASH,
-    },
-    {
-      label: 'DNS Leak',
-      value: network?.dnsLeak ? yesNo(network.dnsLeak.detected) : DASH,
-    },
-    {
-      label: '機器人偵測',
-      value: serverOk ? (hitWords.some((w) => w.includes('bot')) ? '是' : '否') : DASH,
-    },
-    { label: '時區（瀏覽器）', value: asStr(tz, 'timezone') ?? DASH },
+    { label: '黑名單', value: blacklistLabel(data) },
+    { label: 'DNS Leak', value: network?.dnsLeak ? yesNo(network.dnsLeak.detected) : DASH },
+    { label: '機器人偵測', value: botDetectionLabel(data) },
+    { label: 'IP', value: ipValue, big: true },
   ];
 }
 
@@ -341,8 +484,9 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
 /* ------------------------------------------------------------------ */
 
 function Field({ label, value }: { label: string; value: string }) {
+  const na = value === DASH;
   return (
-    <div className="ov-field">
+    <div className={`ov-field${na ? ' ov-field-na' : ''}`}>
       <span className="ov-field-label">{label}</span>
       <span className="ov-field-value">{value}</span>
     </div>
@@ -530,6 +674,10 @@ export default function HomeOverviewV2() {
   const network = current?.network;
   const geo = geoOf(network);
   const signals = current?.report.signals ?? [];
+  const summaryRows = current ? buildSummaryRows(current) : [];
+  const summaryNormal = summaryRows.filter((row) => !row.big);
+  const summaryBig = summaryRows.find((row) => row.big);
+  const uaText = asStr(valueOf(signals, 'ua'), 'userAgent') ?? '';
 
   const actionLabel = busy
     ? `掃描中… ${scanPercent}%`
@@ -642,25 +790,40 @@ export default function HomeOverviewV2() {
               </div>
               <h2 className="ov-hero-title">快速摘要：網站從這次連線看到的你</h2>
               <div className="ov-summary">
-                {buildSummaryRows(current).map((row) => (
-                  <div className="ov-summary-item" key={row.label}>
+                {summaryNormal.map((row) => (
+                  <div
+                    className={`ov-summary-item${row.value === DASH ? ' ov-summary-empty' : ''}`}
+                    key={row.label}
+                  >
                     <span className="ov-summary-label">{row.label}</span>
-                    <span className="ov-summary-value">{row.value}</span>
+                    <span className="ov-summary-value" title={row.value === DASH ? undefined : row.value}>
+                      {row.value}
+                    </span>
                   </div>
                 ))}
+                {summaryBig && (
+                  <div
+                    className={`ov-summary-ip${summaryBig.value === DASH ? ' ov-summary-empty' : ''}`}
+                  >
+                    <span className="ov-summary-label">{summaryBig.label}</span>
+                    <span className="ov-summary-value" title={summaryBig.value}>
+                      {summaryBig.value}
+                    </span>
+                  </div>
+                )}
               </div>
             </section>
 
             {/* 主區標題 + 資訊卡片網格 */}
-            <h2 className="ov-main-title">網站會看到你哪些資訊</h2>
+            <h2 className="ov-main-title">哪些信息會被網站看到</h2>
 
             <div className="ov-grid">
               {/* ── IP 地址卡 ─────────────────────────────── */}
-              <Card icon="🌐" title="IP 地址">
+              <Card icon="🌐" title="IP 地址" className="ov-card-half">
                 <Field label="IP" value={network?.ip ?? webrtcPublicIp(signals, network)} />
-                <Field label="WebRTC 公網 IP" value={webrtcPublicIp(signals, network)} />
+                <Field label="WebRTC" value={webrtcPublicIp(signals, network)} />
                 <Field
-                  label="WebRTC STUN 端點"
+                  label="WebRTC STUN"
                   value={(() => {
                     const ips = webrtcLocalIps(signals);
                     return ips.length > 0 ? ips.join('、') : DASH;
@@ -678,148 +841,82 @@ export default function HomeOverviewV2() {
               </Card>
 
               {/* ── 地理位置卡 ─────────────────────────────── */}
-              <Card icon="🗺️" title="地理位置">
+              <Card icon="🗺️" title="地理位置" className="ov-card-half">
                 <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
+                <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
                 <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
-                <Field label="區域" value={asStr(geo, 'region') ?? DASH} />
-                <Field label="ISP" value={asStr(geo, 'isp') ?? DASH} />
-                <Field label="ASN" value={asStr(geo, 'asn') ?? DASH} />
                 <Field
-                  label="座標"
+                  label="緯度"
                   value={(() => {
                     const lat = asNum(geo, 'latitude');
+                    return lat !== undefined ? lat.toFixed(4) : DASH;
+                  })()}
+                />
+                <Field
+                  label="經度"
+                  value={(() => {
                     const lng = asNum(geo, 'longitude');
-                    return lat !== undefined && lng !== undefined
-                      ? `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-                      : DASH;
+                    return lng !== undefined ? lng.toFixed(4) : DASH;
                   })()}
                 />
               </Card>
 
-              {/* ── 硬體卡 ─────────────────────────────────── */}
-              <Card icon="🖥️" title="硬體">
-                <Field
-                  label="CPU 核心數"
-                  value={current.nav.cores && current.nav.cores > 0 ? `${current.nav.cores} 核心` : DASH}
-                />
-                <Field
-                  label="記憶體"
-                  value={current.nav.memoryGb ? `${current.nav.memoryGb} GB` : DASH}
-                />
-                <Field
-                  label="解析度"
-                  value={(() => {
-                    const screen = valueOf(signals, 'screen');
-                    return asStr(screen, 'resolution') ?? DASH;
+              {/* ── 硬件卡 ─────────────────────────────────── */}
+              <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols">
+                <Field label="訪客ID" value={visitorIdLabel(current.report)} />
+                <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
+                <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
+                <Field label="WebGL Report" value={DASH} />
+                <Field label="廠商" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
+                <Field label="渲染" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
+                <Field label="Audio" value={hashHead(signalOf(signals, 'audio')?.hash)} />
+                <Field label="Client Rects" value={DASH} />
+                <Field label="WebGPU Report" value={hashHead(signalOf(signals, 'webgpu')?.hash)} />
+                <Field label="屏幕分辨率" value={screenValue(signals, 'resolution')} />
+                <Field label="可用屏幕尺寸" value={screenValue(signals, 'availResolution')} />
+                <Field label="顏色深度" value={screenColorDepthLabel(signals)} />
+                <Field label="觸摸支持" value={touchSupportLabel(signals)} />
+                <Field label="媒體設備" value={DASH} />
+                <p className="ov-note">
+                  {(() => {
+                    const parts: string[] = [];
+                    if (current.nav.cores && current.nav.cores > 0) parts.push(`CPU ${current.nav.cores} 核心`);
+                    if (current.nav.memoryGb) parts.push(`記憶體 ${current.nav.memoryGb} GB`);
+                    if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
+                    return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
-                />
-                <Field
-                  label="色深"
-                  value={(() => {
-                    const screen = valueOf(signals, 'screen');
-                    const depth = asNum(screen, 'colorDepth');
-                    return depth !== undefined ? `${depth} bit` : DASH;
-                  })()}
-                />
-                <Field
-                  label="GPU"
-                  value={(() => {
-                    const webgl = valueOf(signals, 'webgl');
-                    const renderer = asStr(webgl, 'renderer');
-                    return renderer ?? DASH;
-                  })()}
-                />
+                </p>
               </Card>
 
-              {/* ── 瀏覽器環境卡 ───────────────────────────── */}
-              <Card icon="🧬" title="瀏覽器環境">
-                <Field
-                  label="UA 摘要"
-                  value={(() => {
-                    const ua = valueOf(signals, 'ua');
-                    const raw = asStr(ua, 'userAgent');
-                    return raw ? truncate(raw, 110) : DASH;
-                  })()}
-                />
-                <Field
-                  label="語言"
-                  value={(() => {
-                    const locale = valueOf(signals, 'locale');
-                    const ua = valueOf(signals, 'ua');
-                    return asStr(locale, 'language') ?? asStr(ua, 'language') ?? DASH;
-                  })()}
-                />
-                <Field
-                  label="時區"
-                  value={(() => {
-                    const tz = valueOf(signals, 'timezone');
-                    const name = asStr(tz, 'timezone');
-                    const offset = asNum(tz, 'offsetHours');
-                    if (!name && offset === undefined) return DASH;
-                    const offsetPart =
-                      offset !== undefined
-                        ? `（UTC${offset >= 0 ? '+' : ''}${offset}）`
-                        : '';
-                    return `${name ?? DASH}${offsetPart}`;
-                  })()}
-                />
-                <Field
-                  label="Canvas 指紋"
-                  value={hashHead(signalOf(signals, 'canvas')?.hash)}
-                />
-                <Field
-                  label="WebGL 指紋"
-                  value={hashHead(signalOf(signals, 'webgl')?.hash)}
-                />
-                <Field
-                  label="WebGPU 指紋"
-                  value={hashHead(signalOf(signals, 'webgpu')?.hash)}
-                />
-                <Field
-                  label="Audio 指紋"
-                  value={hashHead(signalOf(signals, 'audio')?.hash)}
-                />
-                <Field label="字型" value={DASH} />
-                <Field label="外掛" value={DASH} />
-                <p className="ov-note">目前 10 個採集模組未含字型／外掛指紋。</p>
-              </Card>
-
-              {/* ── 網路訊號卡 ─────────────────────────────── */}
-              <Card icon="📡" title="網路訊號">
-                <Field
-                  label="WebRTC 一致性"
-                  value={
-                    network
-                      ? network.webrtc.consistency === 'consistent'
-                        ? '一致'
-                        : network.webrtc.consistency === 'leak'
-                          ? '洩漏'
-                          : '未知'
-                      : DASH
-                  }
-                />
-                <Field
-                  label="本機 IP 數"
-                  value={network ? `${network.webrtc.localIps.length} 個` : DASH}
-                />
-                <Field
-                  label="DNS Leak"
-                  value={network?.dnsLeak ? yesNo(network.dnsLeak.detected) : DASH}
-                />
-                <Field
-                  label="連線類型"
-                  value={current.nav.connectionType ?? DASH}
-                />
-                <div className="ov-flag-row">
-                  <span className="ov-flag-label">服務判定</span>
-                  <div className="ov-flag-chips">
-                    <span className={`ov-flag ${network?.proxy ? 'ov-flag-on' : ''}`}>Proxy</span>
-                    <span className={`ov-flag ${network?.vpn ? 'ov-flag-on' : ''}`}>VPN</span>
-                    <span className={`ov-flag ${network?.tor ? 'ov-flag-on' : ''}`}>Tor</span>
-                    <span className={`ov-flag ${network?.datacenter ? 'ov-flag-on' : ''}`}>資料中心</span>
-                  </div>
-                </div>
-                <Field label="風險等級" value={zhOr(RISK_ZH, network?.riskLevel, DASH)} />
+              {/* ── 瀏覽器卡 ───────────────────────────────── */}
+              <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols">
+                <Field label="隱身模式" value={DASH} />
+                <Field label="操作系統" value={osName(signals)} />
+                <Field label="瀏覽器" value={browserParts(uaText).name} />
+                <Field label="瀏覽器版本" value={browserParts(uaText).version || DASH} />
+                <Field label="Header" value={DASH} />
+                <Field label="JavaScript" value={DASH} />
+                <Field label="軟件" value={DASH} />
+                <Field label="基於IP的時區" value={asStr(geo, 'timezone') ?? DASH} />
+                <Field label="時區" value={timezoneLabel(signals)} />
+                <Field label="基於IP的時間" value={timeInZone(asStr(geo, 'timezone'))} />
+                <Field label="本地時間" value={localTimeLabel(signals)} />
+                <Field label="語言" value={languageLabel(signals)} />
+                <Field label="請求頭語言" value={DASH} />
+                <Field label="Internationalization API" value={intlLocaleLabel(signals)} />
+                <Field label="機器人偵測" value={botDetectionLabel(current)} />
+                <Field label="Do Not Track" value={doNotTrackLabel(signals)} />
+                <Field label="Javascript" value={DASH} />
+                <Field label="Flash" value={DASH} />
+                <Field label="ActiveX" value={DASH} />
+                <Field label="Java" value={DASH} />
+                <Field label="Cookie" value={cookieEnabledLabel(signals)} />
+                <Field label="端口檢測（22 / 3389）" value={DASH} />
+                <Field label="字體" value={DASH} />
+                <Field label="字體列表" value={DASH} />
+                <p className="ov-note">
+                  字型／軟件／隱身模式／端口／Flash／ActiveX／Java 等欄位尚無對應採集模組或伺服器資料，故顯示 —。
+                </p>
               </Card>
 
               {/* ── 異常與風險卡 ───────────────────────────── */}

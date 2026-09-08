@@ -1521,35 +1521,69 @@ html:has(.ov-experience) body {
   margin: 2px 0 0;
 }
 
-/* 摘要列欄位（hero 用，疊排） */
+/* 摘要列欄位（hero 用）：兩欄「標籤:值」列 + 放大 IP（圖 1 BrowserScan 版型） */
 .ov-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 14px 22px;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 34px;
 }
 
 .ov-summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
+  padding: 7px 2px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.13);
 }
 
 .ov-summary-label {
-  display: block;
+  flex: 0 0 96px;
   font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 3px;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.62);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .ov-summary-value {
-  display: block;
+  min-width: 0;
   font-size: 14.5px;
   font-weight: 700;
   color: #fff;
   word-break: break-all;
+}
+
+/* IP 放大列（摘要最後一列，跨兩欄，圖 1 強調顯示） */
+.ov-summary-ip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 6px;
+  padding: 14px 2px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.ov-summary-ip .ov-summary-label {
+  flex-basis: 96px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ov-summary-ip .ov-summary-value {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+/* 無資料欄位（值為 —）弱化顯示（置於最後以覆蓋放大列樣式） */
+.ov-summary-empty .ov-summary-value {
+  color: rgba(255, 255, 255, 0.42);
+  font-weight: 600;
 }
 
 /* ── 快速摘要 hero（深色底白字） ── */
@@ -1601,6 +1635,24 @@ html:has(.ov-experience) body {
   grid-column: 1 / -1;
 }
 
+/* 半寬卡片（4 欄網格佔 2 欄：IP＋地理 同一列、硬件＋瀏覽器 下一列） */
+.ov-card-half {
+  grid-column: span 2;
+}
+
+/* 欄位多的卡片：內部兩欄呈現（硬件／瀏覽器，圖 1 的資訊方塊感） */
+.ov-card-cols .ov-card-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 22px;
+  align-content: start;
+}
+
+.ov-card-cols .ov-card-body > .ov-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
 .ov-field {
   display: flex;
   flex-direction: column;
@@ -1618,6 +1670,17 @@ html:has(.ov-experience) body {
   font-weight: 700;
   word-break: break-all;
   color: var(--ov-text);
+}
+
+/* 無資料欄位（值為 —）：灰化弱化，保持版型完整（圖 1 慣例） */
+.ov-field-na .ov-field-value {
+  color: var(--ov-muted);
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+.ov-field-na .ov-field-label {
+  color: #9aa7bb;
 }
 
 /* ── 網路旗標 chips ── */
@@ -1874,8 +1937,21 @@ html:has(.ov-experience) body {
     grid-template-columns: 1fr;
   }
 
+  .ov-card-half {
+    grid-column: auto;
+  }
+
   .ov-summary {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .ov-summary-label,
+  .ov-summary-ip .ov-summary-label {
+    flex-basis: 84px;
+  }
+
+  .ov-summary-ip .ov-summary-value {
+    font-size: 24px;
   }
 
   .ov-top-inner {
