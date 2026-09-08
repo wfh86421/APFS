@@ -307,6 +307,30 @@ function intlLocaleLabel(signals: NormalizedSignal[]): string {
   return asStr(valueOf(signals, 'locale'), 'intlLocale') ?? DASH;
 }
 
+/** 語言列表（navigator.languages 實測）。 */
+function languagesLabel(signals: NormalizedSignal[]): string {
+  const locale = valueOf(signals, 'locale');
+  const raw = locale?.languages;
+  if (Array.isArray(raw)) {
+    const langs = raw.filter((item): item is string => typeof item === 'string');
+    if (langs.length > 0) return langs.join(', ');
+  }
+  return languageLabel(signals);
+}
+
+/** Accept-Language 標頭近似值：由 navigator.languages 依 q 加權推估（瀏覽器不直接暴露標頭）。 */
+function acceptLanguageApprox(signals: NormalizedSignal[]): string {
+  const locale = valueOf(signals, 'locale');
+  const raw = locale?.languages;
+  const langs = Array.isArray(raw)
+    ? raw.filter((item): item is string => typeof item === 'string')
+    : [];
+  if (langs.length === 0) return languageLabel(signals);
+  return langs
+    .map((lang, i) => (i === 0 ? lang : `${lang};q=${Math.max(0.1, 1 - i * 0.1).toFixed(1)}`))
+    .join(', ');
+}
+
 /** 螢幕解析度／可用螢幕尺寸（screen 訊號 resolution／availResolution）。 */
 function screenValue(signals: NormalizedSignal[], key: string): string {
   return asStr(valueOf(signals, 'screen'), key) ?? DASH;
@@ -375,6 +399,28 @@ const TRACK_ZH: Record<string, string> = {
   fraud: '欺詐軌',
 };
 
+/** 扣分項 ruleId / issue type → 易懂中文名稱（圖 1 Issues 慣例；未列出的回退原始值）。 */
+const ISSUE_ZH: Record<string, string> = {
+  canvas_tamper: 'Canvas 指紋篡改',
+  canvas_tampered: 'Canvas 指紋篡改',
+  os_mismatch: '作業系統不一致',
+  dns_leak: 'DNS 洩漏',
+  webrtc_leak: 'WebRTC IP 洩漏',
+  webrtc_local_ip: 'WebRTC 本地 IP 洩漏',
+  open_ports_ssh_rdp: '異常端口開放（22 / 3389）',
+  bot_detected: '機器人特徵偵測',
+  server_datacenter_ip: '資料中心 IP 連線',
+  server_tor_ip: 'Tor 出口連線',
+  server_vpn_detected: 'VPN 連線偵測',
+  server_proxy_detected: 'Proxy 代理伺服器偵測',
+  server_ip_velocity: '同裝置 7 天 IP 速度異常',
+  server_header_incoherence: '請求標頭一致性異常',
+};
+
+function issueZhName(key: string): string {
+  return ISSUE_ZH[key] ?? key;
+}
+
 function zhOr(record: Record<string, string>, value: string | undefined, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? record[value] ?? value : fallback;
 }
@@ -400,8 +446,6 @@ function numTone(score: number): Tone {
 interface SummaryRow {
   label: string;
   value: string;
-  /** 摘要中需放大顯示的欄位（IP，置於摘要列最後）。 */
-  big?: boolean;
 }
 
 function keywordHits(data: OvData): string[] {
@@ -426,10 +470,12 @@ function blacklistLabel(data: OvData): string {
 }
 
 /**
- * 圖 1（BrowserScan/tc）頂部快速摘要（兩欄「標籤:值」列）。
- * 順序：頁面 → 瀏覽器 → 你 → IP 時區 → 地理位置 → 語言 → 郵政編碼 → ISP →
- * 代理伺服器 → 匿名服務 → 黑名單 → DNS Leak → 機器人偵測 → IP（放大）。
+ * 圖 1 頂部概覽 Overview（兩欄「標籤:值」列）。
+ * 順序：IP 地址 → 地理位置(城市/國家) → Browser(名稱+版本) → Platform →
+ * IP Time Zone → Location(經緯度) → Language → Postal Code → ISP →
+ * Proxy → Anonymous → Blacklist → DNS Leak → Bot Detection。
  * 值取不到顯示 —；伺服器上傳失敗（降級）時伺服器欄位一律 —。
+ * 隱私評分大數字另以 hero 區塊呈現（見 ov-hero-score），不在此列。
  */
 function buildSummaryRows(data: OvData): SummaryRow[] {
   const signals = data.report.signals;
@@ -440,11 +486,22 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
   const ua = valueOf(signals, 'ua');
   const uaText = asStr(ua, 'userAgent') ?? '';
 
-  const geoPlace = [asStr(geo, 'country'), asStr(geo, 'region'), asStr(geo, 'city')]
-    .filter(Boolean)
-    .join(' / ');
+  const geoCityCountry = (() => {
+    const city = asStr(geo, 'city');
+    const country = asStr(geo, 'country');
+    if (!city && !country) return '';
+    if (city && country) return `${city}, ${country}`;
+    return city ?? country ?? '';
+  })();
+
   const publicIp = webrtcPublicIp(signals, network);
   const ipValue = serverOk && network?.ip ? network.ip : publicIp;
+
+  const coordsValue = (() => {
+    const lat = asNum(geo, 'latitude');
+    const lng = asNum(geo, 'longitude');
+    return lat !== undefined && lng !== undefined ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : DASH;
+  })();
 
   const ispValue = (() => {
     const isp = asStr(geo, 'isp');
@@ -459,11 +516,12 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
   if (network?.datacenter) anonParts.push('資料中心');
 
   return [
-    { label: '頁面', value: data.pageUrl || DASH },
+    { label: 'IP 地址', value: ipValue },
+    { label: '地理位置', value: geoCityCountry || DASH },
     { label: '瀏覽器', value: browserLabel(uaText) },
-    { label: '你', value: youPlatform(signals) },
+    { label: '平台', value: youPlatform(signals) },
     { label: 'IP 時區', value: asStr(geo, 'timezone') ?? DASH },
-    { label: '地理位置', value: geoPlace || DASH },
+    { label: '經緯度', value: coordsValue },
     { label: '語言', value: languageLabel(signals) },
     { label: '郵政編碼', value: DASH },
     { label: 'ISP', value: ispValue },
@@ -475,7 +533,6 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
     { label: '黑名單', value: blacklistLabel(data) },
     { label: 'DNS Leak', value: network?.dnsLeak ? yesNo(network.dnsLeak.detected) : DASH },
     { label: '機器人偵測', value: botDetectionLabel(data) },
-    { label: 'IP', value: ipValue, big: true },
   ];
 }
 
@@ -519,35 +576,6 @@ function Card({
 
 function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`ov-badge ov-badge-${tone}`}>{children}</span>;
-}
-
-function DimBar({
-  label,
-  value,
-  inverse = false,
-}: {
-  label: string;
-  value: number;
-  inverse?: boolean;
-}) {
-  const tone: Tone = inverse
-    ? value <= 30
-      ? 'good'
-      : value >= 60
-        ? 'bad'
-        : 'warn'
-    : numTone(value);
-  return (
-    <div className="ov-dim">
-      <div className="ov-dim-head">
-        <span>{label}</span>
-        <span className="ov-dim-value">{Math.round(value)}</span>
-      </div>
-      <div className="ov-bar">
-        <div className={`ov-bar-fill ov-bar-${tone}`} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
-      </div>
-    </div>
-  );
 }
 
 function ProgressBlock({ title, progress }: { title: string; progress: ScanProgressEvent[] }) {
@@ -675,8 +703,6 @@ export default function HomeOverviewV2() {
   const geo = geoOf(network);
   const signals = current?.report.signals ?? [];
   const summaryRows = current ? buildSummaryRows(current) : [];
-  const summaryNormal = summaryRows.filter((row) => !row.big);
-  const summaryBig = summaryRows.find((row) => row.big);
   const uaText = asStr(valueOf(signals, 'ua'), 'userAgent') ?? '';
 
   const actionLabel = busy
@@ -779,7 +805,7 @@ export default function HomeOverviewV2() {
         {/* 結果總覽 */}
         {current && (
           <>
-            {/* 快速摘要 hero（深色） */}
+            {/* ① 頂部概覽 Overview hero（深色）── 左：兩欄標籤:值摘要；右：隱私評分大數字 */}
             <section className="ov-hero">
               <div className="ov-hero-meta">
                 <span className="ov-hero-chip">
@@ -788,37 +814,113 @@ export default function HomeOverviewV2() {
                 <span className="ov-hero-chip">耗時 {current.elapsedMs} ms</span>
                 <span className="ov-hero-chip">時間 {current.scannedAt}</span>
               </div>
-              <h2 className="ov-hero-title">快速摘要：網站從這次連線看到的你</h2>
-              <div className="ov-summary">
-                {summaryNormal.map((row) => (
-                  <div
-                    className={`ov-summary-item${row.value === DASH ? ' ov-summary-empty' : ''}`}
-                    key={row.label}
-                  >
-                    <span className="ov-summary-label">{row.label}</span>
-                    <span className="ov-summary-value" title={row.value === DASH ? undefined : row.value}>
-                      {row.value}
-                    </span>
+              <div className="ov-hero-main">
+                <div className="ov-hero-left">
+                  <h2 className="ov-hero-title">快速摘要：網站從這次連線看到的你</h2>
+                  <p className="ov-page-line" title={current.pageUrl}>
+                    頁面：{current.pageUrl}
+                  </p>
+                  <div className="ov-summary">
+                    {summaryRows.map((row) => (
+                      <div
+                        className={`ov-summary-item${row.value === DASH ? ' ov-summary-empty' : ''}`}
+                        key={row.label}
+                      >
+                        <span className="ov-summary-label">{row.label}</span>
+                        <span className="ov-summary-value" title={row.value === DASH ? undefined : row.value}>
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {summaryBig && (
-                  <div
-                    className={`ov-summary-ip${summaryBig.value === DASH ? ' ov-summary-empty' : ''}`}
-                  >
-                    <span className="ov-summary-label">{summaryBig.label}</span>
-                    <span className="ov-summary-value" title={summaryBig.value}>
-                      {summaryBig.value}
-                    </span>
+                </div>
+                <div className="ov-hero-score">
+                  <span className="ov-hero-score-label">隱私評分</span>
+                  <div className={`ov-hero-score-num ov-score-${numTone(current.score.finalScore)}`}>
+                    {current.score.finalScore}
+                    <span className="ov-hero-score-unit">%</span>
                   </div>
-                )}
+                  <div className="ov-hero-score-tags">
+                    <Badge tone="good">Grade {current.score.grade}</Badge>
+                    <Badge tone={numTone(current.score.finalScore)}>
+                      {zhOr(RISK_ZH, current.score.riskLevel, DASH)}
+                    </Badge>
+                    <Badge tone={sevTone(current.score.riskLevel)}>
+                      {current.policy
+                        ? `政策 ${zhOr(POLICY_ZH, current.policy, current.policy)}`
+                        : `建議決策 ${zhOr(POLICY_ZH, policyDecisionForRiskLevel(current.score.riskLevel), DASH)}（本機推估）`}
+                    </Badge>
+                  </div>
+                  <div className="ov-hero-score-meta">
+                    隱私軌 {Math.round(current.score.privacyScore)}/100 ・ 欺詐軌{' '}
+                    {Math.round(current.score.fraudScore)}/100
+                  </div>
+                  <div className="ov-hero-score-foot">同意模式 standard ・ 分析來源：{current.analysisSource === 'server' ? '伺服器' : '本機（降級）'}</div>
+                </div>
               </div>
             </section>
+
+            {/* ② 扣分項分析 Issues（名稱 -x% ＋說明＋證據） */}
+            <Card icon="📉" title="扣分項分析 Issues" className="ov-card-wide ov-card-issues">
+              {(() => {
+                const explanations = current.score.explanations ?? [];
+                const issues = current.report.issues ?? [];
+                if (explanations.length === 0 && issues.length === 0) {
+                  return <p className="ov-empty">未偵測到扣分項 — 這次連線的環境相當乾淨。🎉</p>;
+                }
+                return (
+                  <>
+                    {explanations.map((e) => {
+                      const tone = sevTone(e.severity);
+                      return (
+                        <div className={`ov-issue ov-issue-${tone}`} key={e.ruleId}>
+                          <div className="ov-issue-main">
+                            <span className="ov-issue-name">{issueZhName(e.ruleId)}</span>
+                            <span className="ov-issue-pct">-{e.points}%</span>
+                          </div>
+                          <div className="ov-issue-desc">{e.reason}</div>
+                          <div className="ov-issue-meta">
+                            規則 {e.ruleId} ・ {zhOr(TRACK_ZH, e.track, e.track)} ・{' '}
+                            <Badge tone={tone}>{e.severity}</Badge>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {issues.map((issue) => {
+                      const tone = sevTone(issue.severity);
+                      return (
+                        <div className={`ov-issue ov-issue-${tone}`} key={issue.id}>
+                          <div className="ov-issue-main">
+                            <span className="ov-issue-name">{issueZhName(issue.type)}</span>
+                            <Badge tone={tone}>{issue.severity}</Badge>
+                          </div>
+                          <div className="ov-issue-desc">{issue.description}</div>
+                          <div className="ov-issue-meta">
+                            {(() => {
+                              const evidence =
+                                issue.evidence && Object.keys(issue.evidence).length > 0
+                                  ? truncate(JSON.stringify(issue.evidence), 160)
+                                  : null;
+                              return evidence ? (
+                                <>
+                                  證據：<code className="ov-issue-evidence">{evidence}</code>
+                                </>
+                              ) : null;
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+            </Card>
 
             {/* 主區標題 + 資訊卡片網格 */}
             <h2 className="ov-main-title">哪些信息會被網站看到</h2>
 
             <div className="ov-grid">
-              {/* ── IP 地址卡 ─────────────────────────────── */}
+              {/* ── ③ IP address 詳情卡 ─────────────────────── */}
               <Card icon="🌐" title="IP 地址" className="ov-card-half">
                 <Field label="IP" value={network?.ip ?? webrtcPublicIp(signals, network)} />
                 <Field label="WebRTC" value={webrtcPublicIp(signals, network)} />
@@ -830,184 +932,113 @@ export default function HomeOverviewV2() {
                   })()}
                 />
                 <Field
-                  label="IP 計數（7 天）"
+                  label="IP Count (7 days)"
                   value={
                     (current.score.explanations ?? []).some((e) => e.ruleId === 'server_ip_velocity')
                       ? '異常（多 IP）'
                       : DASH
                   }
                 />
-                <p className="ov-note">7 天 IP 速度統計需具身分後端才會提供。</p>
+                <Field label="ISP" value={asStr(geo, 'isp') ?? DASH} />
+                <p className="ov-note">ISP 與 IP Count (7 days) 需伺服器／具身分後端，未取得時顯示 —。</p>
               </Card>
 
-              {/* ── 地理位置卡 ─────────────────────────────── */}
+              {/* ── ④ Location 詳情卡 ──────────────────────── */}
               <Card icon="🗺️" title="地理位置" className="ov-card-half">
-                <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
-                <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
-                <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
+                <Field label="Country" value={asStr(geo, 'country') ?? DASH} />
+                <Field label="Region" value={asStr(geo, 'region') ?? DASH} />
+                <Field label="City" value={asStr(geo, 'city') ?? DASH} />
+                <Field label="Postal Code" value={DASH} />
                 <Field
-                  label="緯度"
+                  label="Latitude"
                   value={(() => {
                     const lat = asNum(geo, 'latitude');
                     return lat !== undefined ? lat.toFixed(4) : DASH;
                   })()}
                 />
                 <Field
-                  label="經度"
+                  label="Longitude"
                   value={(() => {
                     const lng = asNum(geo, 'longitude');
                     return lng !== undefined ? lng.toFixed(4) : DASH;
                   })()}
                 />
+                <p className="ov-note">郵政編碼需郵遞區號地理資料庫，目前未提供。</p>
               </Card>
 
-              {/* ── 硬件卡 ─────────────────────────────────── */}
+              {/* ── ⑤ Hardware 硬體卡 ─────────────────────── */}
               <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols">
-                <Field label="訪客ID" value={visitorIdLabel(current.report)} />
+                <Field label="Visitor ID" value={visitorIdLabel(current.report)} />
                 <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
                 <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
                 <Field label="WebGL Report" value={DASH} />
-                <Field label="廠商" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
-                <Field label="渲染" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
+                <Field label="Unmasked Vendor" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
+                <Field label="Unmasked Renderer" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
                 <Field label="Audio" value={hashHead(signalOf(signals, 'audio')?.hash)} />
                 <Field label="Client Rects" value={DASH} />
                 <Field label="WebGPU Report" value={hashHead(signalOf(signals, 'webgpu')?.hash)} />
-                <Field label="屏幕分辨率" value={screenValue(signals, 'resolution')} />
-                <Field label="可用屏幕尺寸" value={screenValue(signals, 'availResolution')} />
-                <Field label="顏色深度" value={screenColorDepthLabel(signals)} />
-                <Field label="觸摸支持" value={touchSupportLabel(signals)} />
-                <Field label="媒體設備" value={DASH} />
+                <Field label="Screen Resolution" value={screenValue(signals, 'resolution')} />
+                <Field label="Available Screen Size" value={screenValue(signals, 'availResolution')} />
+                <Field label="Color Depth" value={screenColorDepthLabel(signals)} />
+                <Field label="Touch Support" value={touchSupportLabel(signals)} />
+                <Field
+                  label="Device Memory"
+                  value={current.nav.memoryGb ? `${current.nav.memoryGb} GB` : DASH}
+                />
+                <Field
+                  label="Hardware Concurrency"
+                  value={current.nav.cores && current.nav.cores > 0 ? `${current.nav.cores}` : DASH}
+                />
+                <Field label="Media devices" value={DASH} />
                 <p className="ov-note">
                   {(() => {
                     const parts: string[] = [];
-                    if (current.nav.cores && current.nav.cores > 0) parts.push(`CPU ${current.nav.cores} 核心`);
-                    if (current.nav.memoryGb) parts.push(`記憶體 ${current.nav.memoryGb} GB`);
                     if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
                     return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
+                  WebGL Report／Client Rects／Media devices 未採集或需權限，顯示 —。
                 </p>
               </Card>
 
-              {/* ── 瀏覽器卡 ───────────────────────────────── */}
+              {/* ── ⑥ Browser 瀏覽器卡 ─────────────────────── */}
               <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols">
-                <Field label="隱身模式" value={DASH} />
-                <Field label="操作系統" value={osName(signals)} />
-                <Field label="瀏覽器" value={browserParts(uaText).name} />
-                <Field label="瀏覽器版本" value={browserParts(uaText).version || DASH} />
-                <Field label="Header" value={DASH} />
-                <Field label="JavaScript" value={DASH} />
-                <Field label="軟件" value={DASH} />
-                <Field label="基於IP的時區" value={asStr(geo, 'timezone') ?? DASH} />
-                <Field label="時區" value={timezoneLabel(signals)} />
-                <Field label="基於IP的時間" value={timeInZone(asStr(geo, 'timezone'))} />
-                <Field label="本地時間" value={localTimeLabel(signals)} />
-                <Field label="語言" value={languageLabel(signals)} />
-                <Field label="請求頭語言" value={DASH} />
+                <Field label="Incognito mode" value={DASH} />
+                <Field label="Device Model" value={DASH} />
+                <Field label="OS" value={osName(signals)} />
+                <Field label="Browser" value={browserParts(uaText).name} />
+                <Field label="Browser Version" value={browserParts(uaText).version || DASH} />
+                <Field label="Header (User Agent)" value={uaText ? truncate(uaText, 100) : DASH} />
+                <Field label="JavaScript" value="是" />
+                <p className="ov-note">
+                  Incognito mode／Device Model 無法由現有採集模組量測，顯示 —（需額外偵測技術）。
+                </p>
+              </Card>
+
+              {/* ── ⑦ Software 軟體卡 ──────────────────────── */}
+              <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3">
+                <Field label="Time Zone Based on IP" value={asStr(geo, 'timezone') ?? DASH} />
+                <Field label="Time Zone" value={timezoneLabel(signals)} />
+                <Field label="Time From IP" value={timeInZone(asStr(geo, 'timezone'))} />
+                <Field label="Time From Javascript" value={localTimeLabel(signals)} />
+                <Field label="Languages" value={languagesLabel(signals)} />
+                <Field label="Accept-Language header" value={acceptLanguageApprox(signals)} />
                 <Field label="Internationalization API" value={intlLocaleLabel(signals)} />
-                <Field label="機器人偵測" value={botDetectionLabel(current)} />
+                <Field label="Bot Detection" value={botDetectionLabel(current)} />
                 <Field label="Do Not Track" value={doNotTrackLabel(signals)} />
-                <Field label="Javascript" value={DASH} />
+                <Field label="JavaScript" value="是" />
                 <Field label="Flash" value={DASH} />
                 <Field label="ActiveX" value={DASH} />
                 <Field label="Java" value={DASH} />
                 <Field label="Cookie" value={cookieEnabledLabel(signals)} />
-                <Field label="端口檢測（22 / 3389）" value={DASH} />
-                <Field label="字體" value={DASH} />
-                <Field label="字體列表" value={DASH} />
+                <Field label="Port Scan (22/3389)" value={DASH} />
+                <Field label="Fonts" value={DASH} />
+                <Field label="Font list" value={DASH} />
                 <p className="ov-note">
-                  字型／軟件／隱身模式／端口／Flash／ActiveX／Java 等欄位尚無對應採集模組或伺服器資料，故顯示 —。
+                  Cookie／Do Not Track／Languages／Time Zone 等為即時實測值；Accept-Language header 以
+                  navigator.languages 近似。Port Scan／Fonts／Font list／Flash／ActiveX／Java 未採集或需登入，顯示 —。
                 </p>
               </Card>
 
-              {/* ── 異常與風險卡 ───────────────────────────── */}
-              <Card icon="🚨" title="異常與風險" className="ov-card-wide">
-                {(() => {
-                  const explanations = current.score.explanations ?? [];
-                  const issues = current.report.issues ?? [];
-                  if (explanations.length === 0 && issues.length === 0) {
-                    return <p className="ov-empty">未發現異常與風險因素。</p>;
-                  }
-                  return (
-                    <>
-                      {explanations.length > 0 && (
-                        <>
-                          <h4 className="ov-subhead">評分因素（score.explanations）</h4>
-                          {explanations.map((e) => {
-                            const tone = sevTone(e.severity);
-                            return (
-                              <div className={`ov-risk-row ov-risk-${tone}`} key={e.ruleId}>
-                                <div className="ov-risk-line">
-                                  <strong>{e.reason}</strong>
-                                  <Badge tone={tone}>{e.severity}</Badge>
-                                </div>
-                                <div className="ov-risk-meta">
-                                  規則 {e.ruleId} ・ {zhOr(TRACK_ZH, e.track, e.track)} ・ 扣 {e.points} 分
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                      {issues.length > 0 && (
-                        <>
-                          <h4 className="ov-subhead">本機一致性異常（report.issues）</h4>
-                          {issues.map((issue) => {
-                            const tone = sevTone(issue.severity);
-                            return (
-                              <div className={`ov-risk-row ov-risk-${tone}`} key={issue.id}>
-                                <div className="ov-risk-line">
-                                  <strong>{issue.type}</strong>
-                                  <Badge tone={tone}>{issue.severity}</Badge>
-                                </div>
-                                <div className="ov-risk-meta">{issue.description}</div>
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </>
-                  );
-                })()}
-              </Card>
-
-              {/* ── 評分卡 ─────────────────────────────────── */}
-              <Card icon="🏆" title="評分" className="ov-card-wide">
-                <div className="ov-score-hero">
-                  <div className={`ov-score-num ov-score-${numTone(current.score.finalScore)}`}>
-                    {current.score.finalScore}
-                  </div>
-                  <div className="ov-score-side">
-                    <div className="ov-score-badges">
-                      <Badge tone="good">Grade {current.score.grade}</Badge>
-                      <Badge tone={numTone(current.score.finalScore)}>
-                        {zhOr(RISK_ZH, current.score.riskLevel, DASH)}
-                      </Badge>
-                      <Badge tone={sevTone(current.score.riskLevel)}>
-                        {current.policy
-                          ? `政策 ${zhOr(POLICY_ZH, current.policy, current.policy)}`
-                          : `建議決策 ${zhOr(POLICY_ZH, policyDecisionForRiskLevel(current.score.riskLevel), DASH)}（本機推估）`}
-                      </Badge>
-                    </div>
-                    <div className="ov-score-meta">
-                      同意模式 standard ・ 分析來源：
-                      {current.analysisSource === 'server' ? '伺服器' : '本機（降級）'} ・ 耗時{' '}
-                      {current.elapsedMs} ms
-                    </div>
-                  </div>
-                </div>
-                <div className="ov-dims">
-                  <DimBar label="隱私暴露（越低越好）" value={current.report.scores.privacyExposure} inverse />
-                  <DimBar label="環境真實性" value={current.report.scores.authenticity} />
-                  <DimBar label="自動化風險（越低越好）" value={current.report.scores.automationRisk} inverse />
-                  <DimBar label="網路信任" value={current.report.scores.networkTrust} />
-                </div>
-                <div className="ov-score-foot">
-                  <span className="ov-foot-chip">隱私軌 {Math.round(current.score.privacyScore)}/100</span>
-                  <span className="ov-foot-chip">欺詐軌 {Math.round(current.score.fraudScore)}/100</span>
-                  <span className="ov-foot-chip">報告 ID {current.report.reportId.slice(0, 8)}</span>
-                  <span className="ov-foot-chip">SDK {current.report.sdk.version}</span>
-                </div>
-              </Card>
             </div>
 
             <p className="ov-source-note">

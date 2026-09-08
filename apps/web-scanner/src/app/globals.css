@@ -1555,32 +1555,7 @@ html:has(.ov-experience) body {
   word-break: break-all;
 }
 
-/* IP 放大列（摘要最後一列，跨兩欄，圖 1 強調顯示） */
-.ov-summary-ip {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin-top: 6px;
-  padding: 14px 2px 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
-}
-
-.ov-summary-ip .ov-summary-label {
-  flex-basis: 96px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.ov-summary-ip .ov-summary-value {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-}
-
-/* 無資料欄位（值為 —）弱化顯示（置於最後以覆蓋放大列樣式） */
+/* 無資料欄位（值為 —）弱化顯示 */
 .ov-summary-empty .ov-summary-value {
   color: rgba(255, 255, 255, 0.42);
   font-weight: 600;
@@ -1618,6 +1593,83 @@ html:has(.ov-experience) body {
   font-size: 19px;
 }
 
+/* Overview：左＝兩欄摘要；右＝隱私評分大數字（圖 1） */
+.ov-hero-main {
+  display: flex;
+  gap: 28px;
+  align-items: stretch;
+}
+
+.ov-hero-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ov-hero-score {
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-align: center;
+  padding: 18px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ov-hero-score-label {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ov-hero-score-num {
+  font-size: 60px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.ov-hero-score-num .ov-hero-score-unit {
+  font-size: 26px;
+  font-weight: 700;
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ov-hero-score-num.ov-score-good {
+  color: #34d399;
+}
+
+.ov-hero-score-num.ov-score-warn {
+  color: #fbbf24;
+}
+
+.ov-hero-score-num.ov-score-bad {
+  color: #f87171;
+}
+
+.ov-hero-score-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.ov-hero-score-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.ov-hero-score-foot {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+}
+
 /* ── 主區標題 + 網格（響應式 2~4 欄） ── */
 .ov-main-title {
   font-size: 20px;
@@ -1649,6 +1701,19 @@ html:has(.ov-experience) body {
 }
 
 .ov-card-cols .ov-card-body > .ov-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
+/* 三欄內部網格（Software 軟體卡 17 欄） */
+.ov-card-cols3 .ov-card-body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 24px;
+  align-content: start;
+}
+
+.ov-card-cols3 .ov-card-body > .ov-note {
   grid-column: 1 / -1;
   margin: 2px 0 0;
 }
@@ -1759,6 +1824,66 @@ html:has(.ov-experience) body {
   font-size: 12px;
   color: var(--ov-muted);
   margin-top: 3px;
+}
+
+/* ── Issues 扣分項（圖 1：名稱 -x% ＋說明＋證據） ── */
+.ov-issue {
+  border: 1px solid var(--ov-border);
+  border-left: 3px solid var(--ov-border);
+  background: var(--ov-surface-2);
+  border-radius: 0 10px 10px 0;
+  padding: 9px 12px;
+}
+
+.ov-issue-bad {
+  border-left-color: var(--ov-bad);
+}
+
+.ov-issue-warn {
+  border-left-color: var(--ov-warn);
+}
+
+.ov-issue-good {
+  border-left-color: var(--ov-good);
+}
+
+.ov-issue-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.ov-issue-name {
+  font-weight: 700;
+}
+
+.ov-issue-pct {
+  font-weight: 800;
+  color: var(--ov-bad);
+  white-space: nowrap;
+}
+
+.ov-issue-desc {
+  font-size: 12.5px;
+  color: var(--ov-muted);
+  margin-top: 3px;
+}
+
+.ov-issue-meta {
+  font-size: 11.5px;
+  color: var(--ov-muted);
+  margin-top: 4px;
+}
+
+.ov-issue-evidence {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  background: rgba(15, 30, 65, 0.05);
+  padding: 1px 5px;
+  border-radius: 6px;
+  word-break: break-all;
 }
 
 /* ── 評分 ── */
@@ -1926,6 +2051,21 @@ html:has(.ov-experience) body {
   .ov-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .ov-hero-main {
+    flex-direction: column;
+  }
+
+  .ov-hero-score {
+    flex: none;
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+
+  .ov-card-cols3 .ov-card-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -1941,17 +2081,20 @@ html:has(.ov-experience) body {
     grid-column: auto;
   }
 
+  .ov-card-cols3 .ov-card-body {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-hero-score-num {
+    font-size: 48px;
+  }
+
   .ov-summary {
     grid-template-columns: 1fr;
   }
 
-  .ov-summary-label,
-  .ov-summary-ip .ov-summary-label {
+  .ov-summary-label {
     flex-basis: 84px;
-  }
-
-  .ov-summary-ip .ov-summary-value {
-    font-size: 24px;
   }
 
   .ov-top-inner {
@@ -1962,3 +2105,6 @@ html:has(.ov-experience) body {
     padding: 20px 14px 48px;
   }
 }
+
+/* INTEG: 頁面細字列（overview hero）*/
+.ov-page-line{margin:0 0 10px;font-size:12px;color:#8a94a6;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
