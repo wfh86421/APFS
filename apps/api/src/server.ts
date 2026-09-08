@@ -507,7 +507,7 @@ function eventsFromScore(report: EnvironmentReport, score: ScoreResult): RiskEve
     const severity =
       explanation.severity === 'critical'
         ? 'high'
-        : explanation.severity === 'medium'
+        : explanation.severity === 'warning'
           ? 'medium'
           : 'info';
     return {
