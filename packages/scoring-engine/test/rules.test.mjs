@@ -1,7 +1,8 @@
 // WP1 規則引擎單元測試（純 JS：不需要 TS 測試基建，避免 lockfile 變動）。
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ScoringEngine, defaultRules } from '../dist/index.js';
+import { zRiskEventType } from '@shieldscan/core-schema';
+import { ScoringEngine, defaultRules, RULE_EVENT_TYPE } from '../dist/index.js';
 
 function makeReport({ signals = [], issues = [] } = {}) {
   return {
@@ -116,4 +117,57 @@ test('WP4 規則：server_header_incoherence 觸發（-6、fraud）', async () =
     score.explanations.some((e) => e.ruleId === 'server_header_incoherence' && e.track === 'fraud'),
   );
   assert.equal(score.finalScore, 94);
+});
+
+test('W4 規則：unusual_open_ports 觸發 open_ports_ssh_rdp（-15、fraud、critical）', async () => {
+  const score = await calc(makeReport(), [
+    issue('unusual_open_ports', { openPorts: [22, 3389] }),
+  ]);
+  const exp = score.explanations.find((e) => e.ruleId === 'open_ports_ssh_rdp');
+  assert.ok(exp, 'open_ports_ssh_rdp 應觸發');
+  assert.equal(exp.track, 'fraud');
+  assert.equal(exp.severity, 'critical');
+  assert.equal(score.finalScore, 85); // 100 - 15
+});
+
+test('W4 規則：os_mismatch 觸發（-5、fraud）', async () => {
+  const score = await calc(makeReport(), [
+    issue('os_mismatch', { uaOs: 'Windows', clientHintsPlatform: 'macOS' }),
+  ]);
+  const exp = score.explanations.find((e) => e.ruleId === 'os_mismatch');
+  assert.ok(exp, 'os_mismatch 應觸發');
+  assert.equal(exp.track, 'fraud');
+  assert.equal(score.finalScore, 95); // 100 - 5
+});
+
+test('W4.1 環境一致性規則：timezone/language/webrtc_ip_mismatch/canvas_disabled 各自點火', async () => {
+  const cases = [
+    ['timezone_mismatch', 92], // -8
+    ['language_mismatch', 94], // -6
+    ['webrtc_ip_mismatch', 92], // -8
+    ['canvas_disabled', 95], // -5（隱私軌）
+  ];
+  for (const [type, expected] of cases) {
+    const score = await calc(makeReport(), [issue(type)]);
+    const exp = score.explanations.find((e) => e.ruleId === type);
+    assert.ok(exp, `${type} 規則應觸發`);
+    assert.equal(score.finalScore, expected);
+  }
+});
+
+test('W4.1 對照完整性：每個 defaultRules id 皆有 RULE_EVENT_TYPE key 且值為合法 zRiskEventType', () => {
+  const rules = defaultRules();
+  const ids = rules.map((r) => r.id);
+  const mapKeys = Object.keys(RULE_EVENT_TYPE);
+  assert.ok(ids.length >= 16, 'defaultRules 至少 16 條');
+  for (const id of ids) {
+    assert.ok(mapKeys.includes(id), `RULE_EVENT_TYPE 缺少 key: ${id}`);
+    const parsed = zRiskEventType.safeParse(RULE_EVENT_TYPE[id]);
+    assert.ok(parsed.success, `非法 eventType: ${id} -> ${RULE_EVENT_TYPE[id]}`);
+  }
+  assert.deepEqual(
+    [...mapKeys].sort(),
+    [...new Set(ids)].sort(),
+    'RULE_EVENT_TYPE keys 應與 defaultRules ids 一對一（防漏 key／誤落 fingerprint_instability 收容桶）',
+  );
 });

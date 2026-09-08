@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-09-09（INTEG）
+- W4「證據層規則點火」：`open_ports`（22/3389：`/v1/port-scan` 結果接線收案）與 `os_mismatch`（server 獨立判定 UA OS vs Client Hints）風險事件真正觸發並可於 `/v1/risk-events` 查得；`RULE_EVENT_TYPE` 補齊 4 個環境一致性 key（timezone_mismatch/language_mismatch/webrtc_ip_mismatch/canvas_disabled），修掉命中被誤標 `fingerprint_instability` 收容桶的系統性錯誤；webrtc 洩漏不再雙重扣分；對照表移入 scoring-engine 並以完整性測試把關（漏 key 即紅）。
+
 ## 2026-09-08（INTEG）
 - 新版首頁「掃描結果總覽」（BrowserScan 風格）完成試用站評判並**升版正式站**：進入即自動掃描（standard）、再次掃描用 ↻、頂部 📍IP＋複製＋重掃工具列、IP 下城市/國旗(flagcdn)、明暗模式(亮/暗/系統)、音效靜音、掃描進度可收合、`/admin/layout`「掃描總覽」8 區塊排序/停用即時生效；以 `NEXT_PUBLIC_EXPERIENCE=overview` 旗標啟用，classic 首頁路徑保留（未設旗標時不變，E2E 不受影響）。
 

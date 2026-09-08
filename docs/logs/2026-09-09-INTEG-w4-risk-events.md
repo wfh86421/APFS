@@ -1,0 +1,22 @@
+# 2026-09-09 INTEG 窗口：W4 證據層規則點火（open_ports / os_mismatch）（代號 INTEG）
+
+- **目標**：W4「證據層規則點火」最小可驗收版——讓 `open_ports`（22/3389）與 `os_mismatch` 風險事件在 server 收案路徑**確實觸發**並可於 `GET /v1/risk-events` 查得（證據鏈：producer issue → 評分規則 → explanation → RiskEvent）。
+- **現況盤點**（稽核後確認）：
+  - 證據鏈主體已接好（收案 allIssues → `scoringEngine.calculate` → `eventsFromScore`（`RULE_EVENT_TYPE` ruleId→eventType）→ `insertRiskEvents` → high/critical 自動開複核 case；`GET /v1/risk-events` 已被 admin overview/events-list/report-detail/workbench-live 四個 UI 消費）。
+  - **斷鏈 1**：`POST /v1/port-scan` 只回傳結果＋寫 audit，從未把開放端口帶進評分 → `unusual_open_ports` issue 無人產生 → `open_ports_ssh_rdp` 規則（critical -15）永不點火。
+  - **斷鏈 2**：server 端 headerCoherenceIssues 只判 `server_header_incoherence`；`os_mismatch` event type 只有客戶端自報才可能出現（server 收案路徑等於死型別）。
+- **關鍵決策**：
+  - open_ports：port-scan 結果依來源 IP 暫存（`recentPortScans`，TTL 10 分鐘、單次消費），收案時若命中 22/3389 產生 `unusual_open_ports` issue → 既有 critical 規則點火 → `open_ports` RiskEvent（severity high、reviewRequired）。**不改 schema、不加表**；web UI 尚未呼叫 port-scan，故事件在「先掃後報」的流程（含未來 UI 接線）生效。
+  - os_mismatch：把 headerCoherence 的「UA OS vs Client Hints platform 家庭矛盾」從 `server_header_incoherence` 拆到 `os_mismatch`（對齊 `zRiskEventType.os_mismatch` 與後台衝突矩陣「OS 宣稱 vs 實際」）；品牌矛盾（sec-ch-ua Chrome vs UA 無 Chrome）仍維持 `server_header_incoherence`。該單一條件不再雙重計入兩種規則。
+  - **W4.1（稽核補強）**：`RULE_EVENT_TYPE` 對照表由 server 私有常數移至 `packages/scoring-engine` 匯出（可測），並補齊原先漏掉的 4 個 key（timezone_mismatch/language_mismatch/webrtc_ip_mismatch/canvas_disabled→canvas_tampering）——修掉「環境一致性規則命中被誤標成 fingerprint_instability 收容桶」的系統性錯誤；`webrtc_ip_mismatch` 規則不再吃 `server_webrtc_leak`（避免與 `webrtc_leak` 對同一洩漏事實 -16 雙重扣分）；新增「每個 defaultRules id 皆有合法對照」回歸測試（漏 key 即紅）。
+- **改動檔案（commit 前綴）**：
+  - `apps/api/src/server.ts`：`recentPortScans`＋`storePortScanResult`＋`consumeUnusualOpenPortsIssue`；port-scan handler 寫暫存；收案 allIssues 引入消費；headerCoherence OS 矛盾改 `os_mismatch`；`RULE_EVENT_TYPE` 改由 scoring-engine 匯入（刪本機重複表）。
+  - `packages/scoring-engine/src/index.ts`：匯出 `RULE_EVENT_TYPE`（16 key 全量）；`webrtc_ip_mismatch` 規則移除 `server_webrtc_leak` 觸發（去重疊）。
+  - `packages/scoring-engine/test/rules.test.mjs`：新增 `unusual_open_ports→open_ports_ssh_rdp`、`os_mismatch`、4 條環境一致性規則、RULE_EVENT_TYPE 完整性＋合法性 共 4 組測試。
+  - `docs/logs/2026-09-09-INTEG-w4-risk-events.md`（本檔）。
+- **驗證結果**：scoring-engine **14/14 綠**（含新增測試）；`pnpm -r --filter ./packages/** build` 全 13 套件 ✅；`@shieldscan/api` typecheck ✅＋build ✅（_v3 乾淨 pnpm install 後、workspace link 指新源碼）；全 workspace `pnpm -r typecheck` 待背景 job 收尾確認。
+- **未完成/待辦**：
+  - api typecheck/build 複驗；CI（GitHub Actions）全綠確認（本沙箱無 gh CLI，需外部看 run）。
+  - web-scanner 若要把「進階掃描→port-scan→自動送報告」接上（讓生產端真的有 open_ports 事件源），屬 W4 之後的 UI 工作包（另開）。
+  - 稽核列出之其他斷鏈型別（如 blacklist_hit/geo_velocity_anomaly/fingerprint_instability）依稽核矩陣續評（可能 W4.2）。
+- **給其他 agent 的備註**：`open_ports_ssh_rdp` 規則 severity critical → risk event severity high、`reviewRequired=true`，但複核 case 仍只在 composite riskLevel high/critical 時自動開（沿用「只記錄不自動封鎖」紅線）；勿改此政策。

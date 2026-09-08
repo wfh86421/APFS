@@ -44,6 +44,7 @@ import {
 } from '@shieldscan/repository';
 import {
   defaultRules,
+  RULE_EVENT_TYPE,
   ScoringEngine,
   type ScoreResult,
   type ScoringProfile,
@@ -118,6 +119,35 @@ const DEFAULT_PROFILE: ScoringProfile = {
 };
 
 const portScanAttempts = new Map<string, number[]>();
+/** 合規 port-scan 結果暫存（依來源 IP、TTL）：供後續同 IP 收案把「開放端口」帶入評分與風險事件。 */
+const PORT_SCAN_RESULT_TTL_MS = 10 * 60 * 1000;
+const recentPortScans = new Map<string, { openPorts: number[]; at: number }>();
+
+function storePortScanResult(ip: string, openPorts: number[]): void {
+  if (openPorts.length === 0) return;
+  recentPortScans.set(ip, { openPorts, at: Date.now() });
+}
+
+/** 消費該 IP 最近一次 port-scan：命中 SSH(22)/RDP(3389) 時產生 unusual_open_ports issue（單次消費，避免重複觸發）。 */
+function consumeUnusualOpenPortsIssue(ip: string): AnalysisIssue[] {
+  const entry = recentPortScans.get(ip);
+  if (!entry) return [];
+  recentPortScans.delete(ip);
+  if (Date.now() - entry.at > PORT_SCAN_RESULT_TTL_MS) return [];
+  const risky = entry.openPorts.filter((p) => p === 22 || p === 3389);
+  if (risky.length === 0) return [];
+  return [
+    {
+      id: crypto.randomUUID(),
+      type: 'unusual_open_ports',
+      severity: 'high',
+      description:
+        '伺服器判定來源 IP 開放 SSH(22)/RDP(3389)（一般用戶網路極不尋常，疑似伺服器/雲手機/模擬器）',
+      evidence: { openPorts: entry.openPorts },
+    },
+  ];
+}
+
 const keyRateLimits = new Map<string, number[]>();
 const auditLog: Array<Record<string, unknown>> = [];
 
@@ -484,22 +514,6 @@ async function analyzeRequestNetwork(
   });
 }
 
-/** 規則→RiskEventType 對照（與 scoring-engine defaultRules id 對應）。 */
-const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
-  canvas_tamper: 'canvas_tampering',
-  os_mismatch: 'os_mismatch',
-  dns_leak: 'dns_leak',
-  webrtc_leak: 'webrtc_mismatch',
-  open_ports_ssh_rdp: 'open_ports',
-  bot_detected: 'bot_suspected',
-  server_datacenter_ip: 'datacenter_ip',
-  server_tor_ip: 'tor_detected',
-  server_vpn_detected: 'vpn_detected',
-  server_proxy_detected: 'proxy_detected',
-  server_ip_velocity: 'ip_velocity_anomaly',
-  server_header_incoherence: 'header_incoherence',
-};
-
 /** 依評分引擎觸發的規則自動產生 RiskEvent（收案證據鏈的第一環）。 */
 function eventsFromScore(report: EnvironmentReport, score: ScoreResult): RiskEvent[] {
   const now = new Date().toISOString();
@@ -766,7 +780,9 @@ function headerCoherenceIssues(report: EnvironmentReport): AnalysisIssue[] {
             ? 'Linux'
             : '';
   if (platform && uaOs && platform !== uaOs) {
-    push('server_header_incoherence', 'medium', 'UA 宣稱 OS 與 Client Hints 平台不符（伺服器獨立判定）', {
+    // OS 家庭矛盾 → os_mismatch（對齊 zRiskEventType.os_mismatch／後台衝突矩陣「OS 宣稱 vs 實際」），
+    // 由 server_header_incoherence 拆出，避免品牌矛盾與 OS 矛盾混用同一事件型別。
+    push('os_mismatch', 'medium', 'UA 宣稱 OS 與 Client Hints 平台不符（伺服器獨立判定，疑似 OS 偽裝）', {
       uaOs,
       clientHintsPlatform: platform,
     });
@@ -1472,6 +1488,7 @@ app.post('/v1/reports', async (request, reply) => {
   const allIssues = [
     ...(report.issues ?? []),
     ...serverIssues,
+    ...consumeUnusualOpenPortsIssue(ip),
     ...velocityIssues,
     ...headerCoherenceIssues(report),
     ...environmentalCoherenceIssues(report, network),
@@ -1740,6 +1757,8 @@ app.post('/v1/port-scan', async (request, reply) => {
   });
 
   const results = await scanPorts(ip, sanitized.length > 0 ? sanitized : [22]);
+  // 收案證據鏈：開放的端口（尤其 22/3389）暫存，供後續同 IP 收案觸發 open_ports 風險事件。
+  storePortScanResult(ip, results.filter((r) => r.open).map((r) => r.port));
   app.log.info({ ip, ports: sanitized }, 'port scan completed');
   return { ip, results, auditId: auditLog.length };
 });

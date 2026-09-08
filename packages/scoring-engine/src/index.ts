@@ -1,4 +1,9 @@
-import type { AnalysisIssue, EnvironmentReport, ScoreBundle } from '@shieldscan/core-schema';
+import type {
+  AnalysisIssue,
+  EnvironmentReport,
+  RiskEventType,
+  ScoreBundle,
+} from '@shieldscan/core-schema';
 
 export interface ScoringRule {
   id: string;
@@ -124,6 +129,31 @@ export class ScoringEngine {
     return 'F';
   }
 }
+
+/**
+ * 規則 id → RiskEventType 對照（與 apps/api `eventsFromScore` 共用；置於本套件以便測試回歸）。
+ * 原則：**每個 defaultRules 規則都必須有 key**——漏 key 會在收案端落入
+ * `fingerprint_instability` 收容桶（誤標事件），由 rules.test.mjs 完整性測試擋下。
+ */
+export const RULE_EVENT_TYPE: Record<string, RiskEventType> = {
+  canvas_tamper: 'canvas_tampering',
+  os_mismatch: 'os_mismatch',
+  dns_leak: 'dns_leak',
+  webrtc_leak: 'webrtc_mismatch',
+  open_ports_ssh_rdp: 'open_ports',
+  bot_detected: 'bot_suspected',
+  server_datacenter_ip: 'datacenter_ip',
+  server_tor_ip: 'tor_detected',
+  server_vpn_detected: 'vpn_detected',
+  server_proxy_detected: 'proxy_detected',
+  server_ip_velocity: 'ip_velocity_anomaly',
+  server_header_incoherence: 'header_incoherence',
+  // 環境一致性規則（W4.1 補齊，修掉原先誤標 fingerprint_instability 的系統性錯誤）
+  timezone_mismatch: 'timezone_mismatch',
+  language_mismatch: 'language_mismatch',
+  webrtc_ip_mismatch: 'webrtc_mismatch',
+  canvas_disabled: 'canvas_tampering',
+};
 
 export function defaultRules(): ScoringRule[] {
   return [
@@ -301,8 +331,9 @@ export function defaultRules(): ScoringRule[] {
       track: 'fraud',
       deduction: 8,
       description: 'WebRTC 公網 IP 與伺服器連線 IP 不同（疑似 IP 隱藏/分流不一致）',
-      evaluate: (_r, issues) =>
-        issues.some((i) => i.type === 'webrtc_ip_mismatch' || i.type === 'server_webrtc_leak'),
+      // 只吃 server 獨立判定的 webrtc_ip_mismatch；不吃 server_webrtc_leak，
+      // 避免與 webrtc_leak（隱私軌 -8）對同一洩漏事實雙重扣分（-16）。
+      evaluate: (_r, issues) => issues.some((i) => i.type === 'webrtc_ip_mismatch'),
     },
     {
       id: 'canvas_disabled',
