@@ -1240,27 +1240,105 @@ a {
 
 /* =============================================================
    Home Overview V2（新版掃描總覽體驗，NEXT_PUBLIC_EXPERIENCE=overview）
-   淺色 BrowserScan 風格；所有 class 前綴 ov-。
-   顏色以 .ov-experience 內部變數為準，不受 site 深/淺主題影響。
+   所有 class 前綴 ov-；顏色一律走下方語意變數（:root = 亮色，
+   html[data-theme='dark'] 覆蓋為暗色），由 home-overview-v2 的
+   明暗選擇器控制（localStorage key：shieldscan.theme）。
    ============================================================= */
-.ov-experience {
-  --ov-bg: #eef2f7;
-  --ov-surface: #ffffff;
-  --ov-surface-2: #f6f8fc;
-  --ov-border: #e2e8f0;
-  --ov-text: #17233d;
-  --ov-muted: #64748b;
-  --ov-accent: #3b6cff;
-  --ov-accent-soft: rgba(59, 108, 255, 0.09);
-  --ov-good: #0f9d6e;
-  --ov-warn: #b45309;
-  --ov-bad: #dc2626;
-  --ov-hero-top: #0e1a3f;
-  --ov-hero-bottom: #1d3066;
 
+/* ── 語意色板（預設亮色） ── */
+:root {
+  color-scheme: light;
+
+  --ov-bg: #e9eef6;
+  --ov-panel: #ffffff;
+  --ov-panel-2: #f3f6fb;
+  --ov-inset: #eef1f7;
+  --ov-chip-bg: #eef2f8;
+  --ov-text: #16233d;
+  --ov-muted: #4f5e74;
+  --ov-faint: #7b8a9f;
+  --ov-border: #d9e1ec;
+  --ov-accent: #2f5cff;
+  --ov-accent-soft: rgba(47, 92, 255, 0.1);
+  --ov-on-accent: #ffffff;
+  --ov-ok: #0e8f66;
+  --ov-ok-soft: rgba(14, 143, 102, 0.1);
+  --ov-ok-border: rgba(14, 143, 102, 0.32);
+  --ov-warn: #a35a00;
+  --ov-warn-soft: rgba(163, 90, 0, 0.1);
+  --ov-warn-border: rgba(163, 90, 0, 0.32);
+  --ov-bad: #c92a32;
+  --ov-bad-soft: rgba(201, 42, 50, 0.09);
+  --ov-bad-border: rgba(201, 42, 50, 0.3);
+  --ov-shadow: 0 1px 3px rgba(15, 30, 65, 0.07);
+  --ov-shadow-lg: 0 12px 28px rgba(15, 30, 80, 0.2);
+
+  /* hero（亮色 = 主色底＋白字；暗色下由下方覆蓋為深色感） */
+  --ov-hero-a: #2e5df0;
+  --ov-hero-b: #10286f;
+  --ov-hero-text: #ffffff;
+  --ov-hero-text-dim: rgba(255, 255, 255, 0.68);
+  --ov-hero-text-faint: rgba(255, 255, 255, 0.5);
+  --ov-hero-rule: rgba(255, 255, 255, 0.14);
+  --ov-hero-chip-bg: rgba(255, 255, 255, 0.1);
+  --ov-hero-chip-border: rgba(255, 255, 255, 0.24);
+  --ov-hero-score-bg: rgba(255, 255, 255, 0.09);
+  --ov-hero-score-border: rgba(255, 255, 255, 0.2);
+  --ov-hero-accent: #bfd3ff;
+  --ov-hero-ok: #5ef2b2;
+  --ov-hero-warn: #ffd166;
+  --ov-hero-bad: #ff9aa3;
+}
+
+/* ── 語意色板（暗色） ── */
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ov-bg: #0a1120;
+  --ov-panel: #131d33;
+  --ov-panel-2: #1a2540;
+  --ov-inset: #101a2e;
+  --ov-chip-bg: #1d2a45;
+  --ov-text: #e8eef9;
+  --ov-muted: #a5b3c9;
+  --ov-faint: #8fa0b8;
+  --ov-border: #2c3a58;
+  --ov-accent: #7ba0ff;
+  --ov-accent-soft: rgba(123, 160, 255, 0.16);
+  --ov-on-accent: #0a1226;
+  --ov-ok: #47d6a0;
+  --ov-ok-soft: rgba(71, 214, 160, 0.14);
+  --ov-ok-border: rgba(71, 214, 160, 0.38);
+  --ov-warn: #f2b056;
+  --ov-warn-soft: rgba(242, 176, 86, 0.14);
+  --ov-warn-border: rgba(242, 176, 86, 0.36);
+  --ov-bad: #ff7a80;
+  --ov-bad-soft: rgba(255, 122, 128, 0.14);
+  --ov-bad-border: rgba(255, 122, 128, 0.36);
+  --ov-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --ov-shadow-lg: 0 14px 30px rgba(0, 0, 0, 0.45);
+
+  --ov-hero-a: #1b2a4a;
+  --ov-hero-b: #0a1020;
+  --ov-hero-text: #f2f6ff;
+  --ov-hero-text-dim: rgba(242, 246, 255, 0.7);
+  --ov-hero-text-faint: rgba(242, 246, 255, 0.5);
+  --ov-hero-rule: rgba(255, 255, 255, 0.14);
+  --ov-hero-chip-bg: rgba(255, 255, 255, 0.07);
+  --ov-hero-chip-border: rgba(255, 255, 255, 0.2);
+  --ov-hero-score-bg: rgba(255, 255, 255, 0.05);
+  --ov-hero-score-border: rgba(255, 255, 255, 0.16);
+  --ov-hero-accent: #9fc0ff;
+  --ov-hero-ok: #4ade80;
+  --ov-hero-warn: #fbbf24;
+  --ov-hero-bad: #f87171;
+}
+
+.ov-experience {
   min-height: 100vh;
   background: var(--ov-bg);
   color: var(--ov-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .ov-experience a {
@@ -1268,13 +1346,52 @@ a {
   text-decoration: none;
 }
 
-/* 僅在新版總覽體驗存在時，讓 canvas 底色配合淺色主題（classic/admin 不受影響）。 */
+/* 僅在新版總覽體驗存在時，讓 canvas 底色配合主題（classic/admin 不受影響）。 */
 html:has(.ov-experience) body {
-  background: #eef2f7;
+  background: var(--ov-bg);
+}
+
+/* ── 明暗模式選擇器（頁面最頂工具列，右上角；可 sticky） ── */
+.ov-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--ov-border);
+  background: var(--ov-chip-bg);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.ov-theme-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ov-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ov-theme-btn:hover:not(.is-active) {
+  color: var(--ov-text);
+}
+
+.ov-theme-btn.is-active {
+  background: var(--ov-panel);
+  color: var(--ov-accent);
+  box-shadow: var(--ov-shadow);
 }
 
 .ov-top {
-  background: var(--ov-surface);
+  background: var(--ov-panel);
   border-bottom: 1px solid var(--ov-border);
 }
 
@@ -1329,7 +1446,7 @@ html:has(.ov-experience) body {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--ov-border);
-  background: var(--ov-surface-2);
+  background: var(--ov-chip-bg);
   color: var(--ov-muted);
   border-radius: 999px;
   padding: 5px 12px;
@@ -1339,15 +1456,15 @@ html:has(.ov-experience) body {
 }
 
 .ov-chip-server {
-  color: var(--ov-good);
-  border-color: rgba(15, 157, 110, 0.35);
-  background: rgba(15, 157, 110, 0.08);
+  color: var(--ov-ok);
+  border-color: var(--ov-ok-border);
+  background: var(--ov-ok-soft);
 }
 
 .ov-chip-local {
   color: var(--ov-warn);
-  border-color: rgba(180, 83, 9, 0.35);
-  background: rgba(180, 83, 9, 0.08);
+  border-color: var(--ov-warn-border);
+  background: var(--ov-warn-soft);
 }
 
 .ov-btn {
@@ -1355,7 +1472,7 @@ html:has(.ov-experience) body {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--ov-border);
-  background: var(--ov-surface);
+  background: var(--ov-panel);
   color: var(--ov-text);
   border-radius: 12px;
   padding: 9px 18px;
@@ -1366,8 +1483,8 @@ html:has(.ov-experience) body {
 }
 
 .ov-btn:hover:not(:disabled) {
-  filter: brightness(1.03);
-  box-shadow: 0 2px 8px rgba(15, 30, 65, 0.12);
+  filter: brightness(1.04);
+  box-shadow: var(--ov-shadow);
 }
 
 .ov-btn:disabled {
@@ -1378,7 +1495,7 @@ html:has(.ov-experience) body {
 .ov-btn-primary {
   background: var(--ov-accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--ov-on-accent);
 }
 
 .ov-page {
@@ -1407,7 +1524,7 @@ html:has(.ov-experience) body {
 .ov-error {
   border: 1px solid var(--ov-border);
   border-left: 4px solid var(--ov-warn);
-  background: var(--ov-surface);
+  background: var(--ov-panel);
   color: var(--ov-text);
   border-radius: 12px;
   padding: 12px 16px;
@@ -1475,11 +1592,11 @@ html:has(.ov-experience) body {
 
 /* ── 卡片通用 ── */
 .ov-card {
-  background: var(--ov-surface);
+  background: var(--ov-panel);
   border: 1px solid var(--ov-border);
   border-radius: 16px;
   padding: 16px 18px;
-  box-shadow: 0 1px 3px rgba(15, 30, 65, 0.06);
+  box-shadow: var(--ov-shadow);
 }
 
 .ov-card-head {
@@ -1534,14 +1651,14 @@ html:has(.ov-experience) body {
   gap: 10px;
   min-width: 0;
   padding: 7px 2px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.13);
+  border-bottom: 1px dashed var(--ov-hero-rule);
 }
 
 .ov-summary-label {
   flex: 0 0 96px;
   font-size: 11px;
   letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--ov-hero-text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1551,24 +1668,24 @@ html:has(.ov-experience) body {
   min-width: 0;
   font-size: 14.5px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ov-hero-text);
   word-break: break-all;
 }
 
 /* 無資料欄位（值為 —）弱化顯示 */
 .ov-summary-empty .ov-summary-value {
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--ov-hero-text-faint);
   font-weight: 600;
 }
 
-/* ── 快速摘要 hero（深色底白字） ── */
+/* ── 快速摘要 hero ── */
 .ov-hero {
-  background: linear-gradient(135deg, var(--ov-hero-top), var(--ov-hero-bottom));
-  color: #fff;
+  background: linear-gradient(135deg, var(--ov-hero-a), var(--ov-hero-b));
+  color: var(--ov-hero-text);
   border-radius: 20px;
   padding: 22px 24px 24px;
   margin-bottom: 26px;
-  box-shadow: 0 12px 28px rgba(15, 30, 80, 0.18);
+  box-shadow: var(--ov-shadow-lg);
 }
 
 .ov-hero-meta {
@@ -1579,9 +1696,9 @@ html:has(.ov-experience) body {
 }
 
 .ov-hero-chip {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--ov-hero-chip-border);
+  background: var(--ov-hero-chip-bg);
+  color: var(--ov-hero-text);
   border-radius: 999px;
   padding: 3px 10px;
   font-size: 12px;
@@ -1614,24 +1731,24 @@ html:has(.ov-experience) body {
   gap: 7px;
   text-align: center;
   padding: 18px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--ov-hero-score-border);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--ov-hero-score-bg);
 }
 
 .ov-hero-score-label {
   font-size: 12px;
   letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ov-hero-text-dim);
 }
 
 .ov-hero-score-auth {
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ov-hero-text-dim);
 }
 
 .ov-hero-score-auth strong {
-  color: #7dd3fc;
+  color: var(--ov-hero-accent);
   font-weight: 800;
 }
 
@@ -1639,26 +1756,26 @@ html:has(.ov-experience) body {
   font-size: 60px;
   font-weight: 800;
   line-height: 1;
-  color: #fff;
+  color: var(--ov-hero-text);
 }
 
 .ov-hero-score-num .ov-hero-score-unit {
   font-size: 26px;
   font-weight: 700;
   margin-left: 2px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ov-hero-text-faint);
 }
 
 .ov-hero-score-num.ov-score-good {
-  color: #34d399;
+  color: var(--ov-hero-ok);
 }
 
 .ov-hero-score-num.ov-score-warn {
-  color: #fbbf24;
+  color: var(--ov-hero-warn);
 }
 
 .ov-hero-score-num.ov-score-bad {
-  color: #f87171;
+  color: var(--ov-hero-bad);
 }
 
 .ov-hero-score-tags {
@@ -1671,12 +1788,12 @@ html:has(.ov-experience) body {
 
 .ov-hero-score-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--ov-hero-text-dim);
 }
 
 .ov-hero-score-foot {
   font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ov-hero-text-faint);
   margin-top: 4px;
 }
 
@@ -1749,13 +1866,12 @@ html:has(.ov-experience) body {
 
 /* 無資料欄位（值為 —）：灰化弱化，保持版型完整（圖 1 慣例） */
 .ov-field-na .ov-field-value {
-  color: var(--ov-muted);
-  opacity: 0.55;
+  color: var(--ov-faint);
   font-weight: 600;
 }
 
 .ov-field-na .ov-field-label {
-  color: #9aa7bb;
+  color: var(--ov-muted);
 }
 
 /* ── 網路旗標 chips ── */
@@ -1780,7 +1896,7 @@ html:has(.ov-experience) body {
 
 .ov-flag {
   border: 1px solid var(--ov-border);
-  background: var(--ov-surface-2);
+  background: var(--ov-panel-2);
   color: var(--ov-muted);
   border-radius: 999px;
   padding: 2px 10px;
@@ -1790,8 +1906,8 @@ html:has(.ov-experience) body {
 
 .ov-flag-on {
   color: var(--ov-bad);
-  border-color: rgba(220, 38, 38, 0.45);
-  background: rgba(220, 38, 38, 0.07);
+  border-color: var(--ov-bad-border);
+  background: var(--ov-bad-soft);
 }
 
 /* ── 異常與風險 ── */
@@ -1804,14 +1920,14 @@ html:has(.ov-experience) body {
 
 .ov-risk-row {
   border-left: 3px solid var(--ov-border);
-  background: var(--ov-surface-2);
+  background: var(--ov-panel-2);
   border-radius: 0 10px 10px 0;
   padding: 8px 12px;
   margin: 6px 0 0;
 }
 
 .ov-risk-good {
-  border-left-color: var(--ov-good);
+  border-left-color: var(--ov-ok);
 }
 
 .ov-risk-warn {
@@ -1840,7 +1956,7 @@ html:has(.ov-experience) body {
 .ov-issue {
   border: 1px solid var(--ov-border);
   border-left: 3px solid var(--ov-border);
-  background: var(--ov-surface-2);
+  background: var(--ov-panel-2);
   border-radius: 0 10px 10px 0;
   padding: 9px 12px;
 }
@@ -1854,7 +1970,7 @@ html:has(.ov-experience) body {
 }
 
 .ov-issue-good {
-  border-left-color: var(--ov-good);
+  border-left-color: var(--ov-ok);
 }
 
 .ov-issue-main {
@@ -1890,7 +2006,7 @@ html:has(.ov-experience) body {
 .ov-issue-evidence {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
-  background: rgba(15, 30, 65, 0.05);
+  background: var(--ov-inset);
   padding: 1px 5px;
   border-radius: 6px;
   word-break: break-all;
@@ -1911,7 +2027,7 @@ html:has(.ov-experience) body {
 }
 
 .ov-score-good {
-  color: var(--ov-good);
+  color: var(--ov-ok);
 }
 
 .ov-score-warn {
@@ -1961,7 +2077,7 @@ html:has(.ov-experience) body {
 .ov-bar {
   height: 8px;
   border-radius: 999px;
-  background: var(--ov-surface-2);
+  background: var(--ov-panel-2);
   border: 1px solid var(--ov-border);
   overflow: hidden;
 }
@@ -1972,7 +2088,7 @@ html:has(.ov-experience) body {
 }
 
 .ov-bar-good {
-  background: var(--ov-good);
+  background: var(--ov-ok);
 }
 
 .ov-bar-warn {
@@ -1994,7 +2110,7 @@ html:has(.ov-experience) body {
 
 .ov-foot-chip {
   border: 1px solid var(--ov-border);
-  background: var(--ov-surface-2);
+  background: var(--ov-panel-2);
   color: var(--ov-muted);
   border-radius: 999px;
   padding: 3px 10px;
@@ -2014,20 +2130,20 @@ html:has(.ov-experience) body {
 }
 
 .ov-badge-good {
-  background: rgba(15, 157, 110, 0.1);
-  border-color: rgba(15, 157, 110, 0.3);
-  color: var(--ov-good);
+  background: var(--ov-ok-soft);
+  border-color: var(--ov-ok-border);
+  color: var(--ov-ok);
 }
 
 .ov-badge-warn {
-  background: rgba(180, 83, 9, 0.1);
-  border-color: rgba(180, 83, 9, 0.3);
+  background: var(--ov-warn-soft);
+  border-color: var(--ov-warn-border);
   color: var(--ov-warn);
 }
 
 .ov-badge-bad {
-  background: rgba(220, 38, 38, 0.08);
-  border-color: rgba(220, 38, 38, 0.3);
+  background: var(--ov-bad-soft);
+  border-color: var(--ov-bad-border);
   color: var(--ov-bad);
 }
 
@@ -2117,4 +2233,4 @@ html:has(.ov-experience) body {
 }
 
 /* INTEG: 頁面細字列（overview hero）*/
-.ov-page-line{margin:0 0 10px;font-size:12px;color:#8a94a6;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-page-line{margin:0 0 10px;font-size:12px;color:var(--ov-muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

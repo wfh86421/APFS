@@ -45,6 +45,61 @@ import { analyzeSignals } from '../lib/analyze';
 import { submitReport, type ServerNetworkAnalysis } from '../lib/api';
 
 /* ------------------------------------------------------------------ */
+/* 明暗模式（localStorage key：shieldscan.theme；html[data-theme] 驅動）  */
+/* ------------------------------------------------------------------ */
+
+const THEME_KEY = 'shieldscan.theme';
+
+type ThemeMode = 'light' | 'dark' | 'auto';
+
+function prefersDark(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
+function readStoredTheme(): ThemeMode {
+  if (typeof window === 'undefined') return 'auto';
+  try {
+    const raw = window.localStorage.getItem(THEME_KEY);
+    if (raw === 'light' || raw === 'dark' || raw === 'auto') return raw;
+  } catch {
+    /* localStorage 不可用時退回跟隨系統 */
+  }
+  return 'auto';
+}
+
+function resolvedTheme(mode: ThemeMode): 'light' | 'dark' {
+  if (mode === 'auto') return prefersDark() ? 'dark' : 'light';
+  return mode;
+}
+
+/** 切換 html[data-theme]，全頁（含 .ov-experience 色板）即時生效。 */
+function setHtmlTheme(mode: ThemeMode): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dataset.theme = resolvedTheme(mode);
+}
+
+function persistTheme(mode: ThemeMode): void {
+  try {
+    window.localStorage.setItem(THEME_KEY, mode);
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 模組載入第一時間同步（避免載入閃爍）：先讀 localStorage，無則跟隨系統。 */
+if (typeof window !== 'undefined') {
+  try {
+    setHtmlTheme(readStoredTheme());
+  } catch {
+    /* noop */
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* 常數／小工具                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -621,7 +676,30 @@ export default function HomeOverviewV2() {
   const [progress, setProgress] = useState<ScanProgressEvent[]>([]);
   const [scanError, setScanError] = useState<string>();
   const [armed, setArmed] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
   const dataRef = useRef<OvData | null>(null);
+
+  // 掛載後才讀取 localStorage（避免 SSR/水合不一致）；html 主題已在模組載入時同步。
+  useEffect(() => {
+    setThemeMode(readStoredTheme());
+  }, []);
+
+  // 「跟隨系統」時監聽系統明暗變化，即時切換 html[data-theme]。
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      setHtmlTheme(themeMode);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [themeMode]);
+
+  const chooseTheme = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    persistTheme(mode);
+    setHtmlTheme(mode);
+  };
 
   const runScan = async () => {
     setBusy(true);
@@ -726,6 +804,27 @@ export default function HomeOverviewV2() {
             </span>
           </div>
           <div className="ov-top-actions">
+            <div className="ov-theme-switch" role="group" aria-label="明暗模式">
+              {(
+                [
+                  ['light', '亮色', '☀️'],
+                  ['dark', '暗色', '🌙'],
+                  ['auto', '跟隨系統', '🖥️'],
+                ] as Array<[ThemeMode, string, string]>
+              ).map(([mode, label, icon]) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={`ov-theme-btn${themeMode === mode ? ' is-active' : ''}`}
+                  aria-pressed={themeMode === mode}
+                  title={`${label}${mode === 'auto' ? '（依系統 prefers-color-scheme）' : ''}`}
+                  onClick={() => chooseTheme(mode)}
+                >
+                  <span aria-hidden="true">{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
             <span className="ov-chip" title="此體驗固定以 standard 模式自動上傳分析">
               同意模式：standard
             </span>
