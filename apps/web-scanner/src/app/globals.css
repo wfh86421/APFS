@@ -1625,6 +1625,16 @@ html:has(.ov-experience) body {
   color: rgba(255, 255, 255, 0.7);
 }
 
+.ov-hero-score-auth {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ov-hero-score-auth strong {
+  color: #7dd3fc;
+  font-weight: 800;
+}
+
 .ov-hero-score-num {
   font-size: 60px;
   font-weight: 800;

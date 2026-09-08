@@ -840,6 +840,15 @@ export default function HomeOverviewV2() {
                     {current.score.finalScore}
                     <span className="ov-hero-score-unit">%</span>
                   </div>
+                  <div className="ov-hero-score-auth">
+                    瀏覽器指紋真實度：
+                    <strong>
+                      {typeof current.report.scores.authenticity === 'number' &&
+                      Number.isFinite(current.report.scores.authenticity)
+                        ? `${Math.round(current.report.scores.authenticity)}%`
+                        : DASH}
+                    </strong>
+                  </div>
                   <div className="ov-hero-score-tags">
                     <Badge tone="good">Grade {current.score.grade}</Badge>
                     <Badge tone={numTone(current.score.finalScore)}>
@@ -932,7 +941,7 @@ export default function HomeOverviewV2() {
                   })()}
                 />
                 <Field
-                  label="IP Count (7 days)"
+                  label="IP 計數（7 天）"
                   value={
                     (current.score.explanations ?? []).some((e) => e.ruleId === 'server_ip_velocity')
                       ? '異常（多 IP）'
@@ -940,24 +949,24 @@ export default function HomeOverviewV2() {
                   }
                 />
                 <Field label="ISP" value={asStr(geo, 'isp') ?? DASH} />
-                <p className="ov-note">ISP 與 IP Count (7 days) 需伺服器／具身分後端，未取得時顯示 —。</p>
+                <p className="ov-note">ISP 與 IP 計數（7 天）需伺服器／具身分後端，未取得時顯示 —。</p>
               </Card>
 
               {/* ── ④ Location 詳情卡 ──────────────────────── */}
               <Card icon="🗺️" title="地理位置" className="ov-card-half">
-                <Field label="Country" value={asStr(geo, 'country') ?? DASH} />
-                <Field label="Region" value={asStr(geo, 'region') ?? DASH} />
-                <Field label="City" value={asStr(geo, 'city') ?? DASH} />
-                <Field label="Postal Code" value={DASH} />
+                <Field label="國家 / 地區" value={asStr(geo, 'country') ?? DASH} />
+                <Field label="州 / 省" value={asStr(geo, 'region') ?? DASH} />
+                <Field label="城市" value={asStr(geo, 'city') ?? DASH} />
+                <Field label="郵政編碼" value={DASH} />
                 <Field
-                  label="Latitude"
+                  label="緯度"
                   value={(() => {
                     const lat = asNum(geo, 'latitude');
                     return lat !== undefined ? lat.toFixed(4) : DASH;
                   })()}
                 />
                 <Field
-                  label="Longitude"
+                  label="經度"
                   value={(() => {
                     const lng = asNum(geo, 'longitude');
                     return lng !== undefined ? lng.toFixed(4) : DASH;
@@ -968,74 +977,75 @@ export default function HomeOverviewV2() {
 
               {/* ── ⑤ Hardware 硬體卡 ─────────────────────── */}
               <Card icon="🖥️" title="硬件" className="ov-card-half ov-card-cols">
-                <Field label="Visitor ID" value={visitorIdLabel(current.report)} />
+                <Field label="訪客ID" value={visitorIdLabel(current.report)} />
                 <Field label="Canvas" value={hashHead(signalOf(signals, 'canvas')?.hash)} />
                 <Field label="WebGL" value={hashHead(signalOf(signals, 'webgl')?.hash)} />
                 <Field label="WebGL Report" value={DASH} />
-                <Field label="Unmasked Vendor" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
-                <Field label="Unmasked Renderer" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
+                <Field label="廠商" value={asStr(valueOf(signals, 'webgl'), 'vendor') ?? DASH} />
+                <Field label="渲染" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
                 <Field label="Audio" value={hashHead(signalOf(signals, 'audio')?.hash)} />
                 <Field label="Client Rects" value={DASH} />
                 <Field label="WebGPU Report" value={hashHead(signalOf(signals, 'webgpu')?.hash)} />
-                <Field label="Screen Resolution" value={screenValue(signals, 'resolution')} />
-                <Field label="Available Screen Size" value={screenValue(signals, 'availResolution')} />
-                <Field label="Color Depth" value={screenColorDepthLabel(signals)} />
-                <Field label="Touch Support" value={touchSupportLabel(signals)} />
+                <Field label="屏幕分辨率" value={screenValue(signals, 'resolution')} />
+                <Field label="可用屏幕尺寸" value={screenValue(signals, 'availResolution')} />
+                <Field label="顏色深度" value={screenColorDepthLabel(signals)} />
+                <Field label="觸摸支持" value={touchSupportLabel(signals)} />
                 <Field
-                  label="Device Memory"
+                  label="設備內存"
                   value={current.nav.memoryGb ? `${current.nav.memoryGb} GB` : DASH}
                 />
                 <Field
-                  label="Hardware Concurrency"
+                  label="邏輯處理器核心"
                   value={current.nav.cores && current.nav.cores > 0 ? `${current.nav.cores}` : DASH}
                 />
-                <Field label="Media devices" value={DASH} />
+                <Field label="媒體設備" value={DASH} />
                 <p className="ov-note">
                   {(() => {
                     const parts: string[] = [];
                     if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
                     return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
-                  WebGL Report／Client Rects／Media devices 未採集或需權限，顯示 —。
+                  WebGL Report／Client Rects／媒體設備 未採集或需權限，顯示 —。
                 </p>
               </Card>
 
               {/* ── ⑥ Browser 瀏覽器卡 ─────────────────────── */}
               <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols">
-                <Field label="Incognito mode" value={DASH} />
-                <Field label="Device Model" value={DASH} />
-                <Field label="OS" value={osName(signals)} />
-                <Field label="Browser" value={browserParts(uaText).name} />
-                <Field label="Browser Version" value={browserParts(uaText).version || DASH} />
-                <Field label="Header (User Agent)" value={uaText ? truncate(uaText, 100) : DASH} />
+                <Field label="隱身模式" value={DASH} />
+                <Field label="設備型號" value={DASH} />
+                <Field label="操作系統" value={osName(signals)} />
+                <Field label="瀏覽器" value={browserParts(uaText).name} />
+                <Field label="瀏覽器版本" value={browserParts(uaText).version || DASH} />
+                <Field label="Header（請求標頭）" value={uaText ? truncate(uaText, 100) : DASH} />
                 <Field label="JavaScript" value="是" />
                 <p className="ov-note">
-                  Incognito mode／Device Model 無法由現有採集模組量測，顯示 —（需額外偵測技術）。
+                  隱身模式／設備型號 無法由現有採集模組量測，顯示 —（需額外偵測技術）；Header
+                  顯示掃描到的 User-Agent 字串。
                 </p>
               </Card>
 
               {/* ── ⑦ Software 軟體卡 ──────────────────────── */}
               <Card icon="🧩" title="軟體" className="ov-card-wide ov-card-cols3">
-                <Field label="Time Zone Based on IP" value={asStr(geo, 'timezone') ?? DASH} />
-                <Field label="Time Zone" value={timezoneLabel(signals)} />
-                <Field label="Time From IP" value={timeInZone(asStr(geo, 'timezone'))} />
-                <Field label="Time From Javascript" value={localTimeLabel(signals)} />
-                <Field label="Languages" value={languagesLabel(signals)} />
-                <Field label="Accept-Language header" value={acceptLanguageApprox(signals)} />
+                <Field label="基於IP的時區" value={asStr(geo, 'timezone') ?? DASH} />
+                <Field label="時區" value={timezoneLabel(signals)} />
+                <Field label="基於IP的時間" value={timeInZone(asStr(geo, 'timezone'))} />
+                <Field label="本地時間" value={localTimeLabel(signals)} />
+                <Field label="語言" value={languagesLabel(signals)} />
+                <Field label="請求頭語言" value={acceptLanguageApprox(signals)} />
                 <Field label="Internationalization API" value={intlLocaleLabel(signals)} />
-                <Field label="Bot Detection" value={botDetectionLabel(current)} />
+                <Field label="機器人偵測" value={botDetectionLabel(current)} />
                 <Field label="Do Not Track" value={doNotTrackLabel(signals)} />
                 <Field label="JavaScript" value="是" />
                 <Field label="Flash" value={DASH} />
                 <Field label="ActiveX" value={DASH} />
                 <Field label="Java" value={DASH} />
                 <Field label="Cookie" value={cookieEnabledLabel(signals)} />
-                <Field label="Port Scan (22/3389)" value={DASH} />
-                <Field label="Fonts" value={DASH} />
-                <Field label="Font list" value={DASH} />
+                <Field label="端口檢測（僅檢測 22、3389）" value={DASH} />
+                <Field label="字體" value={DASH} />
+                <Field label="字體列表" value={DASH} />
                 <p className="ov-note">
-                  Cookie／Do Not Track／Languages／Time Zone 等為即時實測值；Accept-Language header 以
-                  navigator.languages 近似。Port Scan／Fonts／Font list／Flash／ActiveX／Java 未採集或需登入，顯示 —。
+                  Cookie／Do Not Track／語言／時區 等為即時實測值；請求頭語言以 navigator.languages
+                  近似。端口檢測／字體／字體列表／Flash／ActiveX／Java 未採集或需登入，顯示 —。
                 </p>
               </Card>
 
