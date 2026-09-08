@@ -507,7 +507,7 @@ function eventsFromScore(report: EnvironmentReport, score: ScoreResult): RiskEve
     const severity =
       explanation.severity === 'critical'
         ? 'high'
-        : explanation.severity === 'warning'
+        : explanation.severity === 'medium'
           ? 'medium'
           : 'info';
     return {
@@ -670,7 +670,7 @@ function environmentalCoherenceIssues(
     if (browserOffset === null || ipOffset === null || browserOffset !== ipOffset) {
       push(
         'timezone_mismatch',
-        'warning',
+        'medium',
         '瀏覽器時區與 IP 所在時區不一致（疑似使用代理或更改時區）',
         { browserTimeZone: browserTz, ipTimeZone: ipTz, browserOffsetMinutes: browserOffset, ipOffsetMinutes: ipOffset },
       );
@@ -691,7 +691,7 @@ function environmentalCoherenceIssues(
   if (expected && rawLang && !rawLang.toLowerCase().startsWith(expected)) {
     push(
       'language_mismatch',
-      'warning',
+      'medium',
       '瀏覽器語言與 IP 所在國家常用語言不一致（疑似試圖隱藏實際位置）',
       { language: rawLang, expectedPrefix: expected, country: geo?.country },
     );
@@ -706,7 +706,7 @@ function environmentalCoherenceIssues(
   ) {
     push(
       'webrtc_ip_mismatch',
-      'warning',
+      'medium',
       'WebRTC 公網 IP 與伺服器連線 IP 不同（疑似 IP 隱藏或分流不一致）',
       { httpIp, webrtcIp },
     );
