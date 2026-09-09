@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   ADMIN_PAGES,
   ADMIN_PAGE_KEYS,
@@ -511,6 +511,7 @@ export default function BlockLayoutEditor() {
         .pab .pv-card{background:#15233c;border:1px solid #22344f;border-radius:9px;padding:10px 12px;font-size:13px}
         .pab .pv-empty{color:#47618a;font-size:12px}
         .pab-drawer{border:1px solid #4da3ff;background:#15233c;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+        .pab-inline-drawer{margin:0 0 12px}
         .pab-drawer-head{display:flex;justify-content:space-between;align-items:center}
         .pab-drawer-head button{background:none;border:none;color:#cfe3ff;cursor:pointer;font-size:14px}
         .pab-drawer-note{color:#8fa2ba;font-size:12px;margin:0;line-height:1.6}
@@ -591,23 +592,37 @@ export default function BlockLayoutEditor() {
           {ordered.map((d, index) => {
             const off = layout.disabled.includes(d.key);
             return (
-              <div className={`pab-block${off ? ' off' : ''}`} key={d.key}>
-                <span style={{ fontSize: 16 }}>{d.icon}</span>
-                <div className="grow">
-                  <b>{d.title}</b>
-                  <small>{d.description}</small>
+              <Fragment key={d.key}>
+                <div className={`pab-block${off ? ' off' : ''}`}>
+                  <span style={{ fontSize: 16 }}>{d.icon}</span>
+                  <div className="grow">
+                    <b>{d.title}</b>
+                    <small>{d.description}</small>
+                  </div>
+                  <span className={`pill ${off ? 'r' : 'g'}`}>{off ? '已停用' : '啟用'}</span>
+                  {moduleDictFor(d.key) && (
+                    <span className="pill api" title={moduleDictFor(d.key)?.api}>
+                      API {moduleDictFor(d.key)?.api}
+                    </span>
+                  )}
+                  <button className="ctrl" onClick={() => move(index, -1)} title="上移">⬆</button>
+                  <button className="ctrl" onClick={() => move(index, 1)} title="下移">⬇</button>
+                  <button className="ctrl on" onClick={() => setEditing(d.key)} title="設定">⚙</button>
+                  <button className="ctrl" onClick={() => toggleDisabled(d.key)} title={off ? '啟用' : '停用'}>⛔</button>
                 </div>
-                <span className={`pill ${off ? 'r' : 'g'}`}>{off ? '已停用' : '啟用'}</span>
-                {moduleDictFor(d.key) && (
-                  <span className="pill api" title={moduleDictFor(d.key)?.api}>
-                    API {moduleDictFor(d.key)?.api}
-                  </span>
+                {editing === d.key && byKey.get(d.key) && (
+                  <div className="pab-inline-drawer">
+                    <BlockSettingsDrawer
+                      block={byKey.get(d.key)!}
+                      layout={layout}
+                      onSave={(settings) =>
+                        commit({ ...layout, settings: { ...layout.settings, [d.key]: settings } })
+                      }
+                      onClose={() => setEditing(null)}
+                    />
+                  </div>
                 )}
-                <button className="ctrl" onClick={() => move(index, -1)} title="上移">⬆</button>
-                <button className="ctrl" onClick={() => move(index, 1)} title="下移">⬇</button>
-                <button className="ctrl on" onClick={() => setEditing(d.key)} title="設定">⚙</button>
-                <button className="ctrl" onClick={() => toggleDisabled(d.key)} title={off ? '啟用' : '停用'}>⛔</button>
-              </div>
+              </Fragment>
             );
           })}
         </div>
@@ -628,7 +643,7 @@ export default function BlockLayoutEditor() {
         </section>
       )}
 
-      {editing && byKey.get(editing) && (
+      {editing && !ordered.some((d) => d.key === editing) && byKey.get(editing) && (
         <BlockSettingsDrawer
           block={byKey.get(editing)!}
           layout={layout}
