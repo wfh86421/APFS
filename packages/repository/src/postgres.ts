@@ -210,6 +210,15 @@ export class PostgresReportRepository implements ReportRepository {
     return Number(rows[0]?.count ?? 0);
   }
 
+  async countPublicReportsByClientIp(ip: string, since: string): Promise<number> {
+    const { rows } = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM fingerprint_scans
+       WHERE tenant_id IS NULL AND client_ip = $1::inet AND created_at >= $2`,
+      [ip, since],
+    );
+    return Number(rows[0]?.count ?? 0);
+  }
+
   async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
     const { rows } = await this.pool.query<ScanRow>(
       `SELECT *, subject_id FROM fingerprint_scans

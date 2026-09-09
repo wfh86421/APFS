@@ -241,6 +241,10 @@ interface OvData {
   pageUrl: string;
   nav: NavSnapshot;
   scannedAt: string;
+  /** 匿名公開掃描：近 7 天同一 IP 的公開掃描筆數（server 回傳）。 */
+  ipCount7d?: number;
+  /** 設備型號（sec-ch-ua-model，server 回傳；桌面 Chrome 通常無）。 */
+  deviceModel?: string | null;
 }
 
 function readNavSnapshot(): NavSnapshot {
@@ -461,7 +465,7 @@ function localTimeLabel(signals: NormalizedSignal[]): string {
 function doNotTrackLabel(signals: NormalizedSignal[]): string {
   const ua = valueOf(signals, 'ua');
   const raw = ua?.doNotTrack;
-  if (typeof raw !== 'string' || raw.length === 0) return DASH;
+  if (typeof raw !== 'string' || raw.length === 0) return '未提供（瀏覽器未實作）';
   if (raw === '1') return '是';
   if (raw === '0') return '否';
   if (raw === 'unspecified') return '未指定';
@@ -575,6 +579,25 @@ function webglReportLabel(signals: NormalizedSignal[]): string {
   const renderer = asStr(webgl, 'renderer');
   if (!vendor && !renderer) return DASH;
   return [vendor, renderer].filter((part): part is string => typeof part === 'string').join(' / ');
+}
+
+/** WebGPU Report：adapter vendor/device/architecture（真實訊號值）；無值退回 hash 前 8 碼。 */
+function webgpuReportLabel(signals: NormalizedSignal[]): string {
+  const webgpu = valueOf(signals, 'webgpu');
+  const vendor = asStr(webgpu, 'vendor');
+  const device = asStr(webgpu, 'device');
+  const arch = asStr(webgpu, 'architecture');
+  const parts = [vendor, device, arch].filter((part): part is string => typeof part === 'string' && part.length > 0);
+  if (parts.length > 0) return parts.join(' / ');
+  const hash = signalOf(signals, 'webgpu')?.hash;
+  return typeof hash === 'string' && hash.length > 0 ? hashHead(hash) : DASH;
+}
+
+/** 設備內存：navigator.deviceMemory 僅部分環境暴露；非安全連線（http）通常不可得 → 誠實說明。 */
+function deviceMemoryLabel(memoryGb: number | null): string {
+  if (memoryGb && memoryGb > 0) return `${memoryGb} GB`;
+  if (typeof window !== 'undefined' && window.isSecureContext === false) return '僅 HTTPS 可得';
+  return '未暴露';
 }
 
 /** 端口檢測：收案時 server 附上的 unusual_open_ports issue（W4 接線）。 */
@@ -861,7 +884,7 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
     { label: 'IP 時區', value: asStr(geo, 'timezone') ?? DASH },
     { label: '經緯度', value: coordsValue },
     { label: '語言', value: languageLabel(signals) },
-    { label: '郵政編碼', value: DASH },
+    { label: '郵政編碼', value: asStr(geo, 'postalCode') ?? DASH },
     { label: 'ISP', value: ispValue },
     { label: '代理伺服器', value: serverOk ? yesNo(network?.proxy) : DASH },
     {
@@ -1129,6 +1152,8 @@ export default function HomeOverviewV2() {
       let policy: PolicyDecision | undefined;
       let warning: string | undefined;
       let analysisSource: 'local' | 'server' = 'local';
+      let ipCount7d: number | undefined;
+      let deviceModel: string | null | undefined;
 
       try {
         const server = await submitReport(report);
@@ -1143,6 +1168,8 @@ export default function HomeOverviewV2() {
         score = server.score;
         network = server.network;
         policy = server.policy;
+        ipCount7d = server.ipCount7d;
+        deviceModel = server.deviceModel;
         analysisSource = 'server';
       } catch (err) {
         warning = `伺服器分析失敗（${err instanceof Error ? err.message : String(err)}），已降級為本機預覽：IP／地理位置等伺服器欄位顯示 —（WebRTC 公網 IP 仍可顯示）`;
@@ -1159,6 +1186,8 @@ export default function HomeOverviewV2() {
         pageUrl: window.location.href,
         nav: readNavSnapshot(),
         scannedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        ipCount7d,
+        deviceModel,
       };
       dataRef.current = next;
       setData(next);
@@ -1561,9 +1590,13 @@ export default function HomeOverviewV2() {
                 <Field
                   label="IP 計數（7 天）"
                   value={
-                    (current.score.explanations ?? []).some((e) => e.ruleId === 'server_ip_velocity')
-                      ? '異常（多 IP）'
-                      : DASH
+                    current.ipCount7d !== undefined
+                      ? `${current.ipCount7d} 次（近 7 天公開掃描，含本次）`
+                      : (current.score.explanations ?? []).some(
+                            (e) => e.ruleId === 'server_ip_velocity',
+                          )
+                        ? '異常（多 IP）'
+                        : DASH
                   }
                 />
                 <Field label="ISP" value={asStr(geo, 'isp') ?? DASH} />
@@ -1603,14 +1636,14 @@ export default function HomeOverviewV2() {
                 <Field label="渲染" value={asStr(valueOf(signals, 'webgl'), 'renderer') ?? DASH} />
                 <Field label="Audio" value={hashHead(signalOf(signals, 'audio')?.hash)} />
                 <Field label="Client Rects" value={hashHead(signalOf(signals, 'clientRects')?.hash)} />
-                <Field label="WebGPU Report" value={hashHead(signalOf(signals, 'webgpu')?.hash)} />
+                <Field label="WebGPU Report" value={webgpuReportLabel(signals)} />
                 <Field label="屏幕分辨率" value={screenValue(signals, 'resolution')} />
                 <Field label="可用屏幕尺寸" value={screenValue(signals, 'availResolution')} />
                 <Field label="顏色深度" value={screenColorDepthLabel(signals)} />
                 <Field label="觸摸支持" value={touchSupportLabel(signals)} />
                 <Field
                   label="設備內存"
-                  value={current.nav.memoryGb ? `${current.nav.memoryGb} GB` : DASH}
+                  value={deviceMemoryLabel(current.nav.memoryGb)}
                 />
                 <Field
                   label="邏輯處理器核心"
@@ -1623,21 +1656,29 @@ export default function HomeOverviewV2() {
                     if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
                     return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
-                  訪客ID／Canvas／WebGL／Audio／Client Rects／WebGPU 為本次掃描即時實測 hash（前 8 碼）；設備內存／邏輯處理器核心取自已授權的本機 Navigator（真實值）。
+                  訪客ID／Canvas／WebGL／Audio／Client Rects／WebGPU 為本次掃描即時實測 hash（前 8 碼）；設備內存／邏輯處理器核心取自已授權的本機 Navigator（真實值；deviceMemory 於非安全連線 http 常不暴露，會顯示「僅 HTTPS 可得」）。
                 </p>
               </Card>
 
               {/* ── ⑥ Browser 瀏覽器卡 ─────────────────────── */}
               <Card icon="🧬" title="瀏覽器" className="ov-card-half ov-card-cols" style={ovStyle('scan-overview.browser')}>
-                <Field label="隱身模式" value={DASH} />
-                <Field label="設備型號" value={DASH} />
+                <Field label="隱身模式" value="無法由瀏覽器可靠偵測" />
+                <Field
+                  label="設備型號"
+                  value={
+                    current.deviceModel && current.deviceModel.trim()
+                      ? current.deviceModel
+                      : '未提供（瀏覽器未回報型號）'
+                  }
+                />
                 <Field label="操作系統" value={osName(signals)} />
                 <Field label="瀏覽器" value={browserParts(uaText).name} />
                 <Field label="瀏覽器版本" value={browserParts(uaText).version || DASH} />
                 <Field label="Header（請求標頭）" value={uaText ? truncate(uaText, 100) : DASH} />
                 <Field label="JavaScript" value="是" />
                 <p className="ov-note">
-                  隱身模式／設備型號 無法由現有採集模組量測，顯示 —（需額外偵測技術）；Header
+                  隱身模式無法由瀏覽器可靠偵測；設備型號取伺服器端 Client Hints
+                  （sec-ch-ua-model，行動版 Chrome/Android 才回報，桌面瀏覽器顯示「未提供」）；Header
                   顯示掃描到的 User-Agent 字串。
                 </p>
               </Card>

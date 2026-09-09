@@ -1607,6 +1607,20 @@ app.post('/v1/reports', async (request, reply) => {
     'report ingested',
   );
 
+  // 首頁真實性補充（匿名公開掃描限定）：近 7 天同一 client IP 的公開掃描筆數（不含租戶資料）。
+  let ipCount7d: number | undefined;
+  if (!auth) {
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      ipCount7d = await repository.countPublicReportsByClientIp(ip, since);
+    } catch (err) {
+      app.log.warn({ err }, 'public ip 7d count failed (non-fatal)');
+    }
+  }
+  // 設備型號：Client Hints `sec-ch-ua-model`（僅行動版 Chrome/Android 會回報；桌面通常無）。
+  const rawModel = String(request.headers['sec-ch-ua-model'] ?? '').replace(/"/g, '').trim();
+  const deviceModel = rawModel.length > 0 ? rawModel : null;
+
   return reply.code(201).send({
     reportId: report.reportId,
     schemaVersion: report.schemaVersion ?? SCHEMA_VERSION,
@@ -1615,6 +1629,8 @@ app.post('/v1/reports', async (request, reply) => {
     score,
     policy,
     network,
+    deviceModel,
+    ipCount7d,
   });
 });
 

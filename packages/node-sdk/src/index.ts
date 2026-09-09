@@ -35,6 +35,8 @@ export async function collectServerSignals(
         acceptLanguage: ctx.headers['accept-language'],
         secChUa: ctx.headers['sec-ch-ua'],
         secChUaPlatform: ctx.headers['sec-ch-ua-platform'],
+        secChUaModel: ctx.headers['sec-ch-ua-model'],
+        secChUaArch: ctx.headers['sec-ch-ua-arch'],
       },
       confidence: 1,
       collectedAt: now,

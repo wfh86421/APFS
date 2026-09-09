@@ -48,6 +48,8 @@ export interface ReportRepository {
   /** 讀取單筆報告（限 tenantId 所屬；匿名 NULL 資料不可見）。 */
   getReport(tenantId: string, reportId: string): Promise<StoredReport | null>;
   countReports(tenantId?: string): Promise<number>;
+  /** 公開（匿名 tenant NULL）掃描中，同一 client IP 在 since 後的筆數（首頁「IP 計數 7 天」用；僅算公共資料，不跨租戶）。 */
+  countPublicReportsByClientIp(ip: string, since: string): Promise<number>;
   listReportsByTenant(tenantId: string, limit?: number): Promise<StoredReport[]>;
   listReportsByVisitor(tenantId: string, visitorId: string, limit?: number): Promise<StoredReport[]>;
   upsertVisitor(visitorId: string, profile: VisitorProfile): Promise<void>;

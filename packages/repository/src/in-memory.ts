@@ -66,6 +66,16 @@ export class InMemoryReportRepository implements ReportRepository {
       : this.reports.size;
   }
 
+  async countPublicReportsByClientIp(ip: string, since: string): Promise<number> {
+    return [...this.reports.values()].filter(
+      (report) =>
+        !report.tenantId &&
+        report.clientIp === ip &&
+        typeof report.createdAt === 'string' &&
+        report.createdAt >= since,
+    ).length;
+  }
+
   async listReportsByTenant(tenantId: string, limit = 20): Promise<StoredReport[]> {
     return [...this.reports.values()]
       .filter((report) => report.tenantId === tenantId)

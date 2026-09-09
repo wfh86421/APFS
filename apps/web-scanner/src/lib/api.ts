@@ -36,6 +36,10 @@ export interface ReportSubmissionResult {
   score: ScoreResult;
   policy: PolicyDecision;
   network: ServerNetworkAnalysis;
+  /** 匿名公開掃描限定：近 7 天同一 IP 的公開掃描筆數（含本次）。 */
+  ipCount7d?: number;
+  /** 設備型號（sec-ch-ua-model；行動版 Chrome/Android 才有）。 */
+  deviceModel?: string | null;
 }
 
 /** API Base URL：可用 NEXT_PUBLIC_API_URL 覆寫（預設本機開發 API）。 */
