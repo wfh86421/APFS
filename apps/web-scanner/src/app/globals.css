@@ -2513,3 +2513,9 @@ html:has(.ov-experience) body {
 .ov-console-idle{color:#64748b}
 @keyframes ov-blink{50%{opacity:0}}
 @media (max-width:760px){.ov-console-log{flex-basis:200px}.ov-scan-progress .ov-console{gap:8px;padding:10px 10px}}
+
+/* 扣分項可展開/收合 */
+.ov-issue-toggle { cursor: pointer; user-select: none; }
+.ov-issue-toggle:hover { opacity: 0.85; }
+.ov-issue-chevron { margin-left: 0.5rem; opacity: 0.55; font-size: 0.85em; }
+

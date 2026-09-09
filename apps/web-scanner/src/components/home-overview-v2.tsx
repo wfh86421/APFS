@@ -1111,7 +1111,10 @@ export default function HomeOverviewV2() {
   /** 版面設定：初始＝預設全顯示（SSR/首幀一致）；mount 後讀取 localStorage 再套用。 */
   const [ovLayout, setOvLayout] = useState<OvLayout>(() => defaultOvLayout());
   const [copiedTip, setCopiedTip] = useState(false);
+  const [expandedIssues, setExpandedIssues] = useState<Record<string, boolean>>({});
   const copyTimerRef = useRef<number | undefined>(undefined);
+  const toggleIssue = (key: string): void =>
+    setExpandedIssues((prev) => ({ ...prev, [key]: !prev[key] }));
   const dataRef = useRef<OvData | null>(null);
 
   // 掛載後才讀取 localStorage（避免 SSR/水合不一致）；html 主題已在模組載入時同步。
@@ -1556,42 +1559,80 @@ export default function HomeOverviewV2() {
                   <>
                     {explanations.map((e) => {
                       const tone = sevTone(e.severity);
+                      const key = `e:${e.ruleId}`;
+                      const open = Boolean(expandedIssues[key]);
                       return (
                         <div className={`ov-issue ov-issue-${tone}`} key={e.ruleId}>
-                          <div className="ov-issue-main">
+                          <div
+                            className="ov-issue-main ov-issue-toggle"
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={open}
+                            onClick={() => toggleIssue(key)}
+                            onKeyDown={(ev) => {
+                              if (ev.key === 'Enter' || ev.key === ' ') {
+                                ev.preventDefault();
+                                toggleIssue(key);
+                              }
+                            }}
+                          >
                             <span className="ov-issue-name">{issueZhName(e.ruleId)}</span>
                             <span className="ov-issue-pct">-{e.points}%</span>
+                            <span className="ov-issue-chevron">{open ? '▾' : '▸'}</span>
                           </div>
-                          <div className="ov-issue-desc">{e.reason}</div>
-                          <div className="ov-issue-meta">
-                            規則 {e.ruleId} ・ {zhOr(TRACK_ZH, e.track, e.track)} ・{' '}
-                            <Badge tone={tone}>{e.severity}</Badge>
-                          </div>
+                          {open && (
+                            <>
+                              <div className="ov-issue-desc">{e.reason}</div>
+                              <div className="ov-issue-meta">
+                                規則 {e.ruleId} ・ {zhOr(TRACK_ZH, e.track, e.track)} ・{' '}
+                                <Badge tone={tone}>{e.severity}</Badge>
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
                     {issues.map((issue) => {
                       const tone = sevTone(issue.severity);
+                      const key = `i:${issue.id}`;
+                      const open = Boolean(expandedIssues[key]);
                       return (
                         <div className={`ov-issue ov-issue-${tone}`} key={issue.id}>
-                          <div className="ov-issue-main">
+                          <div
+                            className="ov-issue-main ov-issue-toggle"
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={open}
+                            onClick={() => toggleIssue(key)}
+                            onKeyDown={(ev) => {
+                              if (ev.key === 'Enter' || ev.key === ' ') {
+                                ev.preventDefault();
+                                toggleIssue(key);
+                              }
+                            }}
+                          >
                             <span className="ov-issue-name">{issueZhName(issue.type)}</span>
                             <Badge tone={tone}>{issue.severity}</Badge>
+                            <span className="ov-issue-chevron">{open ? '▾' : '▸'}</span>
                           </div>
-                          <div className="ov-issue-desc">{issue.description}</div>
-                          <div className="ov-issue-meta">
-                            {(() => {
-                              const evidence =
-                                issue.evidence && Object.keys(issue.evidence).length > 0
-                                  ? truncate(JSON.stringify(issue.evidence), 160)
-                                  : null;
-                              return evidence ? (
-                                <>
-                                  證據：<code className="ov-issue-evidence">{evidence}</code>
-                                </>
-                              ) : null;
-                            })()}
-                          </div>
+                          {open && (
+                            <>
+                              <div className="ov-issue-desc">{issue.description}</div>
+                              <div className="ov-issue-meta">
+                                {(() => {
+                                  const evidence =
+                                    issue.evidence && Object.keys(issue.evidence).length > 0
+                                      ? truncate(JSON.stringify(issue.evidence), 160)
+                                      : null;
+                                  return evidence ? (
+                                    <>
+                                      證據：<code className="ov-issue-evidence">{evidence}</code>
+                                    </>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
