@@ -23,7 +23,7 @@ const ZONES: Array<{
 }> = [
   { id: 'watch', icon: '📡', name: '態勢感知 Watch', desc: '先看清楚發生什麼', hint: '報告・事件・設備・概覽' },
   { id: 'decide', icon: '🎯', name: '決策與成效 Decide', desc: '用資料下決策、驗證決策是否有效', hint: 'ROI・基準・決策示範' },
-  { id: 'govern', icon: '🧱', name: '治理與延伸 Govern', desc: '設定戰區版面、未來能力', hint: '版面・市場・設定' },
+  { id: 'govern', icon: '🧱', name: '治理與延伸 Govern', desc: '設定戰區版面、未來能力', hint: '版面・採集・市場・設定' },
 ];
 
 interface PageEntry {
@@ -44,7 +44,8 @@ const PAGES: PageEntry[] = [
   { id: 'roi', href: '/admin/roi', label: '成效 ROI', icon: '📈', ready: true, desc: '決策成效閉環：攔截 vs 誤殺', zone: 'decide' },
   { id: 'baselines', href: '/admin/baselines', label: '基準分布', icon: '🧮', ready: true, desc: '規則 × 國家／ASN／時區命中基準（資料黃金）', zone: 'decide' },
   { id: 'demo', href: '/admin/reports/demo', label: '報告決策示範', icon: '📋', ready: true, desc: '以示範報告檢視決策流程', zone: 'decide' },
-  { id: 'layout', href: '/admin/layout', label: '版面設定', icon: '🧱', ready: true, desc: '自訂區塊：後台各頁啟停／排序／參數', zone: 'govern' },
+  { id: 'layout', href: '/admin/layout', label: '版面設定', icon: '🧱', ready: true, desc: '自訂區塊：後台各頁＋公開首頁啟停／排序／參數', zone: 'govern' },
+  { id: 'collection', href: '/admin/collection', label: '偵測採集設定', icon: '🎛️', ready: true, desc: 'SDK 採集／分析模組（6＋1）啟停與順序（進階）', zone: 'govern' },
   { id: 'modules', href: '/admin/modules', label: '模組市場', icon: '🧩', ready: false, desc: '第三方模組安裝（規劃中）', zone: 'govern' },
   { id: 'settings', href: '/admin/settings', label: '設定', icon: '⚙️', ready: false, desc: '租戶／計費／SSO 等（規劃中）', zone: 'govern' },
 ];
@@ -191,7 +192,7 @@ export default function AdminWarRoom() {
           <span className="wr-chip">作戰單元 {total}</span>
           <span className="wr-chip">已上線 {readyCount}</span>
           <span className="wr-chip">規劃中 {total - readyCount}</span>
-          <span className="wr-chip">舊版 6+1／首頁工作台 → <Link href="/admin/legacy-workbench">進階工作台</Link></span>
+          <span className="wr-chip">採集設定 → 🎛️ 偵測採集設定・公開首頁區塊 → 🧱 版面設定・首頁</span>
         </div>
       )}
 
@@ -257,9 +258,9 @@ export default function AdminWarRoom() {
       </div>
 
       <div className="wr-legacy">
-        備註：「後台模組（6＋1）／首頁區塊」舊版工作台已由 <Link href="/admin/layout">版面設定（自訂區塊）</Link>
-        取代；若仍需調整掃描採集模組本身（啟用／停用），請到{' '}
-        <Link href="/admin/legacy-workbench">進階工作台</Link>。
+        已化整為零：舊版「後台模組（6＋1）／首頁區塊」工作台已拆解分配——掃描採集模組設定 →
+        <Link href="/admin/collection">🎛️ 偵測採集設定</Link>；公開首頁區塊 →{' '}
+        <Link href="/admin/layout">🧱 版面設定・首頁</Link>；戰情室即管理者中樞，不再保留整包舊版頁面。
       </div>
     </div>
   );

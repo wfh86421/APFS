@@ -4,13 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TITLES: Record<string, string> = {
-  '/admin': '管理者工作台',
+  '/admin': '戰情室 Command Center',
+  '/admin/collection': '偵測採集設定',
   '/admin/homepage': '首頁設定',
   '/admin/reports': '報告列表',
   '/admin/events': '事件查詢',
   '/admin/devices': '設備指紋',
+  '/admin/roi': '成效 ROI',
+  '/admin/baselines': '基準分布',
   '/admin/reports/demo': '報告決策示範',
   '/admin/overview': '管理概覽',
+  '/admin/layout': '版面設定',
   '/admin/modules': '模組市場',
   '/admin/settings': '設定',
 };

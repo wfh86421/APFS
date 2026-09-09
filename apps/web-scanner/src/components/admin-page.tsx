@@ -49,7 +49,9 @@ function ModuleDataDetails({ module }: { module: ModuleItem }) {
   );
 }
 
-export default function AdminPage() {
+export default function AdminPage({
+  hideHomeTab = false,
+}: { hideHomeTab?: boolean } = {}) {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   const [tab, setTab] = useState<'modules' | 'home'>('modules');
   const [apiKey, setApiKey] = useState(() => {
@@ -145,14 +147,16 @@ export default function AdminPage() {
           className={tab === 'modules' ? 'admin-tab active' : 'admin-tab'}
           onClick={() => setTab('modules')}
         >
-          後台模組（6＋1）
+          偵測採集模組（6＋1）
         </button>
-        <button
-          className={tab === 'home' ? 'admin-tab active' : 'admin-tab'}
-          onClick={() => setTab('home')}
-        >
-          首頁區塊
-        </button>
+        {!hideHomeTab && (
+          <button
+            className={tab === 'home' ? 'admin-tab active' : 'admin-tab'}
+            onClick={() => setTab('home')}
+          >
+            首頁區塊
+          </button>
+        )}
       </div>
 
       {tab === 'modules' && (
@@ -320,7 +324,7 @@ export default function AdminPage() {
         </>
       )}
 
-      {tab === 'home' && <HomepageConfig embedded />}
+      {!hideHomeTab && tab === 'home' && <HomepageConfig embedded />}
     </div>
   );
 }
