@@ -537,11 +537,15 @@ export default function BlockLayoutEditor() {
           Phase A：每頁由區塊組成，可啟停 / 排序（⬆⬇）/ 編輯參數（⚙）。已接後端 dashboard_blocks
           （tenant 隔離＋security_admin＋審計）；未登入時自動以本機 localStorage 示範。
         </p>
+        <p className="pab-sub">
+          註：舊「工作台（6＋1）」報告區塊設定已統一至{' '}
+          <a href="/admin/report-view">🎛️ 報告檢視設定</a>，不再重複列於版面設定。
+        </p>
         {banner && <div className="pab-banner">{banner}</div>}
       </div>
 
       <div className="pab-pages">
-        {ADMIN_PAGE_KEYS.map((p) => (
+        {ADMIN_PAGE_KEYS.filter((p) => p !== 'workbench').map((p) => (
           <button
             key={p}
             className={p === page ? 'on' : ''}
