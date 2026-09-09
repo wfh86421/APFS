@@ -249,9 +249,10 @@ export const ADMIN_PAGES: Record<AdminPageKey, AdminPageDef> = {
   workbench: {
     key: 'workbench',
     route: '/admin',
-    title: '工作台（6+1）',
+    title: '報告檢視模組設定',
     icon: '🛠️',
-    description: '管理者工作台 6+1 分類卡：決策/異常/網路/硬體/瀏覽器/原始＋治理，含即時摘要。',
+    description:
+      '報告詳情頁區塊模組（決策/異常/網路/硬體/瀏覽器/原始＋治理）：此處的啟停／排序會驅動報告決策示範與真實報告頁。',
     accessLevel: 'normal',
   },
   homepage: {

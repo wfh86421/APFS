@@ -7,6 +7,7 @@ import { apiBaseUrl } from '../../lib/api';
 import { getAdminSiteConfig } from '../../lib/config-api';
 import type { WorkspaceConfig } from '../../modules/catalog';
 import { loadWorkspaceConfig, isWorkspaceConfigLike } from '../../modules/store';
+import { reportViewState } from '../../modules/report-module-view';
 
 interface StoredReportLike extends EnvironmentReport {
   clientIp?: string;
@@ -139,9 +140,7 @@ export default function ReportDetailPage({ reportId }: { reportId: string }) {
   };
 
   if (!config) return <div className="admin-page">載入中…</div>;
-  const active = new Set(
-    config.modules.filter((module) => module.enabled && module.visible).map((module) => module.id),
-  );
+  const active = new Set(reportViewState().shown);
   const show = (id: string) => active.has(id);
 
   return (

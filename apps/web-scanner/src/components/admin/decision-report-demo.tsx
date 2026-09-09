@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { loadWorkspaceConfig } from '../../modules/store';
+import { reportViewState } from '../../modules/report-module-view';
 import { apiBaseUrl } from '../../lib/api';
 
 const DEMO = {
@@ -78,10 +78,7 @@ const NETWORK = [
 ];
 
 export default function DecisionReportDemo() {
-  const config = loadWorkspaceConfig();
-  const moduleIds = new Set(
-    config.modules.filter((module) => module.enabled && module.visible).map((module) => module.id),
-  );
+  const { shown: moduleIds } = reportViewState();
   const show = (id: string) => moduleIds.has(id);
   const [rawOpen, setRawOpen] = useState(false);
   const [apiKey, setApiKey] = useState(() => {
@@ -130,7 +127,7 @@ export default function DecisionReportDemo() {
     <div className="decision-page">
       <h1>報告詳情決策頁（示範資料）</h1>
       <p className="muted">
-        依 `/admin` 的 6＋1 模組設定渲染；此頁使用示範報告，尚未串接租戶報告 API。
+        區塊啟停／排序由「版面設定 → 報告檢視模組設定」控制（舊報告檢視設定相容）；此頁使用示範報告，尚未串接租戶報告 API。
       </p>
 
       {show('decision.verdict') && (

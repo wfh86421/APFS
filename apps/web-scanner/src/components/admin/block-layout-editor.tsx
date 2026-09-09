@@ -538,14 +538,14 @@ export default function BlockLayoutEditor() {
           （tenant 隔離＋security_admin＋審計）；未登入時自動以本機 localStorage 示範。
         </p>
         <p className="pab-sub">
-          註：舊「工作台（6＋1）」報告區塊設定已統一至{' '}
-          <a href="/admin/report-view">🎛️ 報告檢視設定</a>，不再重複列於版面設定。
+          「報告檢視模組設定」頁的區塊啟停／排序會驅動 📋 報告決策示範與真實報告頁；舊
+          /admin/report-view 為相容入口（驗證後移除）。
         </p>
         {banner && <div className="pab-banner">{banner}</div>}
       </div>
 
       <div className="pab-pages">
-        {ADMIN_PAGE_KEYS.filter((p) => p !== 'workbench').map((p) => (
+        {ADMIN_PAGE_KEYS.map((p) => (
           <button
             key={p}
             className={p === page ? 'on' : ''}
