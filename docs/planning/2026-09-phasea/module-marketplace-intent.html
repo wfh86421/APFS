@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShieldScan 後台模組市場 — 互動意向取捨頁</title>
+<style>
+  :root{
+    --bg:#0f1520; --panel:#17202f; --panel2:#1e2a3d; --line:#2c3a52;
+    --txt:#e8eef7; --muted:#93a5bd; --accent:#4da3ff; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --chip:#243b57;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;background:linear-gradient(160deg,#0b111c,#101a2b 60%,#0d1524);color:var(--txt);min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 18px 90px}
+  header h1{font-size:26px;margin:0 0 6px}
+  header p{margin:2px 0;color:var(--muted)}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+  .badge{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:12px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;margin-top:18px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+  .panel h2{font-size:16px;margin:0 0 4px}
+  .panel .sub{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+  .opt{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:10px 12px;margin:8px 0;cursor:pointer;transition:border-color .15s,background .15s;display:flex;gap:10px;align-items:flex-start}
+  .opt:hover{border-color:var(--accent)}
+  .opt.sel{border-color:var(--accent);background:#1b2c45}
+  .opt input{margin-top:3px;accent-color:var(--accent)}
+  .opt b{display:block;font-size:14px}
+  .opt .d{color:var(--muted);font-size:12.5px;line-height:1.5}
+  .opt .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+  .t-e{background:#103c2e;color:var(--good);border:1px solid #1d6a50}
+  .t-m{background:#3a3117;color:var(--warn);border:1px solid #6a5a1d}
+  .t-h{background:#40151d;color:var(--bad);border:1px solid #7a1f2e}
+  .preset{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .preset button{background:var(--chip);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:13px}
+  .preset button:hover{border-color:var(--accent)}
+  .summary .row{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:7px 0;font-size:13.5px}
+  .summary .row span:last-child{font-weight:600}
+  .summary .big{font-size:15px;padding:9px 0}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.g{background:#103c2e;color:var(--good)} .pill.y{background:#3a3117;color:var(--warn)} .pill.r{background:#40151d;color:var(--bad)} .pill.b{background:#12314f;color:var(--accent)}
+  .road{background:var(--panel2);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:13px}
+  .road .step{color:var(--accent);font-weight:700}
+  .note{color:var(--muted);font-size:12px;line-height:1.7;margin-top:10px}
+  button.primary{background:var(--accent);border:none;color:#06121f;font-weight:700;border-radius:10px;padding:10px 16px;cursor:pointer;font-size:14px;margin-top:12px;width:100%}
+  button.primary:hover{filter:brightness(1.1)}
+  #out{display:none;margin-top:10px;background:#0c1420;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;font-size:12.5px;color:var(--muted);max-height:240px;overflow:auto}
+  footer{color:var(--muted);font-size:12px;margin-top:20px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🛠 ShieldScan 後台「模組市場」— 互動意向取捨頁</h1>
+    <p>依架構建議拆成三階段＋三個關鍵決策；勾選您的意向，右側即時顯示工作量・風險・建議順序。最後按「產生結論」複製結果給我即可。</p>
+    <div class="badges"><span class="badge">單檔離線可開</span><span class="badge">資料只留在本機</span><span class="badge">v1 草案</span></div>
+  </header>
+
+  <div class="preset">
+    <span style="align-self:center;color:var(--muted);font-size:13px">情境預設：</span>
+    <button onclick="preset('穩健')">🟢 穩健型（只做 A）</button>
+    <button onclick="preset('進取')">🟡 進取型（A＋B＋數據合規）</button>
+    <button onclick="preset('夢想')">🔴 夢想型（A＋B＋C）</button>
+    <button onclick="preset('清空')">✖ 全部清空</button>
+  </div>
+
+  <div class="grid">
+    <!-- 左：決策 -->
+    <div>
+      <!-- 範圍 -->
+      <div class="panel">
+        <h2>① 範圍：做哪些階段？（可複選）</h2>
+        <p class="sub">階段可疊加；每一階段都「包含」前一階段的核心體驗。</p>
+        <label class="opt" data-p="A"><input type="checkbox" data-var="A"><span><b>Phase A — 自訂區塊＋版型層（建議先行）<span class="tag t-e">1–2 人週</span><span class="tag t-e">低風險</span></b><span class="d">後台變成「自訂區域＋區塊」：現有 6+1 模組為預設區塊，每塊有停用＋設定圖示；可改順序／顯隱／文字與參數。設定只存「資料」，不存程式碼。</span></span></label>
+        <label class="opt" data-p="B"><input type="checkbox" data-var="B"><span><b>Phase B — 模組「安裝／卸載」catalog<span class="tag t-m">+1–2 人週</span><span class="tag t-m">中風險</span></b><span class="d">「模組市場」第一版＝營運者策展的目錄（版本＋租戶啟用狀態）。安裝後才出現在自訂區。發行權在營運端，第三方開放留到 C。</span></span></label>
+        <label class="opt" data-p="C"><input type="checkbox" data-var="C"><span><b>Phase C — 開放第三方模組市場（遠期）<span class="tag t-h">數個月</span><span class="tag t-h">高風險</span></b><span class="d">第三方上架＋Plugin 沙箱＋簽章審核＋計費分潤。需先完成 plugin-runtime 沙箱與管理安全地基（P1/P2）。</span></span></label>
+      </div>
+
+      <!-- 關鍵決策 -->
+      <div class="panel">
+        <h2>② 關鍵決策（單選，每題擇一）</h2>
+        <p class="sub">這些是「取捨」的核心——選不同項，工作量與風險差很多。</p>
+
+        <h3 style="font-size:13.5px;margin:14px 0 2px;color:var(--muted)">D1・區塊「設定」能改到什麼程度？</h3>
+        <label class="opt" data-var="D1" data-val="safe"><input type="radio" name="D1"><span><b>只改文字／參數（安全，建議）<span class="tag t-e">低風險</span></b><span class="d">內容、標題、顯隱、順序、顏色等「資料級」設定。不讓任何人直接寫程式碼 → 不會重開 XSS／RCE 大門。</span></span></label>
+        <label class="opt" data-var="D1" data-val="code"><input type="radio" name="D1"><span><b>允許管理者改「代碼片段」<span class="tag t-h">高風險</span></b><span class="d">如你原文「管理者可自由修正代碼內容及文字」。僅限 security_admin＋完整稽核＋模板白名單（不 eval 任意字串）才可考慮，仍需 P1/P2 管理登入先完成。</span></span></label>
+        <label class="opt" data-var="D1" data-val="none"><input type="radio" name="D1"><span><b>先都不開放設定<span class="tag t-e">最小</span></b><span class="d">只做安裝／停用與順序，內容維持固定。</span></span></label>
+
+        <h3 style="font-size:13.5px;margin:14px 0 2px;color:var(--muted)">D2・模組從哪來？</h3>
+        <label class="opt" data-var="D2" data-val="builtin"><input type="radio" name="D2"><span><b>內建 6+1 為主<span class="tag t-e">低風險</span></b><span class="d">先只把現有模組變成「可安裝區塊」，不擴目錄。</span></span></label>
+        <label class="opt" data-var="D2" data-val="curated"><input type="radio" name="D2"><span><b>營運者策展目錄＋版本<span class="tag t-m">中風險（建議 B 搭配）</b></span><span class="d">你上架、租戶安裝／卸載；這才是「市場感」的正確最小版。</span></span></label>
+        <label class="opt" data-var="D2" data-val="open"><input type="radio" name="D2"><span><b>第三方開放市場<span class="tag t-h">高風險</span></b><span class="d">供需＋審核＋沙箱＋分潤，等同做平台，需 C 階段。</span></span></label>
+
+        <h3 style="font-size:13.5px;margin:14px 0 2px;color:var(--muted)">D3・「數字黃金」（數據資產）怎麼定位？</h3>
+        <label class="opt" data-var="D3" data-val="comply"><input type="radio" name="D3"><span><b>先合規累積（建議）<span class="tag t-e">低風險</span></b><span class="d">同意治理＋去識別化＋保留期限落地後，再談跨租戶基準／風險情報；先把「訪客設備指紋＋風險事件」累積成乾淨資料集。</span></span></label>
+        <label class="opt" data-var="D3" data-val="monetize"><input type="radio" name="D3"><span><b>直接往變現設計<span class="tag t-h">高風險</span></b><span class="d">現階段缺 consent／owner 邊界（舊資料 tenant_id=NULL 歸屬未決），先變現會踩個資與契約風險。</span></span></label>
+
+        <h3 style="font-size:13.5px;margin:14px 0 2px;color:var(--muted)">D4・「訪客設備指紋數據」模組要不要納入這輪？</h3>
+        <label class="opt" data-var="D4" data-val="yes"><input type="radio" name="D4"><span><b>納入：設備指紋＋跨 session 聚類模組<span class="tag t-m">中風險</span></b><span class="d">devices 寫入已通；補 network_signals 讀取 API＋聚類 UI，讓「數字黃金」有真數據可餵。建議放 A 之後、與 B 平行。</span></span></label>
+        <label class="opt" data-var="D4" data-val="later"><input type="radio" name="D4"><span><b>暫緩，先把既有模組餵飽<span class="tag t-e">低風險</span></b><span class="d">等 6+1 真數據與報告流程穩定再擴。</span></span></label>
+      </div>
+
+      <!-- 安全地基 -->
+      <div class="panel">
+        <h2>③ 前置安全項（建議與 A 同時做，不列為選項）</h2>
+        <p class="sub">審計報告 P1/P2：管理登入（PIN／httpOnly session）、RBAC 完整化、敏感操作稽核。做「設定／安裝」前建議先墊底，尤其若 D1 選了「改代碼」。</p>
+        <div class="note">若您希望這頁把「安全項」也變成可勾選並計入工作量，跟我說，我再加一題。</div>
+      </div>
+    </div>
+
+    <!-- 右：即時總結 -->
+    <div class="summary">
+      <div class="panel">
+        <h2>即時取捨總結</h2>
+        <div class="row"><span>階段範圍</span><span id="s-scope">（未選）</span></div>
+        <div class="row"><span>D1 區塊設定</span><span id="s-d1">（未選）</span></div>
+        <div class="row"><span>D2 模組來源</span><span id="s-d2">（未選）</span></div>
+        <div class="row"><span>D3 數據定位</span><span id="s-d3">（未選）</span></div>
+        <div class="row"><span>D4 指紋模組</span><span id="s-d4">（未選）</span></div>
+        <div class="row big"><span>預估總量</span><span id="s-effort">—</span></div>
+        <div class="row big"><span>整體風險</span><span id="s-risk">—</span></div>
+        <div class="road" id="s-road"><span style="color:var(--muted)">選好左側選項後，這裡會顯示建議里程碑順序。</span></div>
+        <button class="primary" onclick="gen()">📋 產生取捨結論（可複製）</button>
+        <div id="out"></div>
+      </div>
+      <div class="note">＊工作量為粗估（含設計＋後端＋前端＋測試），不含既有 P1/P2 安全墊底。＊本頁不連任何伺服器，選項不會被送出。</div>
+    </div>
+  </div>
+  <footer>ShieldScan 意向頁 · 只是一個可互動的取捨工具，不是承諾書。</footer>
+</div>
+
+<script>
+const PH = {
+  A:{name:'Phase A 自訂區塊＋版型', wk:'1–2', risk:1},
+  B:{name:'Phase B 模組安裝 catalog', wk:'1–2', risk:2},
+  C:{name:'Phase C 第三方市場', wk:'8–16', risk:3}
+};
+const LAB = {
+  D1:{safe:'文字／參數（安全）', code:'允許改代碼（高風險）', none:'暫不開放'},
+  D2:{builtin:'內建 6+1', curated:'營運者策展目錄', open:'第三方開放市場'},
+  D3:{comply:'合規累積', monetize:'直接變現'},
+  D4:{yes:'納入指紋模組', later:'暫緩'}
+};
+const RISK = {1:'低',2:'中',3:'高'};
+const state = {A:true,B:false,C:false,D1:'safe',D2:'curated',D3:'comply',D4:'later'};
+
+function $id(id){return document.getElementById(id)}
+function esc(s){return s}
+
+function effortRange(){
+  // 依階段與 D 選項粗估人週區間
+  let lo=0, hi=0;
+  if(state.A){lo+=1;hi+=2}
+  if(state.B){lo+=1;hi+=2}
+  if(state.C){lo+=8;hi+=16}
+  if(state.D1==='code'){hi+=2; lo+=1}
+  if(state.D2==='open'&&!state.C){hi+=4}
+  if(state.D4==='yes'){hi+=1; lo+=1}
+  return (state.A||state.B||state.C)?`約 ${lo}–${hi} 人週`:'—';
+}
+function riskLevel(){
+  let lv=1;
+  if(state.C) lv=3;
+  if(state.D1==='code') lv=Math.max(lv,3);
+  if(state.D2==='open') lv=Math.max(lv,3);
+  if(state.B||state.D4==='yes'||state.D3==='monetize') lv=Math.max(lv,2);
+  return lv;
+}
+function render(){
+  $id('s-scope').textContent = [state.A?'A':'',state.B?'B':'',state.C?'C':''].filter(Boolean).join('＋')||'（未選）';
+  $id('s-d1').textContent = LAB.D1[state.D1];
+  $id('s-d2').textContent = LAB.D2[state.D2];
+  $id('s-d3').textContent = LAB.D3[state.D3];
+  $id('s-d4').textContent = LAB.D4[state.D4];
+  $id('s-effort').textContent = effortRange();
+  const lv=riskLevel();
+  $id('s-risk').innerHTML = `<span class="pill ${lv===1?'g':lv===2?'y':'r'}">${RISK[lv]}</span>`;
+  // 里程碑順序
+  const steps=[];
+  if(state.A) steps.push('1. Phase A：自訂區塊＋版型（內容級設定、停用圖示）');
+  if(state.D4==='yes') steps.push((state.A?'2':'1')+'. 指紋模組資料線：network_signals 讀取 API＋累積 UI');
+  if(state.B) steps.push((state.A?(state.D4==='yes'?'3':'2'):(state.D4==='yes'?'2':'1'))+'. Phase B：模組安裝 catalog（版本＋租戶啟用）');
+  if(state.C) steps.push('後續：Phase C 第三方市場（需先完成 plugin 沙箱＋安全墊底）');
+  if(state.D3==='monetize') steps.push('⚠ 注意：D3 選了直接變現——建議先完成 consent／owner 邊界再進行');
+  const base='前置（與 A 平行）：管理登入（PIN/httpOnly session）＋RBAC 完整化＋敏感操作稽核';
+  $id('s-road').innerHTML = steps.length?`<span class="step">建議順序</span><br>${base}<br>${steps.map(s=>'• '+s).join('<br>')}` : base;
+}
+function refresh(){
+  document.querySelectorAll('.opt').forEach(o=>{
+    const v=o.dataset.var;
+    const inp=o.querySelector('input');
+    if(v==='A'||v==='B'||v==='C'){
+      o.classList.toggle('sel', state[v]);
+    } else if(state[v]===o.dataset.val){
+      o.classList.add('sel');
+    } else o.classList.remove('sel');
+  });
+  render();
+}
+document.addEventListener('change',e=>{
+  const o=e.target.closest('.opt'); if(!o)return;
+  const v=o.dataset.var;
+  if(v==='A'||v==='B'||v==='C'){ state[v]=e.target.checked; }
+  else { state[v]=o.dataset.val; }
+  refresh();
+});
+function preset(p){
+  const defs={穩健:{A:true,B:false,C:false,D1:'safe',D2:'builtin',D3:'comply',D4:'later'},
+             進取:{A:true,B:true,C:false,D1:'safe',D2:'curated',D3:'comply',D4:'yes'},
+             夢想:{A:true,B:true,C:true,D1:'code',D2:'open',D3:'monetize',D4:'yes'},
+             清空:{A:false,B:false,C:false,D1:'none',D2:'builtin',D3:'comply',D4:'later'}};
+  Object.assign(state, defs[p]);
+  document.querySelectorAll('input').forEach(i=>{
+    const o=i.closest('.opt'); if(!o)return;
+    const v=o.dataset.var;
+    if(v==='A'||v==='B'||v==='C') i.checked=!!state[v];
+    else i.checked=(state[v]===o.dataset.val);
+  });
+  refresh();
+}
+function gen(){
+  const lv=riskLevel();
+  const lines=[];
+  lines.push('【ShieldScan 後台模組市場 — 意向結論】');
+  lines.push(`階段：${[state.A?'A(自訂區塊)':'',state.B?'B(模組 catalog)':'',state.C?'C(第三方市場)':''].filter(Boolean).join('＋')||'暫緩'}`);
+  lines.push(`D1 區塊設定：${LAB.D1[state.D1]}`);
+  lines.push(`D2 模組來源：${LAB.D2[state.D2]}`);
+  lines.push(`D3 數據定位：${LAB.D3[state.D3]}`);
+  lines.push(`D4 指紋模組：${LAB.D4[state.D4]}`);
+  lines.push(`預估：${effortRange()} ・ 風險：${RISK[lv]}`);
+  lines.push('建議順序：');
+  const st=[];
+  st.push('0. 安全墊底（管理登入＋RBAC＋稽核，與 1 平行）');
+  if(state.A) st.push('1. Phase A 自訂區塊＋版型（內容級設定）');
+  if(state.D4==='yes') st.push((state.A?'2. 指紋模組資料線（network_signals 讀取＋累積 UI）':'1. 指紋模組資料線'));
+  if(state.B) st.push('後續 Phase B 安裝 catalog');
+  if(state.C) st.push('遠期 Phase C 第三方市場');
+  lines.push(...st.map(s=>'  '+s));
+  const out=$id('out');
+  out.textContent=lines.join('\n'); out.style.display='block';
+  const ta=document.createElement('textarea'); ta.value=lines.join('\n'); document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+}
+refresh();
+</script>
+</body>
+</html>

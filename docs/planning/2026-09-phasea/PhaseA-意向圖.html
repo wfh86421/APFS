@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase A 意向圖 — 後台自訂區塊（Mockup）</title>
+<style>
+  :root{
+    --bg:#0e1521; --panel:#151f31; --panel2:#1c293f; --line:#2b3b57;
+    --txt:#e9eff8; --muted:#8fa2ba; --accent:#4da3ff; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --card:#101a2a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#14243c,#0b111c 55%);color:var(--txt);min-height:100vh}
+  .watermark{position:fixed;right:14px;bottom:10px;color:#3d5577;font-size:11px;letter-spacing:1px;z-index:5}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 18px 70px}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+  header h1{font-size:20px;margin:0}
+  header .tags span{background:#1b2b44;border:1px solid var(--line);border-radius:999px;font-size:11px;padding:3px 10px;color:var(--muted);margin-left:6px}
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tab{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:7px 16px;border-radius:999px;font-size:13px;cursor:default}
+  .tab.on{background:#173458;border-color:var(--accent);color:#fff}
+  .callout{display:flex;gap:10px;align-items:flex-start;background:#10233c;border:1px dashed #2f5d8f;border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:12.5px;color:#bcd3ec;line-height:1.7}
+  .app{display:grid;grid-template-columns:190px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:640px}
+  @media(max-width:860px){.app{grid-template-columns:1fr}}
+  .side{background:#0f1728;border-right:1px solid var(--line);padding:14px 10px}
+  .side .logo{font-weight:700;font-size:14px;padding:2px 10px 12px;border-bottom:1px solid var(--line);margin-bottom:10px;color:#cfe3ff}
+  .side a{display:block;color:var(--muted);font-size:12.5px;padding:7px 10px;border-radius:8px;margin:2px 0;text-decoration:none}
+  .side a.on{background:#1c3a63;color:#fff}
+  .side a.new{color:var(--accent);border:1px dashed #2c5f9e;background:#10233f}
+  .main{padding:16px}
+  .mainbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .mainbar h2{font-size:16px;margin:0}
+  .mainbar .acts{display:flex;gap:8px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:6px 13px;border-radius:9px;font-size:12.5px;cursor:default}
+  .btn.primary{background:var(--accent);color:#06121f;border:none;font-weight:700}
+  .hint{color:var(--muted);font-size:12px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .block{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;position:relative;display:flex;flex-direction:column;gap:10px}
+  .block.off{opacity:.55;background:#0d1622}
+  .block .bhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .block .bhead b{font-size:13.5px}
+  .block .controls{display:flex;gap:4px;color:var(--muted)}
+  .block .controls span{width:24px;height:24px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .block .controls span.gear.on{background:#173458;border-color:var(--accent);color:var(--accent)}
+  .block .bmeta{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .block .pillline{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{font-size:10.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.g{color:var(--good);border-color:#1d6a50;background:#0d2b22}
+  .pill.r{color:var(--bad);border-color:#7a1f2e;background:#2b0f17}
+  .placeholder{height:58px;background:repeating-linear-gradient(45deg,#111c30,#111c30 8px,#15233c 8px,#15233c 16px);border:1px dashed var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#47618a;font-size:11px}
+  .legend{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+  .legend i{font-style:normal;margin-right:4px}
+  .num{position:absolute;top:-8px;left:-8px;background:var(--accent);color:#06121f;font-size:11px;font-weight:800;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px #0e1521}
+  .drawer{position:fixed;top:0;right:0;width:360px;height:100vh;background:var(--panel);border-left:1px solid var(--line);padding:18px;z-index:10;box-shadow:-20px 0 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:12px;overflow:auto}
+  .drawer h3{margin:0;font-size:15px}
+  .drawer .sub{color:var(--muted);font-size:12px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:12px;color:var(--muted)}
+  .field input,.field select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--txt);font-size:13px}
+  .field .row2{display:flex;gap:8px}
+  .field .row2 input{flex:1}
+  .sw{display:flex;align-items:center;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12.5px}
+  .sw .tog{width:34px;height:18px;border-radius:999px;background:#2f4a6b;position:relative}
+  .sw .tog:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+  .sw.on .tog{background:var(--accent)} .sw.on .tog:after{left:18px}
+  .drawer .acts{display:flex;gap:8px;margin-top:auto}
+  .call{color:#cfe3ff;font-size:12.5px;line-height:1.8}
+  .call b{color:#8fc2ff}
+</style>
+</head>
+<body>
+<div class="watermark">UI 意向圖 v0.1 · 非正式成品 · ShieldScan</div>
+<div class="wrap">
+  <header>
+    <h1>🛠 後台「自訂區塊」意向圖 <span style="color:var(--muted);font-weight:400;font-size:13px">— Phase A 版面設定概念</span></h1>
+    <div class="tags"><span>設定只存文字/參數</span><span>tenant 隔離</span><span>寫入需 security_admin</span></div>
+  </header>
+
+  <div class="tabs">
+    <span class="tab on">版面設定（編輯中）</span>
+    <span class="tab">預覽模式</span>
+  </div>
+
+  <div class="callout">💡 這張圖是「意向」，不是成品：紅色編號標出我想讓您確認的取捨點（看圖下方問題清單）。</div>
+
+  <div class="app">
+    <div class="side">
+      <div class="logo">ShieldScan 後台</div>
+      <a>總覽 /admin/overview</a>
+      <a>報告 /admin/reports</a>
+      <a>風險事件 /admin/events</a>
+      <a>設備指紋 /admin/devices</a>
+      <a>複核佇列</a>
+      <a>首頁內容</a>
+      <a class="on">版面設定 ← 本頁</a>
+      <a class="new">＋ 模組市場（未來 B）</a>
+    </div>
+
+    <div class="main">
+      <div class="mainbar">
+        <div><h2>自訂首頁（我的後台）</h2><p class="hint">拖曳或上下鍵排序；停用＝不顯示、資料保留</p></div>
+        <div class="acts"><span class="btn">還原預設</span><span class="btn primary">儲存並套用</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="block"><span class="num">1</span>
+          <div class="bhead"><b>📊 營運總覽</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear on">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">顯示：KPI 卡 ×4 ｜ Raw/IP：否（遮罩）<br>副標：最近 7 天風險趨勢</div>
+          <div class="pillline"><span class="pill g">啟用</span><span class="pill">security_admin</span></div>
+        </div>
+        <div class="block"><span class="num">2</span>
+          <div class="bhead"><b>📄 最新報告</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">顯示筆數 10 ｜ 排序：最新</div>
+          <div class="pillline"><span class="pill g">啟用</span></div>
+        </div>
+        <div class="block"><span class="num">3</span>
+          <div class="bhead"><b>🚨 風險事件</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">severity ≥ medium ｜ 筆數 20</div>
+          <div class="pillline"><span class="pill g">啟用</span></div>
+        </div>
+        <div class="block"><span class="num">4</span>
+          <div class="bhead"><b>🕓 複核佇列</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">只顯示 pending ｜ 優先：high</div>
+          <div class="pillline"><span class="pill g">啟用</span></div>
+        </div>
+        <div class="block off"><span class="num">5</span>
+          <div class="bhead"><b>📣 首頁文案</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">此區塊已停用（設定保留，隨時可恢復）</div>
+          <div class="pillline"><span class="pill r">已停用</span></div>
+        </div>
+        <div class="block"><span class="num">6</span>
+          <div class="bhead"><b>🖱 訪客設備指紋</b><div class="controls"><span>⬆</span><span>⬇</span><span class="gear">⚙</span><span>⛔</span></div></div>
+          <div class="bmeta">資料管線已通（v0.1.4）— 此塊預設隱藏，可自行啟用</div>
+          <div class="pillline"><span class="pill r">預設停用</span><span class="pill">開發中標記</span></div>
+        </div>
+      </div>
+
+      <div class="placeholder">＋ 更多區塊（未來：從模組市場安裝 → 自動出現在此）</div>
+
+      <div class="legend">
+        <span><i>⬆⬇</i>排序</span><span><i>⚙</i>設定（開抽屜）</span><span><i>⛔</i>停用/啟用</span><span><i>1–6</i>取捨點</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 設定抽屜（營運總覽範例） -->
+<div class="drawer" style="display:flex">
+  <div><span class="btn" style="padding:3px 10px">✕ 關閉</span></div>
+  <h3>⚙ 區塊設定 — 營運總覽</h3>
+  <p class="sub">欄位由「區塊定義」自動產生（schema-driven），只能改這些，不能改程式碼。</p>
+  <div class="field"><label>標題</label><input value="營運總覽"></div>
+  <div class="field"><label>副標</label><input value="最近 7 天風險趨勢"></div>
+  <div class="field"><label>顯示的 KPI 卡</label>
+    <select><option>全部 4 張</option><option>只顯示評分與風險</option></select>
+  </div>
+  <div class="field"><label>KPI 卡色</label><div class="row2">
+    <input value="#34d399"><input value="#4da3ff"><input value="#fbbf24"></div>
+  </div>
+  <div class="sw on"><span>顯示原始 IP 給 security_admin</span><span class="tog"></span></div>
+  <div class="sw"><span>與「最新報告」連動顯示</span><span class="tog"></span></div>
+  <div class="call"><b>驗證提示：</b>非法值送出 → API 回 400 且不寫入；每次變更都寫入審計（誰、何時、改了什麼）。</div>
+  <div class="acts"><span class="btn">還原此塊</span><span class="btn primary">儲存並套用</span></div>
+</div>
+
+<div style="margin-top:20px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px">
+  <h3 style="margin:0 0 8px">❓ 請您看圖後取捨（回數字即可）</h3>
+  <ol style="color:var(--muted);font-size:13px;line-height:2;margin:0;padding-left:20px">
+    <li><b style="color:var(--txt)">範圍</b>：只做「自訂首頁儀表板」控制（本圖，改動最小）？還是每個後台頁都可拆區塊？</li>
+    <li><b style="color:var(--txt)">排序</b>：⬆⬇ 按鈕（本圖）就好，還是要拖曳？</li>
+    <li><b style="color:var(--txt)">預設區塊</b>：總覽/最新報告/風險事件/複核佇列/首頁文案 5 塊夠嗎？「訪客設備指紋」預設停用、可自行啟用（如區塊 6）可以嗎？</li>
+    <li><b style="color:var(--txt)">設定抽屜</b>：像右側這樣「區塊定義自動生表單」是否符合您的想像？想多哪些欄位類型（數字、顏色、開關、下拉）？</li>
+  </ol>
+</div>
+</body>
+</html>

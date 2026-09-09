@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase A M1 — 頁→區塊→可設定欄位 清單（確認用）</title>
+<style>
+  :root{--bg:#0e1521;--panel:#151f31;--panel2:#1c293f;--line:#2b3b57;--txt:#e9eff8;--muted:#8fa2ba;--accent:#4da3ff;--good:#34d399;--warn:#fbbf24;--bad:#f87171}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#14243c,#0b111c 55%);color:var(--txt);min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px 16px 80px}
+  header h1{font-size:21px;margin:0 0 4px}
+  header p{color:var(--muted);font-size:13px;margin:4px 0}
+  .rules{background:#10233c;border:1px dashed #2f5d8f;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#bcd3ec;line-height:1.8;margin:12px 0 18px}
+  .page{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden}
+  .page>summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14.5px;font-weight:600}
+  .page>summary::-webkit-details-marker{display:none}
+  .page>summary .meta{color:var(--muted);font-size:12px;font-weight:400}
+  .page[open]>summary{border-bottom:1px solid var(--line);background:#182438}
+  .inner{padding:12px 16px 16px}
+  .block{margin:10px 0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .block h4{margin:0 0 2px;font-size:13.5px}
+  .block .bdesc{color:var(--muted);font-size:12px;margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:5px 8px;border-top:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11.5px}
+  td.k{color:#cfe3ff;white-space:nowrap}
+  .ty{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:6px;padding:0 6px;color:var(--accent)}
+  .ex{color:var(--muted);font-size:12px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+  .ex .offtag{display:inline-block;background:#2b0f17;border:1px solid #7a1f2e;color:var(--bad);border-radius:999px;font-size:11px;padding:0 8px;margin-left:6px}
+  .bar{position:sticky;bottom:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#0d1626ee;border:1px solid var(--line);border-radius:12px;padding:10px 14px;backdrop-filter:blur(4px)}
+  .bar .cnt{font-size:12.5px;color:var(--muted)}
+  .bar .cnt b{color:var(--accent)}
+  button.primary{background:var(--accent);border:none;color:#06121f;font-weight:700;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:13px}
+  #out{display:none;margin-top:10px;background:#0c1420;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;font-size:12px;color:var(--muted);max-height:220px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧱 Phase A — M1：頁 → 區塊 → 可設定欄位（清單確認頁）</h1>
+    <p>這是「實作前的最後一張清單」：每一後台頁可拆哪些區塊、每塊能改哪些欄位（型別/上限/預設）。看完按底下「照此開工 M1」。</p>
+  </header>
+
+  <div class="rules">
+    ⚙️ 共用規則：欄位由「區塊定義」的 zod schema 產生表單（抽屜）；<b>只存純文字/枚舉/數值/開關</b>，不存 HTML/程式碼（D1=safe）。全部 tenant 隔離；寫入限 security_admin＋audit；非法值 API 回 400。字串預設上限 80–120 字。
+  </div>
+
+  <details class="page" open>
+    <summary>📊 /admin/overview — 總覽 <span class="meta">3 區塊</span></summary>
+    <div class="inner">
+      <div class="block"><h4>kpi.summary — KPI 摘要卡</h4><div class="bdesc">預設啟用・資料：既有 stats/scans 與租戶用量</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「營運總覽」/ ≤40</td></tr>
+        <tr><td class="k">showCards</td><td><span class="ty">multiselect</span></td><td>[評分,風險,掃描量,用量] 全選</td></tr>
+        <tr><td class="k">cardColor</td><td><span class="ty">color</span></td><td>每卡一色（4 組）</td></tr></table></div>
+      <div class="block"><h4>trend.week — 趨勢圖</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「近 7 天趨勢」/ ≤40</td></tr>
+        <tr><td class="k">days</td><td><span class="ty">number</span></td><td>7（7–90）</td></tr>
+        <tr><td class="k">metric</td><td><span class="ty">select</span></td><td>掃描量/風險事件/平均分</td></tr></table></div>
+      <div class="block"><h4>recent.incidents — 近期高風險</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「近期高風險」/ ≤40</td></tr>
+        <tr><td class="k">minSeverity</td><td><span class="ty">select</span></td><td>high（info..critical）</td></tr>
+        <tr><td class="k">limit</td><td><span class="ty">number</span></td><td>5（1–20）</td></tr></table></div>
+    </div>
+  </details>
+
+  <details class="page" open>
+    <summary>📄 /admin/reports — 報告 <span class="meta">3 區塊 ＋ 詳情頁註記</span></summary>
+    <div class="inner">
+      <div class="block"><h4>filters.bar — 篩選列</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">showRisk</td><td><span class="ty">toggle</span></td><td>開</td></tr>
+        <tr><td class="k">showSeverity</td><td><span class="ty">toggle</span></td><td>開</td></tr>
+        <tr><td class="k">timeWindow</td><td><span class="ty">select</span></td><td>7 天（24h/7d/30d）</td></tr></table></div>
+      <div class="block"><h4>table.list — 報告列表</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「報告」/ ≤40</td></tr>
+        <tr><td class="k">pageSize</td><td><span class="ty">number</span></td><td>20（5–50）</td></tr>
+        <tr><td class="k">columns</td><td><span class="ty">multiselect</span></td><td>時間/風險/分數/IP/來源 全選</td></tr>
+        <tr><td class="k">revealRawIp</td><td><span class="ty">toggle</span></td><td>關（開=僅 security_admin 可見完整 IP/Raw）</td></tr></table></div>
+      <div class="block"><h4>quick.actions — 快速處置列</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">actions</td><td><span class="ty">multiselect</span></td><td>[開複核,封鎖,匯出 JSON] 全選</td></tr></table></div>
+      <div class="ex">⚠️ 詳情頁 <b>/admin/reports/[reportId]</b> 版面複雜且為「單一報告證據鏈」，本輪<b>不拆區塊</b>（整頁固定）；僅允許改頁面標題與品牌色。</div>
+    </div>
+  </details>
+
+  <details class="page" open>
+    <summary>🚨 /admin/events — 風險事件 <span class="meta">3 區塊</span></summary>
+    <div class="inner">
+      <div class="block"><h4>filter.chips — 事件過濾</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">defaultSeverity</td><td><span class="ty">multiselect</span></td><td>[medium,high,critical]</td></tr></table></div>
+      <div class="block"><h4>feed.list — 事件串流</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「風險事件」/ ≤40</td></tr>
+        <tr><td class="k">limit</td><td><span class="ty">number</span></td><td>20（5–100）</td></tr>
+        <tr><td class="k">groupByReport</td><td><span class="ty">toggle</span></td><td>關</td></tr></table></div>
+      <div class="block"><h4>summary.badge — 事件統計</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「事件統計」/ ≤40</td></tr>
+        <tr><td class="k">showAutoBlock</td><td><span class="ty">toggle</span></td><td>開</td></tr></table></div>
+    </div>
+  </details>
+
+  <details class="page" open>
+    <summary>🧬 /admin/devices — 設備指紋 <span class="meta">2 區塊</span></summary>
+    <div class="inner">
+      <div class="block"><h4>stats.card — 設備統計</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「設備指紋」/ ≤40</td></tr>
+        <tr><td class="k">cards</td><td><span class="ty">multiselect</span></td><td>[設備數,跨 session 數,IP 數] 全選</td></tr></table></div>
+      <div class="block"><h4>table.devices — 設備清單 <span class="offtag">預設停用（可自行啟用）</span></h4><div class="bdesc">資料管線已通；啟用後依租戶列出 device_fingerprints</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「設備」/ ≤40</td></tr>
+        <tr><td class="k">pageSize</td><td><span class="ty">number</span></td><td>20（5–50）</td></tr>
+        <tr><td class="k">revealHash</td><td><span class="ty">toggle</span></td><td>關（開=僅 security_admin 可見完整 hash）</td></tr></table></div>
+    </div>
+  </details>
+
+  <details class="page" open>
+    <summary>📣 /admin/homepage — 首頁內容 <span class="meta">2 區塊</span></summary>
+    <div class="inner">
+      <div class="block"><h4>hero — 主視覺區</h4><div class="bdesc">預設啟用（注意：公開首頁內容屬「全域」語意，與租戶版面不同——此區先鎖 security_admin 才能寫）</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「ShieldScan 隱盾檢測」/ ≤80</td></tr>
+        <tr><td class="k">subtitle</td><td><span class="ty">text</span></td><td>文案 / ≤160</td></tr>
+        <tr><td class="k">ctaText</td><td><span class="ty">text</span></td><td>「開始掃描」/ ≤20</td></tr>
+        <tr><td class="k">accentColor</td><td><span class="ty">color</span></td><td>品牌主色</td></tr></table></div>
+      <div class="block"><h4>sections — 頁面區段啟停</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">showConsent</td><td><span class="ty">toggle</span></td><td>開（不建議關）</td></tr>
+        <tr><td class="k">showFeatures</td><td><span class="ty">toggle</span></td><td>開</td></tr>
+        <tr><td class="k">showFooter</td><td><span class="ty">toggle</span></td><td>開</td></tr></table></div>
+    </div>
+  </details>
+
+  <details class="page" open>
+    <summary>🛡️ 治理 / 稽核（governance） <span class="meta">2 區塊・restricted</span></summary>
+    <div class="inner">
+      <div class="ex">此頁整頁僅 <b>security_admin</b> 可見（accessLevel=restricted，沿用現行）；可拆但「誰看得到」不可由租戶自改。</div>
+      <div class="block"><h4>audit.trail — 稽核串流</h4><div class="bdesc">預設啟用</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「稽核日誌」/ ≤40</td></tr>
+        <tr><td class="k">limit</td><td><span class="ty">number</span></td><td>50（10–200）</td></tr></table></div>
+      <div class="block"><h4>roles.info — 角色摘要（唯讀）</h4><div class="bdesc">固定</div>
+        <table><tr><th>欄位</th><th>型別</th><th>預設 / 上限</th></tr>
+        <tr><td class="k">title</td><td><span class="ty">text</span></td><td>「角色與權限」/ ≤40</td></tr></table></div>
+    </div>
+  </details>
+
+  <div class="bar">
+    <div class="cnt">合計：<b>6 頁</b>・<b>15 區塊</b>（1 塊預設停用）＋ 詳情頁固定例外</div>
+    <button class="primary" onclick="copy()">📋 照此開工 M1（複製結論）</button>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+function copy(){
+  const t=`【Phase A M1 欄位清單確認】
+範圍：每後台頁皆可拆區塊（⬆⬇ 排序、預設 5+1、設定抽屜 schema 表單、D1 純文字/參數）
+頁面：overview(3) reports(3+詳情固定例外) events(3) devices(2，設備清單預設停用) homepage(2) governance/稽核(2, restricted)
+區塊數：6 頁 / 15 區塊
+欄位型別：text / number / select / multiselect / toggle / color
+安全：純資料無 HTML/程式碼・tenant 隔離・寫入 security_admin・audit・400 驗證
+下一步：實作 M1 block registry（typed 定義＋zod schema＋單元測試）`;
+  const out=document.getElementById('out');
+  out.textContent=t; out.style.display='block';
+  const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+}
+</script>
+</body>
+</html>
