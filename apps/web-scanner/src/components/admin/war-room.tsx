@@ -45,7 +45,7 @@ const PAGES: PageEntry[] = [
   { id: 'baselines', href: '/admin/baselines', label: '基準分布', icon: '🧮', ready: true, desc: '規則 × 國家／ASN／時區命中基準（資料黃金）', zone: 'decide' },
   { id: 'demo', href: '/admin/reports/demo', label: '報告決策示範', icon: '📋', ready: true, desc: '以示範報告檢視決策流程', zone: 'decide' },
   { id: 'layout', href: '/admin/layout', label: '版面設定', icon: '🧱', ready: true, desc: '自訂區塊：後台各頁＋公開首頁啟停／排序／參數', zone: 'govern' },
-  { id: 'collection', href: '/admin/collection', label: '偵測採集設定', icon: '🎛️', ready: true, desc: 'SDK 採集／分析模組（6＋1）啟停與順序（進階）', zone: 'govern' },
+  { id: 'reportview', href: '/admin/report-view', label: '報告檢視設定', icon: '🎛️', ready: true, desc: '報告詳情 6＋1 區塊模組啟停／排序（進階）', zone: 'govern' },
   { id: 'modules', href: '/admin/modules', label: '模組市場', icon: '🧩', ready: false, desc: '第三方模組安裝（規劃中）', zone: 'govern' },
   { id: 'settings', href: '/admin/settings', label: '設定', icon: '⚙️', ready: false, desc: '租戶／計費／SSO 等（規劃中）', zone: 'govern' },
 ];
@@ -192,7 +192,7 @@ export default function AdminWarRoom() {
           <span className="wr-chip">作戰單元 {total}</span>
           <span className="wr-chip">已上線 {readyCount}</span>
           <span className="wr-chip">規劃中 {total - readyCount}</span>
-          <span className="wr-chip">採集設定 → 🎛️ 偵測採集設定・公開首頁區塊 → 🧱 版面設定・首頁</span>
+          <span className="wr-chip">6＋1 報告區塊 → 🎛️ 報告檢視設定・公開首頁區塊 → 🧱 版面設定・首頁</span>
         </div>
       )}
 
@@ -258,8 +258,8 @@ export default function AdminWarRoom() {
       </div>
 
       <div className="wr-legacy">
-        已化整為零：舊版「後台模組（6＋1）／首頁區塊」工作台已拆解分配——掃描採集模組設定 →
-        <Link href="/admin/collection">🎛️ 偵測採集設定</Link>；公開首頁區塊 →{' '}
+        已化整為零：舊版「後台模組（6＋1）／首頁區塊」工作台已拆解——報告詳情區塊模組 →{' '}
+        <Link href="/admin/report-view">🎛️ 報告檢視設定</Link>；公開首頁區塊 →{' '}
         <Link href="/admin/layout">🧱 版面設定・首頁</Link>；戰情室即管理者中樞，不再保留整包舊版頁面。
       </div>
     </div>

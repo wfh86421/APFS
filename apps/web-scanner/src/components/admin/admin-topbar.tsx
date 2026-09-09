@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const TITLES: Record<string, string> = {
   '/admin': '戰情室 Command Center',
-  '/admin/collection': '偵測採集設定',
+  '/admin/report-view': '報告檢視設定',
   '/admin/homepage': '首頁設定',
   '/admin/reports': '報告列表',
   '/admin/events': '事件查詢',

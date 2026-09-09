@@ -298,7 +298,7 @@ export default function DecisionReportDemo() {
       )}
 
       {!moduleIds.has('decision.verdict') && (
-        <p className="muted">目前設定把主要決策模組關閉或隱藏，請到「偵測採集設定」（/admin/collection）調整。</p>
+        <p className="muted">目前設定把主要決策模組關閉或隱藏，請到「報告檢視設定」（/admin/report-view）調整。</p>
       )}
     </div>
   );

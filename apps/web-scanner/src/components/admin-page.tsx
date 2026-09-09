@@ -107,9 +107,11 @@ export default function AdminPage({
     <div className="admin-page">
       <header className="admin-header">
         <div>
-          <h1>管理者工作台</h1>
+          <h1>報告檢視模組設定（6＋1）</h1>
           <p className="muted">
-            開啟／關閉功能、顯示／隱藏項目，並用上下箭頭調整順序。變更只影響目前瀏覽器（MVP）。
+            控制「報告詳情頁」區塊模組（決策樞紐／異常矩陣／網路地理／硬體指紋／瀏覽器環境／原始稽核／治理）在
+            <a href="/admin/reports/demo">決策示範</a> 與真實報告頁的啟停／顯示／順序；公開版面與後台各頁顯示請到{' '}
+            <a href="/admin/layout">版面設定</a>。變更記憶於本機（可同步 DB）。
           </p>
         </div>
         <div className="admin-header-actions">
@@ -147,7 +149,7 @@ export default function AdminPage({
           className={tab === 'modules' ? 'admin-tab active' : 'admin-tab'}
           onClick={() => setTab('modules')}
         >
-          偵測採集模組（6＋1）
+          報告檢視模組（6＋1）
         </button>
         {!hideHomeTab && (
           <button
