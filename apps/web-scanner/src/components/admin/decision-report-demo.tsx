@@ -144,7 +144,7 @@ export default function DecisionReportDemo() {
     <div className="decision-page">
       <h1>報告詳情決策頁（示範資料）</h1>
       <p className="muted">
-        區塊啟停／排序由「版面設定 → 報告檢視模組設定」控制（舊報告檢視設定相容）；此頁使用示範報告，尚未串接租戶報告 API。
+        區塊啟停／排序由「🧱 版面設定 → 報告檢視模組設定」控制；此頁使用示範報告，尚未串接租戶報告 API。
       </p>
 
       {show('decision.verdict') && (
@@ -312,7 +312,7 @@ export default function DecisionReportDemo() {
       )}
 
       {!moduleIds.has('decision.verdict') && (
-        <p className="muted">目前設定把主要決策模組關閉或隱藏，請到「報告檢視設定」（/admin/report-view）調整。</p>
+        <p className="muted">目前設定把主要決策模組關閉或隱藏，請到「🧱 版面設定 → 報告檢視模組設定」啟用。</p>
       )}
     </div>
   );

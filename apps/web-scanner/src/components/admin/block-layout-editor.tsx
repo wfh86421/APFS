@@ -538,8 +538,8 @@ export default function BlockLayoutEditor() {
           （tenant 隔離＋security_admin＋審計）；未登入時自動以本機 localStorage 示範。
         </p>
         <p className="pab-sub">
-          「報告檢視模組設定」頁的區塊啟停／排序會驅動 📋 報告決策示範與真實報告頁；舊
-          /admin/report-view 為相容入口（驗證後移除）。
+          「報告檢視模組設定」頁是報告詳情區塊（6+1）的唯一設定來源：啟停／排序會驅動 📋
+          報告決策示範與真實報告頁（含管理 key 的後端同步）。
         </p>
         {banner && <div className="pab-banner">{banner}</div>}
       </div>
