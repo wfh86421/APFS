@@ -607,7 +607,7 @@ export default function BlockLayoutEditor() {
                   )}
                   <button className="ctrl" onClick={() => move(index, -1)} title="上移">⬆</button>
                   <button className="ctrl" onClick={() => move(index, 1)} title="下移">⬇</button>
-                  <button className="ctrl on" onClick={() => setEditing(d.key)} title="設定">⚙</button>
+                  <button className="ctrl on" onClick={() => setEditing((cur) => (cur === d.key ? null : d.key))} title="設定（再點一次關閉）">⚙</button>
                   <button className="ctrl" onClick={() => toggleDisabled(d.key)} title={off ? '啟用' : '停用'}>⛔</button>
                 </div>
                 {editing === d.key && byKey.get(d.key) && (

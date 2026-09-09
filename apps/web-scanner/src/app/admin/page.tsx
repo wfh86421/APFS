@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import AdminPage from '../../components/admin-page';
+import AdminWarRoom from '../../components/admin/war-room';
 
 export const metadata: Metadata = {
-  title: 'ShieldScan 管理者工作台',
-  description: '開啟／關閉、顯示／隱藏與排序工作台模組。',
+  title: 'ShieldScan 戰情室 Command Center',
+  description: '管理者中樞：態勢感知／決策成效／治理延伸，各作戰單元入口可自行整理排序。',
 };
 
 export default function Page() {
-  return <AdminPage />;
+  return <AdminWarRoom />;
 }
