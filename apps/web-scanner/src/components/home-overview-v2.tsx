@@ -245,6 +245,8 @@ interface OvData {
   ipCount7d?: number;
   /** 設備型號（sec-ch-ua-model，server 回傳；桌面 Chrome 通常無）。 */
   deviceModel?: string | null;
+  /** 瀏覽器真名（Brave/Edge/Opera…；navigator 原生 API 偵測）。 */
+  detectedBrowser?: string;
 }
 
 function readNavSnapshot(): NavSnapshot {
@@ -396,6 +398,35 @@ function browserParts(uaText: string): BrowserParts {
 function browserLabel(uaText: string): string {
   const parts = browserParts(uaText);
   return parts.version ? `${parts.name} ${parts.version}` : parts.name;
+}
+
+/**
+ * 瀏覽器「真名」偵測：Chromium 家族 UA 相同（Brave/Edge/Opera…），需原生 API 分辨。
+ * Brave 提供 navigator.brave.isBrave()；其餘用 UA 標記。
+ */
+async function detectBrowserBrand(): Promise<string | undefined> {
+  try {
+    const nav = navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } };
+    if (nav.brave && typeof nav.brave.isBrave === 'function' && (await nav.brave.isBrave())) {
+      return 'Brave';
+    }
+  } catch {
+    /* Brave API 失敗視同無 */
+  }
+  const uaText = navigator.userAgent;
+  if (/Edg\//.test(uaText)) return 'Edge';
+  if (/OPR\/|Opera/.test(uaText)) return 'Opera';
+  if (/Vivaldi/.test(uaText)) return 'Vivaldi';
+  if (/SamsungBrowser/.test(uaText)) return 'Samsung Internet';
+  if (/Firefox\//.test(uaText) && !/Seamonkey/.test(uaText)) return 'Firefox';
+  return undefined;
+}
+
+/** 真名＋UA 版本 → 「Brave 152.0.0.0」；偵測不到則退回 UA 解析。 */
+function detectedBrowserLabel(brand: string | undefined, uaText: string): string {
+  if (!brand) return browserLabel(uaText);
+  const version = browserParts(uaText).version;
+  return version ? `${brand} ${version}` : brand;
 }
 
 /** 摘要列「你」欄位：Client Hints platform → navigator.platform → UA 推估 OS。 */
@@ -879,7 +910,7 @@ function buildSummaryRows(data: OvData): SummaryRow[] {
   return [
     { label: 'IP 地址', value: ipValue },
     { label: '地理位置', value: geoCityCountry || DASH },
-    { label: '瀏覽器', value: browserLabel(uaText) },
+    { label: '瀏覽器', value: detectedBrowserLabel(data.detectedBrowser, uaText) },
     { label: '平台', value: youPlatform(signals) },
     { label: 'IP 時區', value: asStr(geo, 'timezone') ?? DASH },
     { label: '經緯度', value: coordsValue },
@@ -1143,6 +1174,7 @@ export default function HomeOverviewV2() {
       });
       const signals = await session.waitForCompletion();
       const elapsedMs = Math.round(performance.now() - startedAt);
+      const detectedBrowser = typeof window !== 'undefined' ? await detectBrowserBrand() : undefined;
 
       // 同意模式固定 standard：上傳伺服器以取得 IP／地理位置／ISP／伺服器分數。
       const { report, score: localScore } = await analyzeSignals(signals, { mode: 'standard' });
@@ -1188,6 +1220,7 @@ export default function HomeOverviewV2() {
         scannedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
         ipCount7d,
         deviceModel,
+        detectedBrowser,
       };
       dataRef.current = next;
       setData(next);
@@ -1579,7 +1612,7 @@ export default function HomeOverviewV2() {
               {/* ── ③ IP address 詳情卡 ─────────────────────── */}
               <Card icon="🌐" title="IP 地址" className="ov-card-half" style={ovStyle('scan-overview.ip')}>
                 <Field label="IP" value={network?.ip ?? webrtcPublicIp(signals, network)} />
-                <Field label="WebRTC" value={webrtcPublicIp(signals, network)} />
+                <Field label="WebRTC" value={asStr(valueOf(signals, 'webrtc'), 'mappedPublicIp') ?? webrtcPublicIp(signals, network)} />
                 <Field
                   label="WebRTC STUN"
                   value={(() => {
@@ -1646,7 +1679,7 @@ export default function HomeOverviewV2() {
                   value={deviceMemoryLabel(current.nav.memoryGb)}
                 />
                 <Field
-                  label="邏輯處理器核心"
+                  label="處理器核心（邏輯）"
                   value={current.nav.cores && current.nav.cores > 0 ? `${current.nav.cores}` : DASH}
                 />
                 <Field label="媒體設備" value={mediaDevicesLabel(signals)} />
@@ -1656,7 +1689,7 @@ export default function HomeOverviewV2() {
                     if (current.nav.connectionType) parts.push(`連線類型 ${current.nav.connectionType}`);
                     return parts.length > 0 ? `本機補充：${parts.join(' ・ ')}（非掃描訊號）。` : '';
                   })()}
-                  訪客ID／Canvas／WebGL／Audio／Client Rects／WebGPU 為本次掃描即時實測 hash（前 8 碼）；設備內存／邏輯處理器核心取自已授權的本機 Navigator（真實值；deviceMemory 於非安全連線 http 常不暴露，會顯示「僅 HTTPS 可得」）。
+                  訪客ID／Canvas／WebGL／Audio／Client Rects／WebGPU 為本次掃描即時實測 hash（前 8 碼）；處理器核心（邏輯）取 navigator.hardwareConcurrency（真實值）；記憶體為瀏覽器 API 值（Chrome 只提供 2 的次方粗估，非精確），非安全連線 http 常不暴露 → 顯示「僅 HTTPS 可得」。
                 </p>
               </Card>
 
@@ -1672,7 +1705,7 @@ export default function HomeOverviewV2() {
                   }
                 />
                 <Field label="操作系統" value={osName(signals)} />
-                <Field label="瀏覽器" value={browserParts(uaText).name} />
+                <Field label="瀏覽器" value={(current?.detectedBrowser) ?? browserParts(uaText).name} />
                 <Field label="瀏覽器版本" value={browserParts(uaText).version || DASH} />
                 <Field label="Header（請求標頭）" value={uaText ? truncate(uaText, 100) : DASH} />
                 <Field label="JavaScript" value="是" />

@@ -684,14 +684,19 @@ function environmentalCoherenceIssues(
         ? Math.round(tz.offsetHours) * 60
         : null;
     const ipOffset = tzOffsetMinutesOf(ipTz);
-    if (browserOffset === null || ipOffset === null || browserOffset !== ipOffset) {
-      push(
-        'timezone_mismatch',
-        'medium',
-        '瀏覽器時區與 IP 所在時區不一致（疑似使用代理或更改時區）',
-        { browserTimeZone: browserTz, ipTimeZone: ipTz, browserOffsetMinutes: browserOffset, ipOffsetMinutes: ipOffset },
-      );
-    }
+    // 時區「名稱」不同即判不一致（對齊競品：即使同 offset，如 Asia/Taipei vs Asia/Hong_Kong 也扣）；
+    // offset 列入證據供複核（同 offset 屬輕度疑慮、異 offset 屬強疑慮）。
+    push(
+      'timezone_mismatch',
+      'medium',
+      '瀏覽器時區與 IP 所在時區名稱不同（疑似使用代理或更改時區）',
+      {
+        browserTimeZone: browserTz,
+        ipTimeZone: ipTz,
+        browserOffsetMinutes: browserOffset,
+        ipOffsetMinutes: ipOffset,
+      },
+    );
   }
 
   const locale = valueOf('locale');
