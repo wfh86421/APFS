@@ -7,7 +7,7 @@ import { apiBaseUrl } from '../../lib/api';
 import { getAdminSiteConfig } from '../../lib/config-api';
 import type { WorkspaceConfig } from '../../modules/catalog';
 import { loadWorkspaceConfig, isWorkspaceConfigLike } from '../../modules/store';
-import { reportViewState } from '../../modules/report-module-view';
+import { reportViewState, fetchServerReportView, type ReportViewState } from '../../modules/report-module-view';
 
 interface StoredReportLike extends EnvironmentReport {
   clientIp?: string;
@@ -53,6 +53,24 @@ export default function ReportDetailPage({ reportId }: { reportId: string }) {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   const [status, setStatus] = useState('載入中…');
   const [actionMessage, setActionMessage] = useState('');
+  const [serverView, setServerView] = useState<ReportViewState | null>(null);
+
+  // 有管理 API Key 時，以後端版面（/v1/dashboard/blocks · workbench 頁）為報告區塊顯示來源。
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!apiKey) {
+        setServerView(null);
+        return;
+      }
+      const remote = await fetchServerReportView(apiKey);
+      if (alive) setServerView(remote);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey]);
 
   useEffect(() => {
     (async () => {
@@ -140,7 +158,7 @@ export default function ReportDetailPage({ reportId }: { reportId: string }) {
   };
 
   if (!config) return <div className="admin-page">載入中…</div>;
-  const active = new Set(reportViewState().shown);
+  const active = new Set((serverView ?? reportViewState()).shown);
   const show = (id: string) => active.has(id);
 
   return (

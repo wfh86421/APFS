@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { reportViewState } from '../../modules/report-module-view';
+import { useEffect, useState } from 'react';
+import { reportViewState, fetchServerReportView, type ReportViewState } from '../../modules/report-module-view';
 import { apiBaseUrl } from '../../lib/api';
 
 const DEMO = {
@@ -78,15 +78,32 @@ const NETWORK = [
 ];
 
 export default function DecisionReportDemo() {
-  const { shown: moduleIds } = reportViewState();
-  const show = (id: string) => moduleIds.has(id);
   const [rawOpen, setRawOpen] = useState(false);
   const [apiKey, setApiKey] = useState(() => {
     if (typeof window === 'undefined') return '';
     return window.localStorage.getItem('shieldscan.admin.apiKey') ?? '';
   });
+  const [serverView, setServerView] = useState<ReportViewState | null>(null);
   const [reportId, setReportId] = useState(DEMO.reportId);
   const [actionStatus, setActionStatus] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!apiKey) {
+        setServerView(null);
+        return;
+      }
+      const remote = await fetchServerReportView(apiKey);
+      if (alive) setServerView(remote);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [apiKey]);
+
+  const moduleIds = (serverView ?? reportViewState()).shown;
+  const show = (id: string) => moduleIds.has(id);
 
   const saveApiKey = (value: string) => {
     setApiKey(value);

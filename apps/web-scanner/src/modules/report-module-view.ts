@@ -9,6 +9,7 @@
  * layout key（workbench.*）↔ 舊 module id（decision.*）為固定對照，見 PAIRS。
  */
 import { loadWorkspaceConfig } from './store';
+import { apiBaseUrl } from '../lib/api';
 
 export interface ReportViewState {
   /** 資料來源（除錯用） */
@@ -74,4 +75,29 @@ export function reportViewState(): ReportViewState {
   }
 
   return { mode: 'default', order: DEFAULT_ORDER, shown: new Set(DEFAULT_ORDER) };
+}
+
+/** 帶管理 API Key 讀取後端版面（/v1/dashboard/blocks）的 workbench 頁；失敗/無資料回 null（呼叫端自行 fallback）。 */
+export async function fetchServerReportView(apiKey: string): Promise<ReportViewState | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl()}/v1/dashboard/blocks`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as {
+      pages?: Array<{ key?: string; blocks?: Array<{ blockKey?: string; enabled?: boolean }> }>;
+    };
+    const page = (body.pages ?? []).find((p) => p.key === 'workbench');
+    const blocks = page?.blocks ?? [];
+    if (blocks.length === 0) return null;
+    const order = blocks
+      .filter((b) => b.enabled !== false && typeof b.blockKey === 'string')
+      .map((b) => b.blockKey as string)
+      .filter((key) => PAIRS.some((p) => p.layoutKey === key))
+      .map((key) => PAIRS.find((p) => p.layoutKey === key)?.moduleId)
+      .filter((id): id is string => typeof id === 'string');
+    return { mode: 'layout', order, shown: new Set(order) };
+  } catch {
+    return null;
+  }
 }
