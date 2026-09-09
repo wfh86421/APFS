@@ -258,7 +258,7 @@ export default function AdminWarRoom() {
 
       <div className="wr-legacy">
         設定單一來源：報告詳情區塊（6+1）與公開首頁區塊都由{' '}
-        <Link href="/admin/layout">🧱 版面設定</Link>（報告檢視模組設定・首頁）管理；舊「報告檢視設定」獨立入口已移除，
+        <Link href="/admin/layout">🧱 版面設定</Link>（報告檢視模組設定・首頁）管理；不再有重複的獨立設定入口，
         示範與真實報告頁自動套用版面設定（舊設定僅為相容 fallback）。
       </div>
     </div>
