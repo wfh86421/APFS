@@ -3,6 +3,13 @@
 本專案由多組並行 agent 共同開發（同一 repo：本機 `歸檔`、GitHub `wfh86421/APFS`、VPS `/root/APFS`）。
 **啟動任何工作前先讀本檔；每個窗口結束前依 §記錄 寫入並推送。**
 
+## 0. 對話輸出規範（**使用者明確要求，所有窗口必守**）
+- **對話視窗只給摘要**：結論、關鍵數字、風險、下一步。**禁止**在對話貼整份報告、長清單、大段原始輸出（例如 `ls` 全部結果、整份 API dump、逐筆資料表）。
+- 需要完整內容時：**寫成檔案**（`docs/**`、`docs/logs/**`），對話只留 3–6 行摘要＋檔案路徑。
+- 面對可能很大的輸出：先在指令端過濾／計數（`grep`、`wc -l`、`| head`、只印符合項），**不要把原始大輸出整包貼進對話**。
+- 例外：使用者**明確要求**「貼完整／全文／整份」時，才可直接貼出。
+- 本規範**不影響** §2 記錄要求：日誌與報告照寫（在檔案裡），只是不在對話重貼。
+
 ## 1. 專案速覽
 - pnpm monorepo：`packages/*`（core-schema/repository/tenant/scoring-engine/signing/network-intel/port-scanner/browser-sdk/node-sdk/react-sdk/plugin-*/policy-engine）、`apps/api`（Fastify）、`apps/web-scanner`（Next 15）。
 - 資料層：PostgreSQL 16（`infra/docker/postgres/init.sql` 為唯一 schema 事實來源，CI/部署以 `node scripts/init-db.mjs` 套用，**冪等可重跑**）+ Redis。

@@ -35,6 +35,7 @@
 - **整合窗口（合併/部署）**：依 `docs/AGENT-DISPATCH.md` §6 檢查清單：分支已 pull --rebase → typecheck/build → 相關測試 → CI 全綠 → 合入 main → 需要時部署（先試用站驗證）→ 更新 CHANGELOG/代號表 → 回報 commit 與部署狀態。
 
 ## ⛔ 鐵律速記
+- **對話只給摘要（AGENTS.md §0）**：不在對話貼整份報告／長清單／大段原始輸出；完整內容寫檔，對話留 3–6 行摘要＋路徑；大輸出先在指令端用 `grep`／`wc -l`／`head` 過濾。使用者明確要求全文時才貼。
 - **製程（AGENTS.md §1.5，預設工作流）**：本機 `_v3` 寫 → **先在備用站 :3080/:3081 部署實測** → 測過才 commit/push GitHub → 累積到一階段才把正式站更新成備用站樣子 → 再推 GitHub。**不得跳過備用站驗證**。
 - 不 force-push main；push 前 `git pull --rebase origin main`。
 - 不覆寫他人 docs/logs 檔；commit 帶自己代號。

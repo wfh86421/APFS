@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-09-13（INTEG）
+- **新增對話輸出規範**：`AGENTS.md` §0（並同步 `docs/AGENT-ONBOARD.md` 鐵律）——對話視窗只給摘要（結論／關鍵數字／風險／下一步），**禁止**貼整份報告、長清單、大段原始輸出；完整內容寫入 `docs/**`，對話留 3–6 行摘要＋路徑；大輸出先在指令端以 `grep`／`wc -l`／`head` 過濾，僅使用者明確要求全文時才貼。此規範不影響 §2 的日誌／報告寫檔要求。
 - **釐清正式站「4 天零風險事件」為正常現象（非缺陷）**：確認 `risk_events` 只由評分引擎的規則命中（`score.explanations`）產生、與 `issues` 無關；09-08 後 31 筆掃描（15 筆帶 issues）皆未命中評分規則，故無事件（與使用者「測試流量」說明相符）。於備用站以刻意構造的 UA／Client-Hints 矛盾匿名報告驗證，事件鏈路正常寫入（`os_mismatch`／medium／tenant NULL／-5），探針資料已清除。
 - **流程 SOP 落地**：新增 `docs/PROCESS.md`——把 §1.5 製程寫成可執行 SOP（五步實際指令、部署後驗收清單、兩站一致性 md5 比對、回退表、常見坑），並補 §1.6「純營運／基礎設施改動」例外路徑（禁關站須先同意、變更前備份、**變更後等一個週期驗證**）。
 - **修復備用站聚合 cron**：原本 crontab 只有正式站一條，備用站 `rule_baselines` 停在 09-08、`/v1/baselines` 賣過期資料；已追加 `*/10 * * * * docker exec -i shieldscan-trial-api-1 … aggregate-baselines.mjs`，實測 01:10 週期寫入 128 列、`max(updated_at)` 推進至 09-12 17:10 UTC，端點回傳新資料。備份 `/root/crontab-backup-20260913-010904`。
