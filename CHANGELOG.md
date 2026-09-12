@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-09-13（INTEG）
+- **釐清正式站「4 天零風險事件」為正常現象（非缺陷）**：確認 `risk_events` 只由評分引擎的規則命中（`score.explanations`）產生、與 `issues` 無關；09-08 後 31 筆掃描（15 筆帶 issues）皆未命中評分規則，故無事件（與使用者「測試流量」說明相符）。於備用站以刻意構造的 UA／Client-Hints 矛盾匿名報告驗證，事件鏈路正常寫入（`os_mismatch`／medium／tenant NULL／-5），探針資料已清除。
 - **流程 SOP 落地**：新增 `docs/PROCESS.md`——把 §1.5 製程寫成可執行 SOP（五步實際指令、部署後驗收清單、兩站一致性 md5 比對、回退表、常見坑），並補 §1.6「純營運／基礎設施改動」例外路徑（禁關站須先同意、變更前備份、**變更後等一個週期驗證**）。
 - **修復備用站聚合 cron**：原本 crontab 只有正式站一條，備用站 `rule_baselines` 停在 09-08、`/v1/baselines` 賣過期資料；已追加 `*/10 * * * * docker exec -i shieldscan-trial-api-1 … aggregate-baselines.mjs`，實測 01:10 週期寫入 128 列、`max(updated_at)` 推進至 09-12 17:10 UTC，端點回傳新資料。備份 `/root/crontab-backup-20260913-010904`。
 - **製程立規**：`AGENTS.md` 新增 §1.5「製程」——地基完成後，任何改動一律「本機寫 → **備用站 :3080/:3081 部署實測** → 測過才 commit/push GitHub → 累積到一階段才把正式站更新成備用站樣子 → 再推 GitHub」；明訂不得跳過備用站驗證直接推 main 或上正式站。
