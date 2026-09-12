@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-11（INTEG）
+- 兩站版本一致性查核：發現正式站（`/root/APFS` `724d39b`，落後 main 20 commit）與備用站（`3097f5b`，落後 1 commit）**並非同一版本**，且兩站 api 映像皆早於 `b30aa06`（缺 server 端「時區名稱不同即扣」規則）、備用站 web 映像內容早於同目錄程式 HEAD；已依使用者裁定「以備用站為主、只換程式不動資料」，將正式站更新至 main `2355497` 並重建 api/web 映像。複驗：兩站 `/admin` 同為「戰情室 Command Center」、api `dist/server.js` 與 web `chunks/app/page-*.js` **md5 位元相同**、`/health` 皆 ok；備用站全程未動。詳細數據見 `docs/logs/2026-09-11-INTEG-two-site-version-audit.md` 與 `docs/logs/2026-09-11-INTEG-prod-update-to-main.md`。
+- 收錄 `d8f49ed..2355497` 里程碑（該批 8 個 commit 先前未入 CHANGELOG）：舊版 6+1／首頁工作台化整為零——採集設定→`/admin/collection`、首頁區塊→版面設定・首頁、移除 legacy-workbench；6+1 正名「報告檢視設定」；版面設定成為示範/報告頁版面單一來源（舊設定相容）；`/admin` 戰情室中樞＋⚙面板貼齊所點區塊。
+
 ## 2026-09-09（INTEG）
 - W4「證據層規則點火」：`open_ports`（22/3389：`/v1/port-scan` 結果接線收案）與 `os_mismatch`（server 獨立判定 UA OS vs Client Hints）風險事件真正觸發並可於 `/v1/risk-events` 查得；`RULE_EVENT_TYPE` 補齊 4 個環境一致性 key（timezone_mismatch/language_mismatch/webrtc_ip_mismatch/canvas_disabled），修掉命中被誤標 `fingerprint_instability` 收容桶的系統性錯誤；webrtc 洩漏不再雙重扣分；對照表移入 scoring-engine 並以完整性測試把關（漏 key 即紅）。
 - W1「指紋採集補齊」：browser-sdk 新增 `fonts`（保守測寬 hash＋detected list，含 CJK/程式字型）、`clientRects`（排版佈局 hash）、`mediaDevices`（enumerateDevices 僅狀態、不取流不詢問）三模組並註冊至首頁/掃描/登入風控三頁面；server `buildDeviceFingerprint` 補 `fontsHash`/`clientRectsHash` 寫入既有 `device_fingerprints` 欄位——補齊先前「DB 欄位已留、SDK 未採集」的護城河落差。
