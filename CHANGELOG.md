@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-13（INTEG）
+- **製程立規**：`AGENTS.md` 新增 §1.5「製程」——地基完成後，任何改動一律「本機寫 → **備用站 :3080/:3081 部署實測** → 測過才 commit/push GitHub → 累積到一階段才把正式站更新成備用站樣子 → 再推 GitHub」；明訂不得跳過備用站驗證直接推 main 或上正式站。
+- **VPS 具備推送能力**：為 `/root/APFS` 與 `/root/shieldscan-trial-code` 裝上 GitHub 憑證（`/root/.git-credentials`，`chmod 600`＋`credential.helper=store`，帳號 `wfh86421`、scope `repo`），兩站自此可自行 `git push`；先前僅能 pull。兩站 checkout 同步至 `3f7a4d9`（0 behind）。
+
 ## 2026-09-11（INTEG）
 - 兩站版本一致性查核：發現正式站（`/root/APFS` `724d39b`，落後 main 20 commit）與備用站（`3097f5b`，落後 1 commit）**並非同一版本**，且兩站 api 映像皆早於 `b30aa06`（缺 server 端「時區名稱不同即扣」規則）、備用站 web 映像內容早於同目錄程式 HEAD；已依使用者裁定「以備用站為主、只換程式不動資料」，將正式站更新至 main `2355497` 並重建 api/web 映像。複驗：兩站 `/admin` 同為「戰情室 Command Center」、api `dist/server.js` 與 web `chunks/app/page-*.js` **md5 位元相同**、`/health` 皆 ok；備用站全程未動。詳細數據見 `docs/logs/2026-09-11-INTEG-two-site-version-audit.md` 與 `docs/logs/2026-09-11-INTEG-prod-update-to-main.md`。
 - 收錄 `d8f49ed..2355497` 里程碑（該批 8 個 commit 先前未入 CHANGELOG）：舊版 6+1／首頁工作台化整為零——採集設定→`/admin/collection`、首頁區塊→版面設定・首頁、移除 legacy-workbench；6+1 正名「報告檢視設定」；版面設定成為示範/報告頁版面單一來源（舊設定相容）；`/admin` 戰情室中樞＋⚙面板貼齊所點區塊。
