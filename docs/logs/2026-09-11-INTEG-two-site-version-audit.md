@@ -45,6 +45,7 @@
 - [ ] 清理 `/root/APFS` 殘留未追蹤檔（`=`、`CACHED`、`[api`、`[web`、`exporting`、`naming`、`unpacking`）。
 - [x] 兩站 api 映像皆需含 `b30aa06` 起之 server 端規則——複驗時兩站 `server.js` md5 相同（`b1267779…`）且含新規則字串。
 - [ ] 備用站為禁關站：任何 `docker compose up -d --build` 會短暫重啟其容器，需使用者明確同意後才可執行。
+- [x] **備用站聚合 cron 缺失（查核時發現）**：09-13 已於 VPS crontab 追加指向 `shieldscan-trial-api-1` 的 10 分鐘聚合，實測生效——見 `docs/logs/2026-09-13-INTEG-process-sop-and-trial-cron.md`。
 
 ## 查核後複驗（正式站更新至 `2355497` 後）
 

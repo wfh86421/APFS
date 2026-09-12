@@ -44,7 +44,7 @@
 |---|---|---|---|
 | `tenants` | **37** | 4 | 正式站租戶多；**不得整庫覆蓋** |
 | `report_facts` | 19 | 198 | 備用站為測試累積 |
-| `rule_baselines` | 11 | 44 | 正式站每 10 分鐘更新；**備用站停 09-08** |
+| `rule_baselines` | 11 | 128 | 兩站皆有 10 分鐘聚合 cron（**備用站 cron 已於 09-13 補上**） |
 | `risk_events` | 28 | **572** | 正式站最後一筆 09-08 21:28 UTC；備用站 09-12 17:02 UTC（測試流量持續觸發） |
 | `dashboard_blocks` | **0** | 8 | 正式站尚無版面設定資料 |
 | `fingerprint_scans` | 67 | 357 | 正式站最後一筆 09-11 23:12 UTC |
@@ -52,7 +52,7 @@
 ## 5. 待辦與風險（依優先序）
 
 ### P1 — 需你決定
-1. **備用站聚合 cron 缺失**：crontab 只有一條 `*/10 * * * * docker exec -i shieldscan-api-1 … aggregate-baselines.mjs`（只跑正式站容器、只寫正式庫）。備用站 `rule_baselines` 停在 **2026-09-08 21:10**，等於 `/v1/baselines` 在備用站賣的是 5 天前的資料。→ 需補一條指向 `shieldscan-trial-api-1` 的 cron。
+1. ~~**備用站聚合 cron 缺失**~~ → **已修復（2026-09-13）**：VPS crontab 追加 `*/10 * * * * docker exec -i shieldscan-trial-api-1 … aggregate-baselines.mjs >/tmp/fm-agg-trial.log`；實測 01:10 週期自動寫入 128 列，`rule_baselines.max(updated_at)` 由 09-08 推進至 09-12 17:10 UTC，`:3081/v1/baselines` 回傳新資料。備份：`/root/crontab-backup-20260913-010904`。
 2. **GitHub 暫存 repo 待刪**：`wfh86421/zz-待刪除-INTEG-暫存`（private，09-13 推送能力測試殘留）。token 無 `delete_repo` scope，需你在網頁刪除。
 
 ### P2 — 功能缺口

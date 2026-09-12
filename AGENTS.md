@@ -19,6 +19,8 @@
 
 **禁制**：不得跳過步驟 2 直接把未經備用站驗證的改動推上 main 或放到正式站；不得為了趕時間把正式站當測試場。
 
+**可執行 SOP**：逐步指令、部署後驗收清單、兩站一致性比對、回退方式與常見坑，全部寫在 **`docs/PROCESS.md`**（動工前讀一次、完工前跑 §2 驗收）。
+
 **VPS 憑證（已裝，2026-09-13）**：`/root/.git-credentials`（`chmod 600`，兩台皆設 `credential.helper=store`），故 `/root/APFS` 與 `/root/shieldscan-trial-code` 皆可自行 `git push`（帳號 `wfh86421`）。**此檔含 token，嚴禁進 git、嚴禁外印**。
 
 ## 2. 記錄位置（每個窗口必須寫）
